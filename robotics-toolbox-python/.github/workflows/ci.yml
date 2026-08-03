@@ -1,0 +1,263 @@
+# Run tests, coverage, and build docs across all supported platforms
+# Triggers on pushes/PRs to main and the active dev branch.
+#
+# spatialgeometry and swift-sim are installed from GitHub HEAD because the
+# current PyPI releases were compiled against NumPy 1.x and crash under 2.x.
+# Once numpy-2-compatible releases are published, remove those two steps and
+# use plain `pip install .[dev]`.
+
+name: CI
+
+on:
+  push:
+    branches: [main, future]
+  pull_request:
+    branches: [main, future]
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  MPLBACKEND: Agg
+  QT_QPA_PLATFORM: offscreen
+
+jobs:
+  test-core:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install package (core, no swift)
+        run: pip install .[dev]
+
+      - name: Verify compiled extensions built
+        # Catches a silent build/import regression for _fknm_c/_frne_c --
+        # without this, tests/test_fknm_fallback.py's C-vs-Python
+        # cross-validation tests would just skip (they're gated on
+        # _C_AVAILABLE precisely so a missing extension can't masquerade as
+        # a passing comparison), and nothing else would notice.
+        shell: bash
+        run: |
+          python -c '
+          from roboticstoolbox.ets.fknm import _C_AVAILABLE as fknm_c
+          from roboticstoolbox.robot.frne import _C_AVAILABLE as frne_c
+          assert fknm_c and frne_c, f"compiled extension missing: fknm={fknm_c} frne={frne_c}"
+          print("OK: both _fknm_c and _frne_c built")
+          '
+
+      - name: Test (core)
+        run: pytest tests/ --ignore=tests/test_blocks.py --timeout=50 --timeout_method=thread -q
+
+  test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
+        exclude:
+          - os: windows-latest
+            python-version: "3.13"
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Shorten TEMP path (Windows — avoids MAX_PATH breach during C++ compile)
+        if: runner.os == 'Windows'
+        run: |
+          New-Item -ItemType Directory -Force -Path C:\T | Out-Null
+          "TEMP=C:\T" >> $env:GITHUB_ENV
+          "TMP=C:\T"  >> $env:GITHUB_ENV
+
+      - name: Install spatialgeometry + swift from source (NumPy 2 compatible)
+        run: |
+            pip install "websockets<11"
+            pip install git+https://github.com/petercorke/spatialgeometry.git@future
+            pip install git+https://github.com/petercorke/swift.git@future
+
+      - name: Install package
+        run: pip install .[dev]
+
+      - name: Verify compiled extensions built
+        # See the same step in test-core for why this matters.
+        shell: bash
+        run: |
+          python -c '
+          from roboticstoolbox.ets.fknm import _C_AVAILABLE as fknm_c
+          from roboticstoolbox.robot.frne import _C_AVAILABLE as frne_c
+          assert fknm_c and frne_c, f"compiled extension missing: fknm={fknm_c} frne={frne_c}"
+          print("OK: both _fknm_c and _frne_c built")
+          '
+
+      - name: Test
+        run: pytest tests/ --ignore=tests/test_blocks.py --timeout=50 --timeout_method=thread -q
+
+  coverage:
+    needs: [test-core, test]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install spatialgeometry + swift from source (NumPy 2 compatible)
+        run: |
+          pip install "websockets<11"
+          pip install git+https://github.com/petercorke/spatialgeometry.git@future
+          pip install git+https://github.com/petercorke/swift.git@future
+
+      - name: Install package
+        run: pip install .[dev]
+
+      - name: Run coverage
+        run: pytest tests/ --ignore=tests/test_blocks.py --cov=src/roboticstoolbox --cov-report=xml:coverage.xml -q
+
+      - uses: codecov/codecov-action@v6
+        with:
+          files: ./coverage.xml
+
+  docs-build:
+    needs: [test-core, test]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install spatialgeometry + swift from source (NumPy 2 compatible)
+        run: |
+          pip install "websockets<11"
+          pip install git+https://github.com/petercorke/spatialgeometry.git@future
+          pip install git+https://github.com/petercorke/swift.git@future
+
+      - name: Install docs dependencies
+        run: |
+          pip install .[docs]
+          pip install git+https://github.com/petercorke/sphinx-autorun.git sympy
+          sudo apt-get install -y graphviz
+
+      - name: Build docs
+        # TODO: add -W once warning count reaches zero
+        run: |
+          cd docs && make SPHINXOPTS="--keep-going" html
+          touch build/html/.nojekyll
+
+      - name: Fetch pyodide wheel for JupyterLite
+        # A plain `pip wheel`/`build` here would produce a native
+        # macOS/Linux wheel with the compiled _fknm_c/_frne_c extensions --
+        # useless in Pyodide (WASM). release.yml already cross-compiles a
+        # genuine wasm32 wheel via cibuildwheel (CIBW_PLATFORM=pyodide) and
+        # attaches it to each GitHub Release (PyPI rejects the pyodide_*
+        # platform tag), so reuse that rather than rebuilding here. This
+        # means the "Try it Now" experience tracks the latest release, not
+        # bleeding-edge main -- deliberate, since a full Pyodide/Emscripten
+        # rebuild on every docs push would be slow.
+        #
+        # STOPGAP (see tech-debt.md): only fetch the cp312 wheel, matching
+        # jupyterlite-pyodide-kernel==0.6.1 below. A release can carry wasm
+        # wheels for more than one CPython version (cibuildwheel's pyodide
+        # platform builds one per supported interpreter), and
+        # jupyterlite-pyodide-kernel's all.json generator keys entries by
+        # (name, version) and *overwrites* rather than accumulates, so
+        # fetching more than one wheel for the same package+version
+        # silently drops all but the alphabetically-last from the piplite
+        # index -- no build error, just a runtime "can't find a pure
+        # Python 3 wheel" in the browser. Confirmed still present in
+        # jupyterlite_pyodide_kernel 0.7.1 (latest as of 2026-07-21), not
+        # just 0.6.1 -- an upstream bug to route around, not a version to
+        # bump past. Intended to be removed once the pure-Python wasm
+        # wheel work lands and this whole fetch step goes away.
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p docs/lite/pypi
+          gh release download --repo "$GITHUB_REPOSITORY" --pattern '*cp312*pyodide*' --dir docs/lite/pypi --clobber
+
+      - name: Sync notebooks into JupyterLite content
+        # Copies *.ipynb plus any local asset directories (e.g.
+        # docs/notebooks/figs/, referenced by relative path from markdown
+        # cells) -- but not the Makefile-generated *.py script conversions
+        # or other loose files. ik_benchmark.ipynb is excluded deliberately:
+        # it benchmarks numeric IK solver performance and uses the
+        # websocket-based Swift visualizer, neither of which is meaningful
+        # or functional inside the Pyodide sandbox -- it stays Colab-only.
+        run: |
+          mkdir -p docs/lite/files
+          rsync -a --exclude '.ipynb_checkpoints' --exclude '__pycache__' \
+            --exclude 'Untitled*.ipynb' --exclude '*.py' --exclude 'Makefile' \
+            --exclude 'ik_benchmark.ipynb' \
+            docs/notebooks/ docs/lite/files/
+
+      - name: Adapt staged notebooks for JupyterLite
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          root = Path("docs/lite/files")
+          for nb_path in root.rglob("*.ipynb"):
+              with nb_path.open("r", encoding="utf-8") as f:
+                  nb = json.load(f)
+
+              meta = nb.setdefault("metadata", {})
+              meta["kernelspec"] = {
+                  "name": "python",
+                  "display_name": "Python (Pyodide)",
+                  "language": "python",
+              }
+              meta.setdefault("language_info", {})
+              meta["language_info"]["name"] = "python"
+
+              with nb_path.open("w", encoding="utf-8") as f:
+                  json.dump(nb, f, indent=1)
+                  f.write("\n")
+          PY
+
+      - name: Build JupyterLite site
+        # jupyterlite-pyodide-kernel is pinned deliberately: newer versions
+        # bundle a newer Pyodide runtime than the cp312 wasm wheel attached
+        # to releases targets, which manifests as a silent hang in the
+        # browser (no error, just a kernel that never responds) rather than
+        # a build-time failure. See toolbox-infrastructure.md for the full
+        # version-skew story before bumping this.
+        run: |
+          pip install jupyterlite-core "jupyterlite-pyodide-kernel==0.6.1" jupyter-server
+          cd docs/lite && jupyter lite build --output-dir ../build/html/lite
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: docs/build/html
+
+  # Separate job so the github-pages environment (and its deployment
+  # protection rules restricting it to main) is only ever touched on main —
+  # a job-level `environment:` triggers a deployment attempt as soon as the
+  # job starts, regardless of any step-level `if:`, so PR/dependabot runs
+  # would otherwise show a false "failed to deploy to github-pages".
+  docs-deploy:
+    needs: docs-build
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deploy
+        uses: actions/deploy-pages@v4

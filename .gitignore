@@ -1,0 +1,41 @@
+# IDE / editor
+.cursor/
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+.pytest_cache/
+.mypy_cache/
+dist/
+*.egg
+
+# Catkin / ROS workspace build artifacts
+ocs2_ws/build/
+ocs2_ws/devel/
+ocs2_ws/install/
+ocs2_ws/logs/
+ocs2_ws/.catkin_tools/
+
+remani_planner/build/
+remani_planner/devel/
+remani_planner/install/
+remani_planner/logs/
+remani_planner/.catkin_tools/
+
+# Generic ROS/catkin leftovers
+**/CMakeFiles/
+**/cmake_install.cmake
+**/catkin_generated/
+**/atomic_configure/
+
+# OS
+.DS_Store
+Thumbs.db

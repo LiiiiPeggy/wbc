@@ -1,0 +1,12 @@
+<?xml version="1.0"?>
+<!-- ################################ -->
+<!-- XML: CR10 FK test launch begin -->
+<!-- ################################ -->
+<launch>
+  <rosparam file="$(find remani_planner)/config/mm_param.yaml"/>
+  <rosparam file="$(find remani_planner)/config/remani_planner_param.yaml"/>
+  <node pkg="mm_config" type="test_cr10_fk" name="test_cr10_fk" output="screen"/>
+</launch>
+<!-- ################################ -->
+<!-- XML: CR10 FK test launch end -->
+<!-- ################################ -->

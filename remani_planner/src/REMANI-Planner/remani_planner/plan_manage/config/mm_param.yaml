@@ -1,0 +1,54 @@
+mm:
+  # ################################
+  # YAML: Ranger + CR10 simulation params begin
+  # ################################
+  # Ranger full-size footprint (collision envelope) + virtual differential model.
+  # mobile_base_wheel_base is the VIRTUAL track width used by remani wheel-speed
+  # feasibility (left/right), NOT the Ranger longitudinal wheelbase (~0.90 m).
+  mobile_base_dof            : 2
+  mobile_base_length         : 1.10
+  mobile_base_width          : 0.90
+  mobile_base_height         : 0.40
+  mobile_base_wheel_base     : 0.56   # sync poly_traj_utils.hpp
+  mobile_base_wheel_radius   : 0.125  # sync poly_traj_utils.hpp; approx Ranger wheel
+  mobile_base_non_singul_vel : 0.05
+  mobile_base_max_wheel_omega: 4.0    # ~0.5 m/s with r=0.125 for conservative sim
+  mobile_base_max_wheel_alpha: 8.0
+  mobile_base_check_radius   : 0.20
+
+  manipulator_dof    : 6
+  manipulator_max_vel: 0.80   # conservative sim speed
+  manipulator_max_acc: 1.57
+
+  # cr10_mount_joint: xyz=[0.2462,0,0.1], rpy=[0,0,0]
+  base_mani_fixed_joint_xyz_ypr: [0.2462, 0.0, 0.1, 0.0, 0.0, 0.0]
+
+  manipulator_type: cr10
+
+  # CR10 lengths from URDF (documentation / optional); FK uses fixed origins.
+  manipulator_thickness: 0.06
+  manipulator_config   : [0.1765, 0.607, 0.568, 0.191, 0.125, 0.1084]
+
+  # Conservative simulation limits — 待实机校验 (do NOT treat as real-robot safety limits)
+  # Intersection-ish of Dobot URDF and whole-robot URDF, then shrunk.
+  manipulator_min_pos  : [-3.00, -1.50, -2.80, -3.00, -3.00, -3.00]
+  manipulator_max_pos  : [ 3.00,  1.50,  2.80,  3.00,  3.00,  3.00]
+  # ################################
+  # YAML: Ranger + CR10 simulation params end
+  # ################################
+
+  # ----- legacy FastArmer (commented) -----
+  # manipulator_type: fast_armer
+  # use_fast_armer       : true
+  # manipulator_thickness: 0.03
+  # manipulator_config   : [0.176,   0.417,  0.07,   0.385,  0.0,    0.20]
+  # manipulator_min_pos  : [-3.062, -3.136, -0.008, -2.932, -3.655, -3.14]
+  # manipulator_max_pos  : [ 3.052,  0.001,  3.044,  2.950,  0.447,  3.14]
+
+  # ----- legacy UR5 (commented) -----
+  # manipulator_type: ur5
+  # use_fast_armer       : false
+  # manipulator_thickness: 0.044
+  # manipulator_config   : [0.163,  0.425, 0.392, 0.127, 0.1,   0.1]
+  # manipulator_min_pos  : [-3.14, -3.14, -3.14, -3.14, -3.14, -3.14]
+  # manipulator_max_pos  : [ 3.14,  3.14,  3.14,  3.14,  3.14,  3.14]
