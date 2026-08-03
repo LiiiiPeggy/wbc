@@ -10,16 +10,20 @@
   <arg name="generate_map_size_y" default="8"/>
   <arg name="generate_map_size_z" default="3"/>
   <arg name="map_resolution" value="0.05"/>
-  <arg name="exp_param_file" default="$(find remani_planner)/config/exp0_param.yaml"/>
+  <arg name="exp_param_file" default="$(find remani_planner)/config/exp_ranger_cr10_param.yaml"/>
   <arg name="odom_topic" value="/mm/car/odom"/>
   <arg name="joint_state_topic" value="/mm/mani/joint_state"/>
   <arg name="joint_cmd_topic" value="/mm_controller_node/joint_cmd"/>
   <arg name="gripper_cmd_topic" value="/mm_controller_node/gripper_cmd"/>
   <arg name="gripper_state_topic" value="/mm/mani/gripper_state"/>
   <arg name="use_rviz" default="true"/>
+  <!-- 1: RViz 2D Nav Goal 手动给点; 2: 预设 waypoint -->
+  <arg name="target_type" default="1"/>
 
-  <!-- Ranger-friendly search radius (virtual differential, not Ackermann rewrite) -->
+  <!-- Ranger-friendly search radius (also set on planner private ns below) -->
   <param name="search/min_turning_radius" value="0.9"/>
+  <!-- Manual goal by default for interactive sim -->
+  <param name="fsm/target_type" value="$(arg target_type)"/>
 
   <!-- Whole-body URDF visualization (no hardware drivers) -->
   <param name="robot_description"
@@ -44,6 +48,8 @@
     <arg name="cy" value="243.44969177246094"/>
     <arg name="fx" value="387.229248046875"/>
     <arg name="fy" value="387.229248046875"/>
+    <arg name="target_type" value="$(arg target_type)"/>
+    <arg name="min_turning_radius" value="0.9"/>
   </include>
 
   <!-- fake_mm simulator (legacy car_cmd / joint_cmd) -->

@@ -1,4 +1,5 @@
 #include "mm_config/mm_config.hpp"
+#include <stdexcept>
 
 namespace remani_planner
 {
@@ -25,6 +26,24 @@ void MMConfig::setParam(ros::NodeHandle &nh){
     nh.param("mm/manipulator_dof", manipulator_dof_, -1);
     nh.param("mm/manipulator_thickness", manipulator_thickness_, -1.0);
 
+    // ################################
+    // C++: guard invalid mm params begin
+    // ################################
+    if(manipulator_dof_ <= 0 || mobile_base_dof_ <= 0){
+        ROS_FATAL("MMConfig: invalid dof base=%d mani=%d. Check mm_param.yaml is loaded on this node.",
+                  mobile_base_dof_, manipulator_dof_);
+        throw std::runtime_error("MMConfig invalid dof");
+    }
+    if(mobile_base_length_ <= 0.0 || mobile_base_width_ <= 0.0 || mobile_base_height_ <= 0.0 ||
+       mobile_base_check_radius_ <= 1e-6){
+        ROS_FATAL("MMConfig: invalid base geometry L=%.3f W=%.3f H=%.3f r=%.3f",
+                  mobile_base_length_, mobile_base_width_, mobile_base_height_, mobile_base_check_radius_);
+        throw std::runtime_error("MMConfig invalid base geometry");
+    }
+    // ################################
+    // C++: guard invalid mm params end
+    // ################################
+
     nh.param("grid_map/resolution", map_resolution_, 0.05);
 
     nh.param("optimization/safe_margin", car_safe_margin_, -1.0);
@@ -36,16 +55,28 @@ void MMConfig::setParam(ros::NodeHandle &nh){
     manipulator_max_pos_.resize(manipulator_dof_);
     std::vector<double> pos_limit{0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
     nh.param<std::vector<double>>("mm/manipulator_min_pos", pos_limit, std::vector<double>{0.0, 0.0, 0.0, 0.0, 0.0, 0.0});
+    if((int)pos_limit.size() < manipulator_dof_){
+        ROS_FATAL("MMConfig: manipulator_min_pos size %zu < dof %d", pos_limit.size(), manipulator_dof_);
+        throw std::runtime_error("MMConfig min_pos size");
+    }
     for(int i = 0; i < manipulator_dof_; i++){
         manipulator_min_pos_(i) = pos_limit[i];
     }
     nh.param<std::vector<double>>("mm/manipulator_max_pos", pos_limit, std::vector<double>{0.0, 0.0, 0.0, 0.0, 0.0, 0.0});
+    if((int)pos_limit.size() < manipulator_dof_){
+        ROS_FATAL("MMConfig: manipulator_max_pos size %zu < dof %d", pos_limit.size(), manipulator_dof_);
+        throw std::runtime_error("MMConfig max_pos size");
+    }
     for(int i = 0; i < manipulator_dof_; i++){
         manipulator_max_pos_(i) = pos_limit[i];
     }
 
     std::vector<double> manipulator_config;
     nh.getParam("mm/manipulator_config", manipulator_config);
+    if((int)manipulator_config.size() < manipulator_dof_){
+        ROS_FATAL("MMConfig: manipulator_config size %zu < dof %d", manipulator_config.size(), manipulator_dof_);
+        throw std::runtime_error("MMConfig manipulator_config size");
+    }
     manipulator_config_.resize(manipulator_config.size());
     for(int i = 0; i < manipulator_config.size(); i++){
         manipulator_config_(i) = manipulator_config[i];
@@ -53,6 +84,10 @@ void MMConfig::setParam(ros::NodeHandle &nh){
 
     std::vector<double> base_mani_fixed_joint_xyz_ypr{0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
     nh.param<std::vector<double>>("mm/base_mani_fixed_joint_xyz_ypr", base_mani_fixed_joint_xyz_ypr, std::vector<double>{0.0, 0.0, 0.0, 0.0, 0.0, 0.0});
+    if(base_mani_fixed_joint_xyz_ypr.size() < 6){
+        ROS_FATAL("MMConfig: base_mani_fixed_joint_xyz_ypr size %zu < 6", base_mani_fixed_joint_xyz_ypr.size());
+        throw std::runtime_error("MMConfig mount pose size");
+    }
     T_q_0_ = Eigen::Matrix4d::Identity();
     Eigen::Quaterniond quad = Eigen::AngleAxisd(base_mani_fixed_joint_xyz_ypr[3], Eigen::Vector3d::UnitZ())
                             * Eigen::AngleAxisd(base_mani_fixed_joint_xyz_ypr[4], Eigen::Vector3d::UnitY())
@@ -223,7 +258,6 @@ void MMConfig::setColorSet(){
 void MMConfig::getAJointTran(int joint_num, double theta, Eigen::Matrix4d &T, Eigen::Matrix4d &T_grad){
     double sinTheta = sin(theta);
     double cosTheta = cos(theta);
-    double linkLength = manipulator_config_(joint_num);
     T = Eigen::Matrix4d::Identity();
     T_grad = Eigen::Matrix4d::Zero();
     // ################################
@@ -247,6 +281,7 @@ void MMConfig::getAJointTran(int joint_num, double theta, Eigen::Matrix4d &T, Ei
     // ################################
     // C++: CR10 FK T = T_fixed * RotZ(theta) end
     // ################################
+    double linkLength = manipulator_config_(joint_num);
     if(useFastArmer_){
         switch(joint_num){
             case 0:{
@@ -463,6 +498,16 @@ void MMConfig::getCarPts(const Eigen::Vector3d &car_state, std::vector<Eigen::Ve
 
 void MMConfig::getCarPts(const Eigen::Vector3d &car_state, std::vector<Eigen::Vector3d> &car_pts, const Eigen::Vector3d &inflate_size){
     car_pts.clear();
+    // ################################
+    // C++: prevent infinite sampling when radius invalid begin
+    // ################################
+    if(mobile_base_check_radius_ <= 1e-6 || mobile_base_height_ <= 0.0){
+        ROS_ERROR_THROTTLE(1.0, "getCarPts: invalid radius/height r=%.4f H=%.4f", mobile_base_check_radius_, mobile_base_height_);
+        return;
+    }
+    // ################################
+    // C++: prevent infinite sampling when radius invalid end
+    // ################################
     Eigen::Vector3d point_3d;
     Eigen::Matrix2d R;
     R << cos(car_state(2)), -sin(car_state(2)),

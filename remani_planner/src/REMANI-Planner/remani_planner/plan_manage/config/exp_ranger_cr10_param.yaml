@@ -1,0 +1,22 @@
+map:
+  map_type: 0 # 0: Cuboids 1: Bridge
+
+fsm:
+  # ################################
+  # YAML: Ranger+CR10 sim waypoints begin
+  # ################################
+  # target_type: 1 = RViz "2D Nav Goal" 手动给点; 2 = 按预设 waypoint 顺序
+  waypoint_num : 2
+  # [x, y, q1..q6 deg] — joints within conservative CR10 sim limits
+  init_state             : [-3.0, 0.0, 0.0, -40.0, 80.0, 0.0, -40.0, 0.0]
+  init_yaw               : 0.0
+  init_gripper_close     : false
+  waypoint0              : [2.5, 1.0, 0.0, -40.0, 80.0, 0.0, -40.0, 0.0]
+  waypoint0_yaw          : -30.0
+  waypoint0_gripper_close: true
+  waypoint1              : [-1.0, -2.0, 0.0, -30.0, 60.0, 0.0, -30.0, 0.0]
+  waypoint1_yaw          : -90.0
+  waypoint1_gripper_close: false
+  # ################################
+  # YAML: Ranger+CR10 sim waypoints end
+  # ################################

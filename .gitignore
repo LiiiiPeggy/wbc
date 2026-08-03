@@ -17,7 +17,9 @@ __pycache__/
 dist/
 *.egg
 
-# Catkin / ROS workspace build artifacts
+# ################################
+# 编译结果 / ROS catkin 产物 begin
+# ################################
 ocs2_ws/build/
 ocs2_ws/devel/
 ocs2_ws/install/
@@ -30,11 +32,24 @@ remani_planner/install/
 remani_planner/logs/
 remani_planner/.catkin_tools/
 
-# Generic ROS/catkin leftovers
+# 通用编译产物目录（任意工作空间）
+**/build/
+**/devel/
+**/install/
+**/logs/
+**/.catkin_tools/
 **/CMakeFiles/
 **/cmake_install.cmake
 **/catkin_generated/
 **/atomic_configure/
+*.o
+*.a
+*.so
+*.so.*
+*.pyc
+# ################################
+# 编译结果 / ROS catkin 产物 end
+# ################################
 
 # OS
 .DS_Store
