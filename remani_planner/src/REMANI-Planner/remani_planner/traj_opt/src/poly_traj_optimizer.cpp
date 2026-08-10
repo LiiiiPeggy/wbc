@@ -986,6 +986,39 @@ namespace remani_planner
     double wei_ground_arg = 5.0;
 
     double costp_mani_nume = 0;
+    // ################################
+    // C++: soft cost for CR10 base-link samples begin
+    // ################################
+    {
+      const Eigen::Matrix4Xd base_pts = mm_config_->getBaseLinkPoint();
+      const int base_n = base_pts.cols();
+      Eigen::Matrix4d T_base = T_w_q * T_q_0_;
+      Eigen::Matrix4d dTdYaw_base = dTdYaw; // already = dR/dyaw * T_q_0_ before joints
+      for(int j = 0; j < base_n; ++j){
+        pt_on_link = (T_base * base_pts.col(j)).head(3);
+        Eigen::Vector3d dist_grad;
+        grid_map_->evaluateEDTWithGrad(pt_on_link, dist, dist_grad);
+        dist_err = manipulator_thickness_ + safe_margin_mani_ - dist;
+        if(dist_err > 0){
+          ret = true;
+          dist_grad4.segment(0, 3) = dist_grad;
+          costp_mani += wei_mani_obs_ * pow(dist_err, 3);
+          costp_mani_nume += wei_mani_obs_ * pow(dist_err, 3);
+          curr_grad.setZero();
+          curr_grad(0) -= wei_mani_obs_ * 3.0 * pow(dist_err, 2) * dist_grad4.transpose() * (T_grad_list[0] * base_pts.col(j));
+          curr_grad(1) -= wei_mani_obs_ * 3.0 * pow(dist_err, 2) * dist_grad4.transpose() * (T_grad_list[1] * base_pts.col(j));
+          gradp += curr_grad;
+          curr_grad.setZero();
+          double dDistdYaw = dist_grad4.transpose() * (dTdYaw_base * base_pts.col(j));
+          Eigen::Vector2d gradv_temp = wei_mani_obs_ * 3.0 * pow(dist_err, 2) * dDistdYaw * dYawdV;
+          curr_grad.head(2) -= gradv_temp;
+          gradv += curr_grad;
+        }
+      }
+    }
+    // ################################
+    // C++: soft cost for CR10 base-link samples end
+    // ################################
     for(int i = 0; i < manipulator_dof_; ++i){
       for(int j = 0; j < i + 2; ++j){
         T_grad_list[j] = T_grad_list[j] * T_joint[i];

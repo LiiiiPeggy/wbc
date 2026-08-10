@@ -29,7 +29,7 @@
 	<!-- ################################ -->
 	<arg name="target_type" default="2"/>
 	<arg name="min_turning_radius" default="0.2"/>
-	<arg name="max_seach_time" default="2.0"/>
+	<arg name="max_seach_time" default="3.0"/>
 	<!-- ################################ -->
 	<!-- XML: optional planner overrides end -->
 	<!-- ################################ -->

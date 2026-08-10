@@ -40,6 +40,16 @@ namespace remani_planner
             return manipulator_link_pts_;
         }
 
+        // ################################
+        // C++: CR10 base-link collision samples begin
+        // ################################
+        Eigen::Matrix4Xd getBaseLinkPoint() const {
+            return manipulator_base_link_pts_;
+        }
+        // ################################
+        // C++: CR10 base-link collision samples end
+        // ################################
+
         void getAJointTran(int joint_num, double theta, Eigen::Matrix4d &T, Eigen::Matrix4d &T_grad);
 
         void getJointTrans(const Eigen::VectorXd &theta, std::vector<Eigen::Matrix4d> &T_joint, std::vector<Eigen::Matrix4d> &T_joint_grad){
@@ -141,6 +151,13 @@ namespace remani_planner
         // ################################
         double map_resolution_;
         std::vector<Eigen::Matrix4Xd> manipulator_link_pts_;
+        // ################################
+        // C++: CR10 base-link collision samples begin
+        // ################################
+        Eigen::Matrix4Xd manipulator_base_link_pts_;
+        // ################################
+        // C++: CR10 base-link collision samples end
+        // ################################
         double car_safe_margin_;
         double mani_safe_margin_;
         double self_safe_margin_;

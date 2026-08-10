@@ -813,6 +813,32 @@ bool MMConfig::checkManiObsCollision(Eigen::Vector3d car_state, Eigen::VectorXd 
     T_joint.clear();
     getJointTrans(mani_state, T_joint, T_joint_grad_nouse);
     double dist;
+    // ################################
+    // C++: check cr10_base_link samples before joints begin
+    // ################################
+    if(manipulator_base_link_pts_.cols() > 0){
+        const int base_n = manipulator_base_link_pts_.cols();
+        for(int j = 0; j < base_n; ++j){
+            pt_on_link = (T_now * manipulator_base_link_pts_.col(j)).head(3);
+            pt.x = pt_on_link(0);
+            pt.y = pt_on_link(1);
+            pt.z = pt_on_link(2);
+            if(pt_on_link(2) < ground_safe_dis_){
+                min_dist = pt_on_link(2);
+                sphere_occ_.points.push_back(pt);
+                return true;
+            }
+            dist = grid_map_->getPreciseDistance(pt_on_link);
+            if(dist < safe_dist){
+                sphere_occ_.points.push_back(pt);
+                min_dist = dist;
+                return true;
+            }
+        }
+    }
+    // ################################
+    // C++: check cr10_base_link samples before joints end
+    // ################################
     for(int i = 0; i < manipulator_dof_; ++i){
         T_now = T_now * T_joint[i];
         // get ESDF value
@@ -1027,11 +1053,38 @@ bool MMConfig::checkcollision(Eigen::Vector3d car_state, Eigen::VectorXd mani_st
 void MMConfig::setLinkPoint()
 {
     manipulator_link_pts_.clear();
+    manipulator_base_link_pts_.resize(4, 0);
     Eigen::Matrix4Xd link_pts;
     // ################################
     // C++: CR10 collision sample points begin
     // ################################
     if(manipulator_type_ == ManipulatorType::CR10){
+        // ################################
+        // C++: cr10_base_link env collision proxy begin
+        // ################################
+        // Checked at T_car * T_q_0_ (before joint0). Approximate pedestal volume.
+        {
+            Eigen::Matrix4Xd base_pts;
+            base_pts.resize(4, 19);
+            int c = 0;
+            base_pts.col(c++) = Eigen::Vector4d(0, 0, 0.05, 1);
+            base_pts.col(c++) = Eigen::Vector4d(0, 0, 0.10, 1);
+            base_pts.col(c++) = Eigen::Vector4d(0, 0, 0.15, 1);
+            for(double z : {0.05, 0.10, 0.15}){
+                base_pts.col(c++) = Eigen::Vector4d(0.09, 0, z, 1);
+                base_pts.col(c++) = Eigen::Vector4d(-0.09, 0, z, 1);
+                base_pts.col(c++) = Eigen::Vector4d(0, 0.09, z, 1);
+                base_pts.col(c++) = Eigen::Vector4d(0, -0.09, z, 1);
+            }
+            base_pts.col(c++) = Eigen::Vector4d(0.06, 0.06, 0.10, 1);
+            base_pts.col(c++) = Eigen::Vector4d(-0.06, -0.06, 0.10, 1);
+            base_pts.col(c++) = Eigen::Vector4d(0.06, -0.06, 0.10, 1);
+            base_pts.col(c++) = Eigen::Vector4d(-0.06, 0.06, 0.10, 1);
+            manipulator_base_link_pts_ = base_pts;
+        }
+        // ################################
+        // C++: cr10_base_link env collision proxy end
+        // ################################
         for(int i = 0; i < manipulator_dof_; ++i){
             switch(i){
             case 0:{ // Link1 / shoulder — denser radial + axial samples
@@ -1090,22 +1143,58 @@ void MMConfig::setLinkPoint()
                 // ################################
                 break;
             }
-            case 3:{ // Link4 / wrist1
-                link_pts.resize(4, 3);
+            case 3:{ // Link4 / wrist1 — denser radial envelope
+                // ################################
+                // C++: denser CR10 Link4 samples begin
+                // ################################
+                link_pts.resize(4, 13);
                 link_pts.col(0) = Eigen::Vector4d(0, 0, 0, 1);
-                link_pts.col(1) = Eigen::Vector4d(0, -0.08, 0, 1);
-                link_pts.col(2) = Eigen::Vector4d(0, 0.05, 0, 1);
+                link_pts.col(1) = Eigen::Vector4d(0, 0.08, 0, 1);
+                link_pts.col(2) = Eigen::Vector4d(0, -0.08, 0, 1);
+                link_pts.col(3) = Eigen::Vector4d(0.06, 0, 0, 1);
+                link_pts.col(4) = Eigen::Vector4d(-0.06, 0, 0, 1);
+                link_pts.col(5) = Eigen::Vector4d(0.04, 0.04, 0, 1);
+                link_pts.col(6) = Eigen::Vector4d(-0.04, -0.04, 0, 1);
+                link_pts.col(7) = Eigen::Vector4d(0, 0.05, 0.04, 1);
+                link_pts.col(8) = Eigen::Vector4d(0, -0.05, 0.04, 1);
+                link_pts.col(9) = Eigen::Vector4d(0, 0.05, -0.04, 1);
+                link_pts.col(10) = Eigen::Vector4d(0, -0.05, -0.04, 1);
+                link_pts.col(11) = Eigen::Vector4d(0.05, 0, 0.03, 1);
+                link_pts.col(12) = Eigen::Vector4d(-0.05, 0, -0.03, 1);
+                // ################################
+                // C++: denser CR10 Link4 samples end
+                // ################################
                 break;
             }
-            case 4:{ // Link5 / wrist2
-                link_pts.resize(4, 3);
+            case 4:{ // Link5 / wrist2 — denser radial envelope
+                // ################################
+                // C++: denser CR10 Link5 samples begin
+                // ################################
+                link_pts.resize(4, 13);
                 link_pts.col(0) = Eigen::Vector4d(0, 0, 0, 1);
-                link_pts.col(1) = Eigen::Vector4d(0, 0.07, 0, 1);
-                link_pts.col(2) = Eigen::Vector4d(0, -0.05, 0, 1);
+                link_pts.col(1) = Eigen::Vector4d(0, 0.08, 0, 1);
+                link_pts.col(2) = Eigen::Vector4d(0, -0.08, 0, 1);
+                link_pts.col(3) = Eigen::Vector4d(0.06, 0, 0, 1);
+                link_pts.col(4) = Eigen::Vector4d(-0.06, 0, 0, 1);
+                link_pts.col(5) = Eigen::Vector4d(0.04, 0.04, 0, 1);
+                link_pts.col(6) = Eigen::Vector4d(-0.04, -0.04, 0, 1);
+                link_pts.col(7) = Eigen::Vector4d(0, 0.05, 0.04, 1);
+                link_pts.col(8) = Eigen::Vector4d(0, -0.05, 0.04, 1);
+                link_pts.col(9) = Eigen::Vector4d(0, 0.05, -0.04, 1);
+                link_pts.col(10) = Eigen::Vector4d(0, -0.05, -0.04, 1);
+                link_pts.col(11) = Eigen::Vector4d(0.05, 0, 0.03, 1);
+                link_pts.col(12) = Eigen::Vector4d(-0.05, 0, -0.03, 1);
+                // ################################
+                // C++: denser CR10 Link5 samples end
+                // ################################
                 break;
             }
             case 5:{ // Link6 / flange + gripper envelope
-                link_pts.resize(4, 7);
+                // ################################
+                // C++: denser CR10 Link6 + gripper samples begin
+                // ################################
+                // col(3)/col(4) remain gripper lateral tips (setGripperPoint updates them).
+                link_pts.resize(4, 15);
                 link_pts.col(0) = Eigen::Vector4d(0, 0, 0, 1);
                 link_pts.col(1) = Eigen::Vector4d(0, 0, 0.05, 1);
                 link_pts.col(2) = Eigen::Vector4d(0, 0, 0.10, 1);
@@ -1113,6 +1202,17 @@ void MMConfig::setLinkPoint()
                 link_pts.col(4) = Eigen::Vector4d(0, -0.05, 0.10, 1);
                 link_pts.col(5) = Eigen::Vector4d(0.04, 0, 0.08, 1);
                 link_pts.col(6) = Eigen::Vector4d(-0.04, 0, 0.08, 1);
+                link_pts.col(7) = Eigen::Vector4d(0.05, 0.05, 0.10, 1);
+                link_pts.col(8) = Eigen::Vector4d(0.05, -0.05, 0.10, 1);
+                link_pts.col(9) = Eigen::Vector4d(-0.05, 0.05, 0.10, 1);
+                link_pts.col(10) = Eigen::Vector4d(-0.05, -0.05, 0.10, 1);
+                link_pts.col(11) = Eigen::Vector4d(0.06, 0, 0.03, 1);
+                link_pts.col(12) = Eigen::Vector4d(-0.06, 0, 0.03, 1);
+                link_pts.col(13) = Eigen::Vector4d(0, 0.06, 0.12, 1);
+                link_pts.col(14) = Eigen::Vector4d(0, -0.06, 0.12, 1);
+                // ################################
+                // C++: denser CR10 Link6 + gripper samples end
+                // ################################
                 break;
             }
             default:
@@ -1317,6 +1417,28 @@ void MMConfig::visManiCheckBall(ros::Publisher &pub, std::string ns, int idx, do
             0.0              , 0.0               , 0.0, 1.0;
     Eigen::Matrix4d T_now = T_q * T_q_0_;
     Eigen::Vector3d pt_on_link;
+
+    // ################################
+    // C++: visualize cr10_base_link check balls begin
+    // ################################
+    if(manipulator_base_link_pts_.cols() > 0){
+        sphere.color.r = 0.9;
+        sphere.color.g = 0.6;
+        sphere.color.b = 0.1;
+        ++sphere.id;
+        for(int j = 0; j < manipulator_base_link_pts_.cols(); ++j){
+            pt_on_link = (T_now * manipulator_base_link_pts_.col(j)).head(3);
+            pt.x = pt_on_link(0);
+            pt.y = pt_on_link(1);
+            pt.z = pt_on_link(2);
+            sphere.points.push_back(pt);
+        }
+        pub.publish(sphere);
+        sphere.points.clear();
+    }
+    // ################################
+    // C++: visualize cr10_base_link check balls end
+    // ################################
 
     for(int i = 0; i < manipulator_dof_; ++i){
         sphere.color.r = color_set_[i + 1](0);

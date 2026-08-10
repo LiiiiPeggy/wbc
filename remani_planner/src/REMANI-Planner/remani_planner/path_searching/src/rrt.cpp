@@ -831,9 +831,15 @@ namespace remani_planner{
           reals[2] -= 2 * M_PI;
       }
       xt = Eigen::Vector3d(reals[0], reals[1], reals[2]);
-      if(mm_config_->checkcollision(xt, cur_state->state.tail(manipulator_dof_) + delta_theta * temp_i, false)){
+      // ################################
+      // C++: RRT edge uses obs margin (safe=true) begin
+      // ################################
+      if(mm_config_->checkcollision(xt, cur_state->state.tail(manipulator_dof_) + delta_theta * temp_i, true)){
         return true;
       }
+      // ################################
+      // C++: RRT edge uses obs margin (safe=true) end
+      // ################################
     }
     // if(check_num < 10)
     //   check_num = 10;

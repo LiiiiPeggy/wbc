@@ -10,11 +10,17 @@ search:
 
   try_astar_times: 5 # Use whole-body RRT after try_astar_times consecutive planning failures
 
-  yaw_resolution    : 3.15   # yaw sampling interval
+  # ################################
+  # YAML: finer yaw for Hybrid A* (was ~180deg / 2 bins) begin
+  # ################################
+  yaw_resolution    : 0.35   # ~20 deg yaw bins (3.15 left only ~2 bins)
+  # ################################
+  # YAML: finer yaw for Hybrid A* end
+  # ################################
   max_arc           : 0.4    # Maximum forward search displacement
   min_turning_radius: 0.2    # Minimum turning radius
   lambda_heu        : 1      # Coefficient for greedy search, multiplied by h
-  max_seach_time    : 2.0    # Hybrid A* budget (Ranger large turn radius needs >0.5s)
+  max_seach_time    : 3.0    # Hybrid A* budget for Ranger long goals
   check_num         : 16     # Used to check collision when Hybrid A* expands the state
   dist_resolution   : 0.6    # Expected distance between path points given to the backend
   sample_time       : 0.1    # Sampling time when given to the backend

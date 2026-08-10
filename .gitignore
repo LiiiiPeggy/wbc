@@ -37,6 +37,11 @@ remani_planner/.catkin_tools/
 **/devel/
 **/install/
 **/logs/
+# ################################
+# 例外：REMANI 运行日志目录需纳入版本库
+# ################################
+!remani_planner/src/REMANI-Planner/logs/
+!remani_planner/src/REMANI-Planner/logs/**
 **/.catkin_tools/
 **/CMakeFiles/
 **/cmake_install.cmake

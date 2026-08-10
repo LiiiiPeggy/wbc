@@ -285,8 +285,13 @@ namespace mani_sample{
       yaw_vector_temp.push_back(car_state_list[q_temp->index](2));
       if(q_temp->index > 0){
         t_vector_temp.push_back(t_list[q_temp->index - 1]);
-        // singul_vector_temp.push_back(singul_container[q_temp->index - 1]);
-        singul_vector_temp.push_back(1);
+        // ################################
+        // C++: restore true singularity from car path begin
+        // ################################
+        singul_vector_temp.push_back(singul_container[q_temp->index - 1]);
+        // ################################
+        // C++: restore true singularity from car path end
+        // ################################
       }
       q_temp = q_temp->parent;
     }
@@ -302,17 +307,20 @@ namespace mani_sample{
       singul = (path_fill[1] - path_fill[0]).head(2).dot(Eigen::Vector2d(cos(yaw_list_fill[0]), sin(yaw_list_fill[0]))) >= 0 ? 1 : -1;
     else
       singul = singul_vector_temp.back();
-    // singul_vector_temp.push_back(singul);
-    singul_vector_temp.push_back(1);
+    // ################################
+    // C++: restore computed singul (was forced +1) begin
+    // ################################
+    singul_vector_temp.push_back(singul);
     for(int i = 1; i < path_fill_num - 1; ++i){
-      // singul = (path_fill[i + 1] - path_fill[i]).head(2).dot(Eigen::Vector2d(cos(yaw_list_fill[i]), sin(yaw_list_fill[i]))) >= 0 ? 1 : -1;
       singul = (path_fill[i + 1] - path_fill[i]).head(2).dot((path_fill[i] - path_fill[i - 1]).head(2)) >= 0 ? singul : -singul;
-      // singul_vector_temp.push_back(singul);
-      singul_vector_temp.push_back(1);
+      singul_vector_temp.push_back(singul);
       state_vector_temp.push_back(path_fill[i]);
       yaw_vector_temp.push_back(yaw_list_fill[i]);
       t_vector_temp.push_back(t_list_fill[i]);
     }
+    // ################################
+    // C++: restore computed singul (was forced +1) end
+    // ################################
     q_temp = q_an_t;
     while(q_temp != nullptr){
       state_full.head(mobile_base_dof_) = car_state_list[q_temp->index].head(mobile_base_dof_);
@@ -321,7 +329,13 @@ namespace mani_sample{
       yaw_vector_temp.push_back(car_state_list[q_temp->index](2));
       if(q_temp->index < max_index_ - 1){
         t_vector_temp.push_back(t_list[q_temp->index]);
-        singul_vector_temp.push_back(1);
+        // ################################
+        // C++: restore true singularity on anti-tree begin
+        // ################################
+        singul_vector_temp.push_back(singul_container[q_temp->index]);
+        // ################################
+        // C++: restore true singularity on anti-tree end
+        // ################################
       }
       q_temp = q_temp->parent;
     }

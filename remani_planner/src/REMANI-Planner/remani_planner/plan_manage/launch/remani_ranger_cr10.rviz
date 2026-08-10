@@ -67,6 +67,20 @@ Visualization Manager:
             vis_mm_odom: true
           Queue Size: 100
           Value: true
+        # ################################
+        # YAML/RViz: show collision proxy balls begin
+        # ################################
+        - Class: rviz/Marker
+          Enabled: true
+          Marker Topic: /model_vis/vis_mm_check_ball
+          Name: mm_check_ball
+          Namespaces:
+            {}
+          Queue Size: 100
+          Value: true
+        # ################################
+        # YAML/RViz: show collision proxy balls end
+        # ################################
         - Alpha: 1
           Class: rviz/RobotModel
           Collision Enabled: false

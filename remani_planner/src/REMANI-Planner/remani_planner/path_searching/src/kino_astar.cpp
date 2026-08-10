@@ -310,8 +310,7 @@ int KinoAstar::KinoAstarSearchAndGetSimplePath(const Eigen::VectorXd &start_pos,
     // ################################
     // C++: reject frontend path that fails hard gate begin
     // ################################
-    // After KinoA* timeout the straight/RRT fallback may be only thickness-clear
-    // (safe=false). IsTrajSafe uses safe=true → car collision @ ~10s. Reject early.
+    // Use safe=true so soft margin matches IsTrajSafe / runtime safety.
     for(size_t ti = 0; ti < simple_path_container.size() && sample_succ; ++ti){
       if(ti >= yaw_list_container.size()) break;
       for(size_t i = 0; i < simple_path_container[ti].size(); ++i){
@@ -319,7 +318,7 @@ int KinoAstar::KinoAstarSearchAndGetSimplePath(const Eigen::VectorXd &start_pos,
         const Eigen::VectorXd &s = simple_path_container[ti][i];
         int coll_type = -1;
         Eigen::Vector3d car_state(s(0), s(1), yaw_list_container[ti][i]);
-        if(mm_config_->checkcollision(car_state, s.tail(manipulator_dof_), false, coll_type)){
+        if(mm_config_->checkcollision(car_state, s.tail(manipulator_dof_), true, coll_type)){
           ROS_WARN_THROTTLE(2.0, "KinoAstar: frontend path not free (coll=%d) at piece %zu idx %zu; reject",
                    coll_type, ti, i);
           sample_succ = false;

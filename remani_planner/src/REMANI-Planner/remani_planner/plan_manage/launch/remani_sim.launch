@@ -47,7 +47,7 @@
   <!-- ################################ -->
   <!-- XML: Ranger needs longer Hybrid A* budget begin -->
   <!-- ################################ -->
-  <param name="search/max_seach_time" value="2.0" if="$(eval arg('robot_model') == 'ranger_cr10')"/>
+  <param name="search/max_seach_time" value="3.0" if="$(eval arg('robot_model') == 'ranger_cr10')"/>
   <!-- ################################ -->
   <!-- XML: Ranger needs longer Hybrid A* budget end -->
   <!-- ################################ -->
@@ -84,7 +84,7 @@
     <arg name="fy" value="387.229248046875"/>
     <arg name="target_type" value="$(arg target_type)"/>
     <arg name="min_turning_radius" value="$(arg min_turning_radius)"/>
-    <arg name="max_seach_time" value="2.0" if="$(eval arg('robot_model') == 'ranger_cr10')"/>
+    <arg name="max_seach_time" value="3.0" if="$(eval arg('robot_model') == 'ranger_cr10')"/>
     <arg name="max_seach_time" value="0.5" if="$(eval arg('robot_model') == 'fast_armer')"/>
   </include>
 
