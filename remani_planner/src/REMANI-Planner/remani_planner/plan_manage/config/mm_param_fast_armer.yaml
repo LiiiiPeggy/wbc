@@ -1,0 +1,33 @@
+# ################################
+# YAML: original REMANI FastArmer + small differential base begin
+# ################################
+# Upstream defaults from Robotics-STAR-Lab/REMANI-Planner.
+# Mount xyz uses corrected order [x,y,z,yaw,pitch,roll] (upstream yaml had swapped blocks;
+# original code then overwrote T_q_0_ — we keep the intended mount here).
+mm:
+  mobile_base_dof            : 2
+  mobile_base_length         : 0.5
+  mobile_base_width          : 0.5
+  mobile_base_height         : 0.23
+  mobile_base_wheel_base     : 0.37
+  mobile_base_wheel_radius   : 0.07
+  mobile_base_non_singul_vel : 0.05
+  mobile_base_max_wheel_omega: 10.0
+  mobile_base_max_wheel_alpha: 20.0
+  mobile_base_check_radius   : 0.17
+
+  manipulator_dof    : 6
+  manipulator_max_vel: 1.57
+  manipulator_max_acc: 3.14
+
+  base_mani_fixed_joint_xyz_ypr: [0.03, -0.02, 0.23, 0.0, 0.0, 0.0]
+
+  manipulator_type: fast_armer
+  use_fast_armer       : true
+  manipulator_thickness: 0.03
+  manipulator_config   : [0.176, 0.417, 0.07, 0.385, 0.0, 0.20]
+  manipulator_min_pos  : [-3.062, -3.136, -0.008, -2.932, -3.655, -3.14]
+  manipulator_max_pos  : [ 3.052,  0.001,  3.044,  2.950,  0.447,  3.14]
+# ################################
+# YAML: original REMANI FastArmer + small differential base end
+# ################################

@@ -1,5 +1,6 @@
 #include "mm_config/mm_config.hpp"
 #include <stdexcept>
+#include <algorithm>
 
 namespace remani_planner
 {
@@ -25,6 +26,14 @@ void MMConfig::setParam(ros::NodeHandle &nh){
 
     nh.param("mm/manipulator_dof", manipulator_dof_, -1);
     nh.param("mm/manipulator_thickness", manipulator_thickness_, -1.0);
+    // ################################
+    // C++: load self-collision thickness begin
+    // ################################
+    // Default = obstacle thickness (FastArmer). CR10 sets a smaller value in yaml.
+    nh.param("mm/manipulator_self_thickness", manipulator_self_thickness_, manipulator_thickness_);
+    // ################################
+    // C++: load self-collision thickness end
+    // ################################
 
     // ################################
     // C++: guard invalid mm params begin
@@ -124,12 +133,30 @@ void MMConfig::setParam(ros::NodeHandle &nh){
     // C++: manipulator_type (cr10/fast_armer/ur5) end
     // ################################
 
+    // ################################
+    // C++: CR10 clamp self thickness after type known begin
+    // ################################
+    // If yaml param missing, nh.param defaulted to obstacle thickness (0.10) →
+    // 2*0.10=0.20 > wrist spacing ~0.12 → every pose reports start(3).
+    if(manipulator_type_ == ManipulatorType::CR10){
+        if(manipulator_self_thickness_ <= 0.0 ||
+           manipulator_self_thickness_ >= manipulator_thickness_ - 1e-6){
+            manipulator_self_thickness_ = 0.04;
+        }
+        manipulator_self_thickness_ = std::min(manipulator_self_thickness_, 0.045);
+    }
+    ROS_INFO("MMConfig: type=%s thickness=%.3f self_thickness=%.3f",
+             manipulator_type_str.c_str(), manipulator_thickness_, manipulator_self_thickness_);
+    // ################################
+    // C++: CR10 clamp self thickness after type known end
+    // ################################
+
     std::string mesh_path = ros::package::getPath("mm_config")  + "/meshes/";
 
     mesh_resource_mobile_base_ = "file://" + mesh_path + "mobile_base.STL";
 
     // ################################
-    // C++: Ranger chassis mesh for CR10 sim begin
+    // C++: Ranger/CR10 mesh as file:// (avoid rospack errors) begin
     // ################################
     mesh_resource_ranger_base_ = "file://" + mesh_path + "Ranger/ranger_base_link.STL";
     mesh_resource_ranger_box_  = "file://" + mesh_path + "Ranger/box_link.STL";
@@ -137,7 +164,7 @@ void MMConfig::setParam(ros::NodeHandle &nh){
         mesh_resource_mobile_base_ = mesh_resource_ranger_base_;
     }
     // ################################
-    // C++: Ranger chassis mesh for CR10 sim end
+    // C++: Ranger/CR10 mesh as file:// (avoid rospack errors) end
     // ################################
 
     mesh_resource_fastarmer_base0_ = "file://" + mesh_path + "FastArmer/base_link.STL";
@@ -160,7 +187,7 @@ void MMConfig::setParam(ros::NodeHandle &nh){
     mesh_resource_ur5_wrist3_   = "file://" + mesh_path + "ur5/wrist3.dae";
 
     // ################################
-    // C++: CR10 mesh resources begin
+    // C++: CR10 mesh file:// URIs begin
     // ################################
     mesh_resource_cr10_base_  = "file://" + mesh_path + "CR10/cr10_base_link.STL";
     mesh_resource_cr10_link1_ = "file://" + mesh_path + "CR10/Link1.STL";
@@ -169,6 +196,9 @@ void MMConfig::setParam(ros::NodeHandle &nh){
     mesh_resource_cr10_link4_ = "file://" + mesh_path + "CR10/Link4.STL";
     mesh_resource_cr10_link5_ = "file://" + mesh_path + "CR10/Link5.STL";
     mesh_resource_cr10_link6_ = "file://" + mesh_path + "CR10/Link6.STL";
+    // ################################
+    // C++: CR10 mesh file:// URIs end
+    // ################################
     initCr10FixedTransforms();
     // ################################
     // C++: CR10 mesh resources end
@@ -769,7 +799,13 @@ bool MMConfig::checkManiObsCollision(Eigen::Vector3d car_state, Eigen::VectorXd 
     T_q(1, 1) = cos(car_state(2));
     T_q(1, 3) = car_state(1);
     double safe_dist = safe ? manipulator_thickness_ + mani_safe_margin_ : manipulator_thickness_;
-    // safe_dist += map_resolution_ / 2.0;
+    // ################################
+    // C++: account for ESDF grid discretization begin
+    // ################################
+    safe_dist += map_resolution_ / 2.0;
+    // ################################
+    // C++: account for ESDF grid discretization end
+    // ################################
     geometry_msgs::Point pt;
     Eigen::Vector3d pt_on_link;
     Eigen::Matrix4d T_now = T_q * T_q_0_;
@@ -805,21 +841,49 @@ bool MMConfig::checkManiObsCollision(Eigen::Vector3d car_state, Eigen::VectorXd 
 }
 
 bool MMConfig::checkCarManiCollision(Eigen::VectorXd mani_state, bool safe, double &min_dist){
-    double safe_dist = safe ? mobile_base_check_radius_ + manipulator_thickness_ + self_safe_margin_ : mobile_base_check_radius_ + manipulator_thickness_;
+    // ################################
+    // C++: car-mani uses self thickness + CR10 proximal skip begin
+    // ################################
+    // Obstacle thickness (0.10) is too fat vs deck clearance (~0.18 m at shoulder).
+    double arm_r = manipulator_self_thickness_;
+    double safe_dist = safe ? mobile_base_check_radius_ + arm_r + self_safe_margin_
+                            : mobile_base_check_radius_ + arm_r;
     std::vector<Eigen::Vector3d> car_pts;
     getCarPts(Eigen::Vector3d::Zero(), car_pts);
+    // Arm is mounted ON the chassis (z=T_q_0_ z). A tall mobile_base_height prism
+    // would falsely embed the arm. Keep base_mani_fixed_joint unchanged; filter
+    // car samples above the mount deck for self-collision only.
+    if(manipulator_type_ == ManipulatorType::CR10){
+        const double deck_z = T_q_0_(2, 3) + 1e-3;
+        std::vector<Eigen::Vector3d> deck_pts;
+        deck_pts.reserve(car_pts.size());
+        for(const auto &p : car_pts){
+            if(p(2) <= deck_z) deck_pts.push_back(p);
+        }
+        if(deck_pts.empty() && !car_pts.empty()){
+            const double z_deck = std::max(mobile_base_check_radius_ * 0.5, T_q_0_(2, 3) * 0.5);
+            for(const auto &p : car_pts){
+                deck_pts.emplace_back(p(0), p(1), z_deck);
+            }
+        }
+        car_pts.swap(deck_pts);
+    }
     Eigen::Vector3d pt_on_link;
-    std::vector<Eigen::Vector3d> pt_to_check_list;
     std::vector<Eigen::Matrix4d> T_joint, T_joint_grad_nouse;
     T_joint.clear();
     getJointTrans(mani_state, T_joint, T_joint_grad_nouse);
-    int car_pts_size = car_pts.size();
+    int car_pts_size = static_cast<int>(car_pts.size());
     int pts_size;
     Eigen::Matrix4d T_now = T_q_0_ * T_joint[0];
     for(int i = 1; i < manipulator_dof_; ++i){
         T_now = T_now * T_joint[i];
         pts_size = manipulator_link_pts_[i].cols();
         for(int j = 0; j < pts_size; ++j){
+            // Skip upper-arm samples near shoulder (always adjacent to mount/box).
+            if(manipulator_type_ == ManipulatorType::CR10 && i == 1){
+                const double lx = manipulator_link_pts_[i](0, j);
+                if(lx > -0.25) continue;
+            }
             pt_on_link = (T_now * manipulator_link_pts_[i].col(j)).head(3);
             for(int k = 0; k < car_pts_size; ++k){
                 if((pt_on_link - car_pts[k]).norm() < safe_dist){
@@ -829,12 +893,22 @@ bool MMConfig::checkCarManiCollision(Eigen::VectorXd mani_state, bool safe, doub
             }
         }
     }
+    // ################################
+    // C++: car-mani uses self thickness + CR10 proximal skip end
+    // ################################
     min_dist = safe_dist;
     return false;
 }
 
 bool MMConfig::checkManiManiCollision(Eigen::VectorXd mani_state, bool safe, double &min_dist){
-    double safe_dist = safe ? 2.0 * manipulator_thickness_ + self_safe_margin_ : 2.0 * manipulator_thickness_;
+    // ################################
+    // C++: use self thickness for mani-mani begin
+    // ################################
+    double safe_dist = safe ? 2.0 * manipulator_self_thickness_ + self_safe_margin_
+                            : 2.0 * manipulator_self_thickness_;
+    // ################################
+    // C++: use self thickness for mani-mani end
+    // ################################
     Eigen::Vector3d pt_on_link;
     std::vector<Eigen::Vector3d> pt_to_check_list;
     pt_to_check_list.reserve(20);
@@ -847,17 +921,27 @@ bool MMConfig::checkManiManiCollision(Eigen::VectorXd mani_state, bool safe, dou
     Eigen::Matrix4d T_now = Eigen::Matrix4d::Identity();
     for(int i = 0; i < manipulator_dof_; ++i){
         T_now *= T_joint[i];
-        if(i >= 2)
-            num_to_check += manipulator_link_pts_[i - 2].cols();
-        // if(i == manipulator_dof_ - 1)
-        //     num_to_check += manipulator_link_pts_[i - 1].cols();
+        // ################################
+        // C++: CR10 skip 2 wrist neighbors begin
+        // ################################
+        // Wrist1/2/flange spacing ~0.12 m; skipping only 1 neighbor still pairs
+        // link5 vs link3 and falsely collides under any thickness > 0.06.
+        if(manipulator_type_ == ManipulatorType::CR10){
+            if(i >= 3)
+                num_to_check += manipulator_link_pts_[i - 3].cols();
+        }else{
+            if(i >= 2)
+                num_to_check += manipulator_link_pts_[i - 2].cols();
+        }
+        // ################################
+        // C++: CR10 skip 2 wrist neighbors end
+        // ################################
         pts_size = manipulator_link_pts_[i].cols();
         for(int j = 0; j < pts_size; ++j){
             pt_on_link = (T_now * manipulator_link_pts_[i].col(j)).head(3);
             pt_to_check_list.push_back(pt_on_link);
             for(int k = 0; k < num_to_check; ++k){
                 if((pt_on_link - pt_to_check_list[k]).norm() < safe_dist){
-                    // printf("(%d, %d, %d)\n", i, j, k);
                     min_dist = (pt_on_link - pt_to_check_list[k]).norm();
                     return true;
                 }
@@ -870,20 +954,30 @@ bool MMConfig::checkManiManiCollision(Eigen::VectorXd mani_state, bool safe, dou
 
 bool MMConfig::checkManicollision(Eigen::Vector3d car_state, Eigen::VectorXd mani_state, bool safe){
     double min_dist;
+    // ################################
+    // C++: obs honor safe; self never use soft margin begin
+    // ################################
+    // CR10 wrist spacing ~0.12 m; self_safe_margin would revive start(3) false positives.
     if(checkManiObsCollision(car_state, mani_state, safe, min_dist)){
         return true;
     }
-    if(checkCarManiCollision(mani_state, safe, min_dist)){
+    if(checkCarManiCollision(mani_state, false, min_dist)){
         return true;
     }
-    if(checkManiManiCollision(mani_state, safe, min_dist)){
+    if(checkManiManiCollision(mani_state, false, min_dist)){
         return true;
     }
+    // ################################
+    // C++: obs honor safe; self never use soft margin end
+    // ################################
     return false;
 }
 
 bool MMConfig::checkcollision(Eigen::Vector3d car_state, Eigen::VectorXd mani_state, bool safe, int &coll_type /*0: car, 1: mani, 2: car-mani, 3: mani-mani*/){
     double min_dist;
+    // ################################
+    // C++: obs with margin; self without soft margin begin
+    // ################################
     if(checkCarObsCollision(car_state, true, safe, min_dist)){
         coll_type = 0;
         return true;
@@ -892,32 +986,41 @@ bool MMConfig::checkcollision(Eigen::Vector3d car_state, Eigen::VectorXd mani_st
         coll_type = 1;
         return true;
     }
-    if(checkCarManiCollision(mani_state, safe, min_dist)){
+    if(checkCarManiCollision(mani_state, false, min_dist)){
         coll_type = 2;
         return true;
     }
-    if(checkManiManiCollision(mani_state, safe, min_dist)){
+    if(checkManiManiCollision(mani_state, false, min_dist)){
         coll_type = 3;
         return true;
     }
+    // ################################
+    // C++: obs with margin; self without soft margin end
+    // ################################
     coll_type = -1;
     return false;
 }
 
 bool MMConfig::checkcollision(Eigen::Vector3d car_state, Eigen::VectorXd mani_state, bool safe){
     double min_dist;
+    // ################################
+    // C++: obs with margin; self without soft margin begin
+    // ################################
     if(checkCarObsCollision(car_state, true, safe, min_dist)){
         return true;
     }
     if(checkManiObsCollision(car_state, mani_state, safe, min_dist)){
         return true;
     }
-    if(checkCarManiCollision(mani_state, safe, min_dist)){
+    if(checkCarManiCollision(mani_state, false, min_dist)){
         return true;
     }
-    if(checkManiManiCollision(mani_state, safe, min_dist)){
+    if(checkManiManiCollision(mani_state, false, min_dist)){
         return true;
     }
+    // ################################
+    // C++: obs with margin; self without soft margin end
+    // ################################
     return false;
 }
 
@@ -931,54 +1034,85 @@ void MMConfig::setLinkPoint()
     if(manipulator_type_ == ManipulatorType::CR10){
         for(int i = 0; i < manipulator_dof_; ++i){
             switch(i){
-            case 0:{ // Link1 / shoulder
-                link_pts.resize(4, 3);
+            case 0:{ // Link1 / shoulder — denser radial + axial samples
+                // ################################
+                // C++: denser CR10 Link1 samples begin
+                // ################################
+                link_pts.resize(4, 9);
                 link_pts.col(0) = Eigen::Vector4d(0, 0, 0, 1);
-                link_pts.col(1) = Eigen::Vector4d(0, 0.06, 0, 1);
-                link_pts.col(2) = Eigen::Vector4d(0, -0.06, 0, 1);
+                link_pts.col(1) = Eigen::Vector4d(0, 0.08, 0, 1);
+                link_pts.col(2) = Eigen::Vector4d(0, -0.08, 0, 1);
+                link_pts.col(3) = Eigen::Vector4d(0.06, 0, 0, 1);
+                link_pts.col(4) = Eigen::Vector4d(-0.06, 0, 0, 1);
+                link_pts.col(5) = Eigen::Vector4d(0, 0, 0.06, 1);
+                link_pts.col(6) = Eigen::Vector4d(0, 0, -0.06, 1);
+                link_pts.col(7) = Eigen::Vector4d(0.04, 0.04, 0, 1);
+                link_pts.col(8) = Eigen::Vector4d(-0.04, -0.04, 0, 1);
+                // ################################
+                // C++: denser CR10 Link1 samples end
+                // ################################
                 break;
             }
-            case 1:{ // Link2 / upper arm length ~0.607 along -x toward joint3
-                link_pts.resize(4, 7);
-                link_pts.col(0) = Eigen::Vector4d(0, 0, 0, 1);
-                link_pts.col(1) = Eigen::Vector4d(-0.10, 0, 0, 1);
-                link_pts.col(2) = Eigen::Vector4d(-0.20, 0, 0, 1);
-                link_pts.col(3) = Eigen::Vector4d(-0.30, 0, 0, 1);
-                link_pts.col(4) = Eigen::Vector4d(-0.40, 0, 0, 1);
-                link_pts.col(5) = Eigen::Vector4d(-0.50, 0, 0, 1);
-                link_pts.col(6) = Eigen::Vector4d(-0.58, 0, 0, 1);
+            case 1:{ // Link2 / upper arm ~0.607 along -x + lateral envelope
+                // ################################
+                // C++: denser CR10 Link2 samples (0.05 step) begin
+                // ################################
+                link_pts.resize(4, 40);
+                int c = 0;
+                for(double x = 0.0; x >= -0.60 - 1e-6; x -= 0.05){
+                    link_pts.col(c++) = Eigen::Vector4d(x, 0, 0, 1);
+                    link_pts.col(c++) = Eigen::Vector4d(x, 0.08, 0, 1);
+                    link_pts.col(c++) = Eigen::Vector4d(x, -0.08, 0, 1);
+                }
+                link_pts.conservativeResize(4, c);
+                // ################################
+                // C++: denser CR10 Link2 samples end
+                // ################################
                 break;
             }
-            case 2:{ // Link3 / forearm ~0.568 along -x, offset z=0.191 to joint4
-                link_pts.resize(4, 7);
-                link_pts.col(0) = Eigen::Vector4d(0, 0, 0, 1);
-                link_pts.col(1) = Eigen::Vector4d(-0.10, 0, 0.03, 1);
-                link_pts.col(2) = Eigen::Vector4d(-0.20, 0, 0.07, 1);
-                link_pts.col(3) = Eigen::Vector4d(-0.30, 0, 0.10, 1);
-                link_pts.col(4) = Eigen::Vector4d(-0.40, 0, 0.14, 1);
-                link_pts.col(5) = Eigen::Vector4d(-0.50, 0, 0.17, 1);
-                link_pts.col(6) = Eigen::Vector4d(-0.55, 0, 0.19, 1);
+            case 2:{ // Link3 / forearm ~0.568 along -x toward wrist
+                // ################################
+                // C++: denser CR10 Link3 samples (0.05 step) begin
+                // ################################
+                link_pts.resize(4, 36);
+                {
+                    int c = 0;
+                    for(double x = 0.0; x >= -0.55 - 1e-6; x -= 0.05){
+                        double z = (-x / 0.55) * 0.19;
+                        link_pts.col(c++) = Eigen::Vector4d(x, 0, z, 1);
+                        link_pts.col(c++) = Eigen::Vector4d(x, 0.07, z, 1);
+                        link_pts.col(c++) = Eigen::Vector4d(x, -0.07, z, 1);
+                    }
+                    link_pts.conservativeResize(4, c);
+                }
+                // ################################
+                // C++: denser CR10 Link3 samples end
+                // ################################
                 break;
             }
             case 3:{ // Link4 / wrist1
-                link_pts.resize(4, 2);
+                link_pts.resize(4, 3);
                 link_pts.col(0) = Eigen::Vector4d(0, 0, 0, 1);
-                link_pts.col(1) = Eigen::Vector4d(0, -0.06, 0, 1);
+                link_pts.col(1) = Eigen::Vector4d(0, -0.08, 0, 1);
+                link_pts.col(2) = Eigen::Vector4d(0, 0.05, 0, 1);
                 break;
             }
             case 4:{ // Link5 / wrist2
-                link_pts.resize(4, 2);
+                link_pts.resize(4, 3);
                 link_pts.col(0) = Eigen::Vector4d(0, 0, 0, 1);
-                link_pts.col(1) = Eigen::Vector4d(0, 0.05, 0, 1);
+                link_pts.col(1) = Eigen::Vector4d(0, 0.07, 0, 1);
+                link_pts.col(2) = Eigen::Vector4d(0, -0.05, 0, 1);
                 break;
             }
             case 5:{ // Link6 / flange + gripper envelope
-                link_pts.resize(4, 5);
+                link_pts.resize(4, 7);
                 link_pts.col(0) = Eigen::Vector4d(0, 0, 0, 1);
-                link_pts.col(1) = Eigen::Vector4d(0, 0, 0.04, 1);
-                link_pts.col(2) = Eigen::Vector4d(0, 0, 0.08, 1);
-                link_pts.col(3) = Eigen::Vector4d(0, 0.04, 0.10, 1);
-                link_pts.col(4) = Eigen::Vector4d(0, -0.04, 0.10, 1);
+                link_pts.col(1) = Eigen::Vector4d(0, 0, 0.05, 1);
+                link_pts.col(2) = Eigen::Vector4d(0, 0, 0.10, 1);
+                link_pts.col(3) = Eigen::Vector4d(0, 0.05, 0.10, 1);
+                link_pts.col(4) = Eigen::Vector4d(0, -0.05, 0.10, 1);
+                link_pts.col(5) = Eigen::Vector4d(0.04, 0, 0.08, 1);
+                link_pts.col(6) = Eigen::Vector4d(-0.04, 0, 0.08, 1);
                 break;
             }
             default:

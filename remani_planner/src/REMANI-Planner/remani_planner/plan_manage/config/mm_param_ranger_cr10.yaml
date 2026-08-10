@@ -1,19 +1,15 @@
 # ################################
-# YAML: default mm_param = Ranger+CR10 begin
+# YAML: Ranger + CR10 simulation params begin
 # ################################
-# Prefer selecting via launch:
-#   robot_model:=fast_armer   -> mm_param_fast_armer.yaml
-#   robot_model:=ranger_cr10  -> mm_param_ranger_cr10.yaml
-# This file stays as Ranger+CR10 for backward-compatible includes.
-# ################################
-# YAML: default mm_param = Ranger+CR10 end
-# ################################
-
 mm:
+  # Ranger full-size footprint (collision envelope) + virtual differential model.
+  # mobile_base_wheel_base is the VIRTUAL track width used by remani wheel-speed
+  # feasibility (left/right), NOT the Ranger longitudinal wheelbase (~0.90 m).
   mobile_base_dof            : 2
   mobile_base_length         : 1.10
   mobile_base_width          : 0.90
-  # Collision envelope height = chassis deck only (mount xyz unchanged)
+  # Collision envelope height = chassis deck only (NOT including arm volume).
+  # Mount stays [0.2462,0,0.1] — do not raise mount; tall height falsely triggers car-mani.
   mobile_base_height         : 0.15
   mobile_base_wheel_base     : 0.56
   mobile_base_wheel_radius   : 0.125
@@ -26,11 +22,20 @@ mm:
   manipulator_max_vel: 0.80
   manipulator_max_acc: 1.57
 
+  # cr10_mount_joint: xyz=[0.2462,0,0.1], rpy=[0,0,0]
   base_mani_fixed_joint_xyz_ypr: [0.2462, 0.0, 0.1, 0.0, 0.0, 0.0]
+
   manipulator_type: cr10
-  # Obstacle envelope vs wrist self-check (see mm_param_ranger_cr10.yaml)
+
+  # Obstacle envelope (thicker). Self-collision uses thinner radius below:
+  # CR10 wrist spacing ~0.12 m; 2*0.09=0.18 falsely flags every pose as mani-mani.
   manipulator_thickness: 0.10
   manipulator_self_thickness: 0.045
   manipulator_config   : [0.1765, 0.607, 0.568, 0.191, 0.125, 0.1084]
+
+  # Conservative simulation limits — 待实机校验
   manipulator_min_pos  : [-3.00, -1.50, -2.80, -3.00, -3.00, -3.00]
   manipulator_max_pos  : [ 3.00,  1.50,  2.80,  3.00,  3.00,  3.00]
+# ################################
+# YAML: Ranger + CR10 simulation params end
+# ################################

@@ -12,6 +12,13 @@
 	<arg name="depth_topic"/>
 	<arg name="cloud_topic"/>
 	<arg name="exp_param_file"/>
+	<!-- ################################ -->
+	<!-- XML: selectable mm_param_file begin -->
+	<!-- ################################ -->
+	<arg name="mm_param_file" default="$(find remani_planner)/config/mm_param.yaml"/>
+	<!-- ################################ -->
+	<!-- XML: selectable mm_param_file end -->
+	<!-- ################################ -->
 
 	<arg name="cx"/>
 	<arg name="cy"/>
@@ -22,6 +29,7 @@
 	<!-- ################################ -->
 	<arg name="target_type" default="2"/>
 	<arg name="min_turning_radius" default="0.2"/>
+	<arg name="max_seach_time" default="2.0"/>
 	<!-- ################################ -->
 	<!-- XML: optional planner overrides end -->
 	<!-- ################################ -->
@@ -29,11 +37,18 @@
   <!-- main node -->
   	<node pkg="remani_planner" name="remani_planner_node" type="remani_planner_node" output="screen">
 		<rosparam file="$(arg exp_param_file)"/>
-		<rosparam file="$(find remani_planner)/config/mm_param.yaml"/>
+		<rosparam file="$(arg mm_param_file)"/>
 		<rosparam file="$(find remani_planner)/config/remani_planner_param.yaml"/>
 		<!-- overrides after rosparam so they win -->
 		<param name="fsm/target_type" value="$(arg target_type)"/>
 		<param name="search/min_turning_radius" value="$(arg min_turning_radius)"/>
+		<!-- ################################ -->
+		<!-- XML: node-local Hybrid A* budget begin -->
+		<!-- ################################ -->
+		<param name="search/max_seach_time" value="$(arg max_seach_time)"/>
+		<!-- ################################ -->
+		<!-- XML: node-local Hybrid A* budget end -->
+		<!-- ################################ -->
 
 		<remap from="~gripper_cmd" to="$(arg gripper_cmd_topic)"/>
 		<remap from="~gripper_state" to="$(arg gripper_state_topic)"/>
@@ -61,7 +76,7 @@
 		<param name="grid_map/local_update_range_x"   value="17" /> 
 		<param name="grid_map/local_update_range_y"   value="17" /> 
 		<param name="grid_map/local_update_range_z"   value="3.0" /> 
-		<param name="grid_map/obstacles_inflation"    value="0.00" /> 
+		<param name="grid_map/obstacles_inflation"    value="0.08" /> 
 		<param name="grid_map/local_map_margin"       value="15"/>
 		<param name="grid_map/ground_height"          value="-0.01"/>
 		<param name="grid_map/z_length"               value="0.0"/>
@@ -106,7 +121,7 @@
 
 	<node pkg="mm_controller" name="mm_controller_node" type="mm_controller_node" output="screen">
 		<rosparam file="$(arg exp_param_file)"/>
-		<rosparam file="$(find remani_planner)/config/mm_param.yaml"/>
+		<rosparam file="$(arg mm_param_file)"/>
 		<rosparam file="$(find remani_planner)/config/remani_planner_param.yaml"/>
   
 		<remap from="~odom" to="$(arg odometry_topic)"/>

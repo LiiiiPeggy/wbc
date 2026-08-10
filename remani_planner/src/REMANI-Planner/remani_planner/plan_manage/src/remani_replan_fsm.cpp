@@ -421,13 +421,37 @@ namespace remani_planner
       return;
     cout << "Triggered! traget type: " << target_type_ << endl;
     // trigger_ = true;
+    // ################################
+    // C++: manual goal also sets trigger begin
+    // ################################
+    have_trigger_ = true;
+    // ################################
+    // C++: manual goal also sets trigger end
+    // ################################
     init_state_ = mm_state_pos_;
     end_pt_ = Eigen::VectorXd::Zero(traj_dim_);
     
     if(target_type_ == TARGET_TYPE::MANUAL_TARGET){
+      // ################################
+      // C++: manual goal keeps current arm joints begin
+      // ################################
+      end_pt_ = mm_state_pos_;
       end_pt_(0) = msg->pose.position.x;
       end_pt_(1) = msg->pose.position.y;
+      // ################################
+      // C++: log clicked goal + current pose begin
+      // ################################
+      ROS_INFO("FSM goal click: goal_xy=(%.3f, %.3f) start_xy=(%.3f, %.3f) yaw=%.1f deg",
+               end_pt_(0), end_pt_(1),
+               mm_state_pos_(0), mm_state_pos_(1),
+               mm_car_yaw_ * 180.0 / M_PI);
+      // ################################
+      // C++: log clicked goal + current pose end
+      // ################################
       end_yaw_ = tf::getYaw(msg->pose.orientation);
+      // ################################
+      // C++: manual goal keeps current arm joints end
+      // ################################
     }else{
       ROS_ERROR("wrong target type: %d", target_type_);
       return;
@@ -465,11 +489,21 @@ namespace remani_planner
   }
 
   void REMANIReplanFSM::mmManiOdomCallback(const sensor_msgs::JointStateConstPtr &msg){
+    // ################################
+    // C++: guard short JointState begin
+    // ################################
+    if((int)msg->position.size() < manipulator_dim_){
+      ROS_WARN_THROTTLE(1.0, "joint_state position size %zu < %d, skip", msg->position.size(), manipulator_dim_);
+      return;
+    }
     for(int i = 0; i < manipulator_dim_; ++i){
       mm_state_pos_(mobile_base_dim_ + i) = msg->position[i];
-      mm_state_vel_(mobile_base_dim_ + i) = msg->velocity[i];
-      mm_state_acc_(mobile_base_dim_ + i) = msg->effort[i];
+      mm_state_vel_(mobile_base_dim_ + i) = ((int)msg->velocity.size() > i) ? msg->velocity[i] : 0.0;
+      mm_state_acc_(mobile_base_dim_ + i) = ((int)msg->effort.size() > i) ? msg->effort[i] : 0.0;
     }
+    // ################################
+    // C++: guard short JointState end
+    // ################################
   }
 
   void REMANIReplanFSM::gripperCallback(const std_msgs::Bool::ConstPtr &msg){
@@ -489,7 +523,18 @@ namespace remani_planner
     static string state_str[8] = {"INIT", "WAIT_TARGET", "GEN_NEW_TRAJ", "REPLAN_TRAJ", "EXEC_TRAJ", "EMERGENCY_STOP"};
     int pre_s = int(exec_state_);
     exec_state_ = new_state;
-    cout << "[" + pos_call + "]: from " + state_str[pre_s] + " to " + state_str[int(new_state)] << endl;
+    // ################################
+    // C++: throttle same-state FSM spam begin
+    // ################################
+    if(pre_s == int(new_state)){
+      ROS_INFO_THROTTLE(2.0, "[%s]: stay in %s (x%d)", pos_call.c_str(),
+                        state_str[int(new_state)].c_str(), continously_called_times_);
+    }else{
+      cout << "[" + pos_call + "]: from " + state_str[pre_s] + " to " + state_str[int(new_state)] << endl;
+    }
+    // ################################
+    // C++: throttle same-state FSM spam end
+    // ################################
   }
 
   void REMANIReplanFSM::printFSMExecState(){

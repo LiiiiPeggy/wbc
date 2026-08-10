@@ -760,7 +760,7 @@ namespace remani_planner{
     xt[0] = cur_state->state[0];
     xt[1] = cur_state->state[1];
     xt[2] = cur_state->yaw; 
-    return mm_config_->checkcollision(xt, cur_state->state.tail(manipulator_dof_), false);
+    return mm_config_->checkcollision(xt, cur_state->state.tail(manipulator_dof_), true);
   }
 
   // bool RrtPlanning::checkcollision(Eigen::VectorXd cur_state){

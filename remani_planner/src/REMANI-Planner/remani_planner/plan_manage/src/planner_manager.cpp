@@ -27,7 +27,13 @@ namespace remani_planner
     nh.param("search/time_resolution", pp_.polyTraj_piece_time, -1.0);
     double dist_resolution;
     nh.param("search/dist_resolution", dist_resolution, -1.0);
-    pp_.polyTraj_piece_time = dist_resolution / pp_.max_vel_;
+    // ################################
+    // C++: defer polyTraj_piece_time until max_vel is known begin
+    // ################################
+    // (was: dist_resolution / pp_.max_vel_ here — max_vel_ not set yet → Inf/NaN)
+    // ################################
+    // C++: defer polyTraj_piece_time until max_vel is known end
+    // ################################
     nh.param("manager/drone_id", pp_.drone_id, -1);
 
     nh.param("fsm/planning_horizon", pp_.planning_horizen_, 5.0);
@@ -48,8 +54,20 @@ namespace remani_planner
     mm_config_.reset(new MMConfig);
     mm_config_->setParam(nh, grid_map_);
 
+    // ################################
+    // C++: set max_vel before polyTraj_piece_time begin
+    // ################################
     pp_.max_vel_ = mm_config_->getBaseMaxVel();
     pp_.max_acc_ = mm_config_->getBaseMaxAcc();
+    if(pp_.max_vel_ > 1e-6){
+      pp_.polyTraj_piece_time = dist_resolution / pp_.max_vel_;
+    }else{
+      pp_.polyTraj_piece_time = 1.0;
+      ROS_WARN("MMPlannerManager: max_vel invalid, polyTraj_piece_time fallback=1.0");
+    }
+    // ################################
+    // C++: set max_vel before polyTraj_piece_time end
+    // ################################
     
     ploy_traj_opt_.reset(new PolyTrajOptimizer);
     ploy_traj_opt_->setParam(nh, grid_map_, mm_config_);
@@ -335,8 +353,19 @@ namespace remani_planner
       const bool have_local_traj, double &init_time, double &opt_time)
   {
     static int count = 0;
-
-    printf("\033[47;30m\n[replan %d]==============================================\033[0m\n", count++);
+    // ################################
+    // C++: throttle replan banner begin
+    // ################################
+    static ros::Time last_replan_banner(0);
+    ros::Time now_banner = ros::Time::now();
+    if(count == 0 || (now_banner - last_replan_banner).toSec() >= 2.0){
+      printf("\033[47;30m\n[replan %d]==============================================\033[0m\n", count);
+      last_replan_banner = now_banner;
+    }
+    ++count;
+    // ################################
+    // C++: throttle replan banner end
+    // ################################
 
     ros::Time t_start = ros::Time::now();
     ros::Duration t_init, t_opt;
@@ -347,7 +376,17 @@ namespace remani_planner
     if (!computeInitReferenceState(start_pt, start_vel, start_acc, start_jerk, start_yaw, start_singul, start_gripper,
                                    local_target_pt, local_target_vel, local_target_acc, local_target_yaw, local_target_gripper,
                                    initMJO_container, singul_container, 
-                                   flag_polyInit, continous_failures_count_)){return false;}
+                                   flag_polyInit, continous_failures_count_)){
+      // ################################
+      // C++: count frontend failures so RRT can kick in begin
+      // ################################
+      // Previously returned false without ++, so failures stayed 0 and RRT never ran.
+      continous_failures_count_++;
+      // ################################
+      // C++: count frontend failures so RRT can kick in end
+      // ################################
+      return false;
+    }
 
     Eigen::VectorXd init_len(7);
     double init_dura = 0.0;

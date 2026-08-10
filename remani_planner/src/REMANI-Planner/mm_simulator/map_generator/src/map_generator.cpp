@@ -20,7 +20,13 @@
 #include <Eigen/Eigen>
 #include <random>
 #include <std_msgs/Int32.h>
-
+// ################################
+// C++: XmlRpc for clear_centers begin
+// ################################
+#include <xmlrpcpp/XmlRpcValue.h>
+// ################################
+// C++: XmlRpc for clear_centers end
+// ################################
 
 using namespace std; 
 
@@ -39,6 +45,25 @@ double _x_size, _y_size, _z_size;
 double _x_l, _x_h, _y_l, _y_h;
 double _resolution, _pub_rate;
 double _min_dist;
+// ################################
+// C++: clear zones around start/waypoints begin
+// ################################
+double _clear_radius;
+std::vector<Eigen::Vector2d> _clear_centers;
+// ################################
+// C++: clear zones around start/waypoints end
+// ################################
+// ################################
+// C++: optional bridges in cuboid map begin
+// ################################
+struct BridgeSpec {
+  Eigen::Vector2d pos;
+  Eigen::Vector3d size; // depth_x, width_y, clearance_z (underside of board)
+};
+std::vector<BridgeSpec> _bridges;
+// ################################
+// C++: optional bridges in cuboid map end
+// ################################
 
 bool _map_ok = false;
 bool _has_odom = false;
@@ -77,6 +102,47 @@ void GenerateBox(Eigen::Vector3d pos, Eigen::Vector3d box_size, pcl::PointCloud<
                pos(2) - box_size(2) / 2, pos(2) + box_size(2) / 2, 
                cloudMap);
 }
+
+// ################################
+// C++: reject obstacles near clear centers begin
+// ################################
+bool InClearZone(double x, double y){
+  if(_clear_radius <= 0.0 || _clear_centers.empty()) return false;
+  Eigen::Vector2d p(x, y);
+  for(const auto &c : _clear_centers){
+    if((p - c).norm() < _clear_radius) return true;
+  }
+  return false;
+}
+// ################################
+// C++: reject obstacles near clear centers end
+// ################################
+
+// ################################
+// C++: add gate/bridge obstacle begin
+// ################################
+// size: (depth along x, lateral width along y, underside clearance height)
+void AddBridge(const Eigen::Vector2d &pos_in, const Eigen::Vector3d &bridge_size,
+               pcl::PointCloud<pcl::PointXYZ>& cloudMap){
+  double x = floor(pos_in(0) / _resolution) * _resolution + _resolution / 2.0;
+  double y = floor(pos_in(1) / _resolution) * _resolution + _resolution / 2.0;
+  Eigen::Vector2d pos(x, y);
+  // top board
+  GenerateWall(pos(0) - bridge_size(0) / 2.0, pos(0) + bridge_size(0) / 2.0,
+               pos(1) - bridge_size(1) / 2.0, pos(1) + bridge_size(1) / 2.0,
+               bridge_size(2), bridge_size(2) + 1e-3 + 2 * _resolution,
+               cloudMap);
+  // side feet (passage along +x between the two walls)
+  GenerateWall(pos(0) - bridge_size(0) / 2, pos(0) + bridge_size(0) / 2,
+               pos(1) - bridge_size(1) / 2, pos(1) - bridge_size(1) / 2 + 2 * _resolution,
+               0.0, bridge_size(2), cloudMap);
+  GenerateWall(pos(0) - bridge_size(0) / 2, pos(0) + bridge_size(0) / 2,
+               pos(1) + bridge_size(1) / 2 - 2 * _resolution, pos(1) + bridge_size(1) / 2,
+               0.0, bridge_size(2), cloudMap);
+}
+// ################################
+// C++: add gate/bridge obstacle end
+// ################################
 
 void GenerateWall(Eigen::Vector3d pos, double theta, Eigen::Vector3d wall_size, pcl::PointCloud<pcl::PointXYZ>& cloudMap){
   Eigen::Vector2d dirx(cos(theta), sin(theta));
@@ -155,28 +221,7 @@ void GenerateBridge(){
 
     auto pos = Eigen::Vector2d(x, y);
       // board
-    GenerateWall(pos(0) - bridge_size(0) / 2.0, pos(0) + bridge_size(0) / 2.0,
-                pos(1) - bridge_size(1) / 2.0, pos(1) + bridge_size(1) / 2.0,
-                bridge_size(2), bridge_size(2) + 1e-3 + 2 * _resolution,
-                cloudMap);
-  // feet
-    std::vector<Eigen::Vector2d> corner_list;
-    Eigen::Vector2d corner;
-    corner << pos(0) - bridge_size(0) / 2, pos(1) - bridge_size(1) / 2;
-    corner_list.push_back(corner);
-    corner << pos(0) - bridge_size(0) / 2, pos(1) + bridge_size(1) / 2;
-    corner_list.push_back(corner);
-    corner << pos(0) + bridge_size(0) / 2, pos(1) - bridge_size(1) / 2;
-    corner_list.push_back(corner);
-    corner << pos(0) + bridge_size(0) / 2, pos(1) + bridge_size(1) / 2;
-    corner_list.push_back(corner);
-
-    GenerateWall(pos(0) - bridge_size(0) / 2, pos(0) + bridge_size(0) / 2, 
-                pos(1) - bridge_size(1) / 2, pos(1) - bridge_size(1) / 2 + 2 * _resolution,
-                0.0, bridge_size(2), cloudMap);
-    GenerateWall(pos(0) - bridge_size(0) / 2, pos(0) + bridge_size(0) / 2 , 
-                pos(1) + bridge_size(1) / 2 - 2 * _resolution, pos(1) + bridge_size(1) / 2,
-                0.0, bridge_size(2), cloudMap);
+    AddBridge(pos, bridge_size, cloudMap);
   }
 
   GenerateWall(_x_l, _x_h, _y_l, _y_l + _resolution, 0.0, 0.2, cloudMap);
@@ -250,7 +295,20 @@ void GenerateCuboids(){
   // generate random box
   obs_position.clear();
   obs_size.clear();
+  // ################################
+  // C++: bounded obstacle placement retries begin
+  // ################################
+  int place_tries = 0;
+  const int max_place_tries = std::max(2000, (_obs_num + _float_obs_num) * 200);
+  // ################################
+  // C++: bounded obstacle placement retries end
+  // ################################
   for (int i = 0; i < _obs_num && ros::ok(); ++i){
+    if(++place_tries > max_place_tries){
+      ROS_WARN("map_generator: give up placing ground cuboids after %d tries (placed %zu/%d)",
+               place_tries, obs_position.size(), _obs_num);
+      break;
+    }
     x = rand_x(eng);
     y = rand_y(eng);
     z = rand_z_(eng);
@@ -265,6 +323,16 @@ void GenerateCuboids(){
     z = floor(z / _resolution) * _resolution + _resolution / 2.0;
 
     bool flag_continue = false;
+    // ################################
+    // C++: skip cuboid in clear zone begin
+    // ################################
+    if(InClearZone(x, y)){
+      i--;
+      continue;
+    }
+    // ################################
+    // C++: skip cuboid in clear zone end
+    // ################################
     for (auto p : obs_position)
       if ((Eigen::Vector2d(x, y) - p).norm() < _min_dist /*metres*/)
       {
@@ -283,7 +351,13 @@ void GenerateCuboids(){
 
   obs_position.clear();
   obs_size.clear();
+  place_tries = 0;
   for (int i = 0; i < _float_obs_num && ros::ok(); ++i){
+    if(++place_tries > max_place_tries){
+      ROS_WARN("map_generator: give up placing float cuboids after %d tries (placed %zu/%d)",
+               place_tries, obs_position.size(), _float_obs_num);
+      break;
+    }
     x = rand_float_x(eng);
     y = rand_float_y(eng);
     z = rand_float_z(eng);
@@ -298,6 +372,16 @@ void GenerateCuboids(){
     z = floor(z / _resolution) * _resolution + _resolution / 2.0;
 
     bool flag_continue = false;
+    // ################################
+    // C++: skip float cuboid in clear zone begin
+    // ################################
+    if(InClearZone(x, y)){
+      i--;
+      continue;
+    }
+    // ################################
+    // C++: skip float cuboid in clear zone end
+    // ################################
     for (auto p : obs_position)
       if ((Eigen::Vector2d(x, y) - p).norm() < 1.0 /*metres*/)
       {
@@ -318,6 +402,18 @@ void GenerateCuboids(){
   GenerateBox(Eigen::Vector3d(_x_l + _resolution, _y_h - _resolution, 0.9), Eigen::Vector3d(0.1, 0.1, 1.8), cloudMap);
   GenerateBox(Eigen::Vector3d(_x_h - _resolution, _y_l + _resolution, 0.9), Eigen::Vector3d(0.1, 0.1, 1.8), cloudMap);
   GenerateBox(Eigen::Vector3d(_x_h - _resolution, _y_h - _resolution, 0.9), Eigen::Vector3d(0.1, 0.1, 1.8), cloudMap);
+
+  // ################################
+  // C++: append configured bridges to cuboid map begin
+  // ################################
+  for(const auto &b : _bridges){
+    AddBridge(b.pos, b.size, cloudMap);
+    ROS_INFO("map_generator: bridge at (%.2f,%.2f) size=(%.2f,%.2f) clearance=%.2f",
+             b.pos(0), b.pos(1), b.size(0), b.size(1), b.size(2));
+  }
+  // ################################
+  // C++: append configured bridges to cuboid map end
+  // ################################
 
   cloudMap.width = cloudMap.points.size();
   cloudMap.height = 1;
@@ -363,6 +459,67 @@ int main(int argc, char **argv){
 
   n.param("pub_rate", _pub_rate, 10.0);
   n.param("min_distance", _min_dist, 1.0);
+
+  // ################################
+  // C++: load clear zone params begin
+  // ################################
+  n.param("clear_radius", _clear_radius, 0.0);
+  _clear_centers.clear();
+  XmlRpc::XmlRpcValue clear_list;
+  if(n.getParam("clear_centers", clear_list) && clear_list.getType() == XmlRpc::XmlRpcValue::TypeArray){
+    for(int i = 0; i < clear_list.size(); ++i){
+      if(clear_list[i].getType() == XmlRpc::XmlRpcValue::TypeArray && clear_list[i].size() >= 2){
+        double cx = 0.0, cy = 0.0;
+        if(clear_list[i][0].getType() == XmlRpc::XmlRpcValue::TypeDouble)
+          cx = static_cast<double>(clear_list[i][0]);
+        else
+          cx = static_cast<int>(clear_list[i][0]);
+        if(clear_list[i][1].getType() == XmlRpc::XmlRpcValue::TypeDouble)
+          cy = static_cast<double>(clear_list[i][1]);
+        else
+          cy = static_cast<int>(clear_list[i][1]);
+        _clear_centers.emplace_back(cx, cy);
+      }
+    }
+  }
+  // fallback: fsm/init_state [x,y,...] if clear_centers empty
+  if(_clear_centers.empty()){
+    std::vector<double> init_state;
+    if(n.getParam("fsm/init_state", init_state) && init_state.size() >= 2){
+      _clear_centers.emplace_back(init_state[0], init_state[1]);
+      if(_clear_radius <= 0.0) _clear_radius = 2.5;
+    }
+  }
+  ROS_INFO("map_generator: clear_radius=%.2f, clear_centers=%zu", _clear_radius, _clear_centers.size());
+  // ################################
+  // C++: load clear zone params end
+  // ################################
+
+  // ################################
+  // C++: load bridge list [x,y, depth, width, clearance] begin
+  // ################################
+  _bridges.clear();
+  XmlRpc::XmlRpcValue bridge_list;
+  if(n.getParam("bridges", bridge_list) && bridge_list.getType() == XmlRpc::XmlRpcValue::TypeArray){
+    for(int i = 0; i < bridge_list.size(); ++i){
+      if(bridge_list[i].getType() != XmlRpc::XmlRpcValue::TypeArray || bridge_list[i].size() < 5)
+        continue;
+      auto as_d = [](XmlRpc::XmlRpcValue &v)->double{
+        if(v.getType() == XmlRpc::XmlRpcValue::TypeDouble) return static_cast<double>(v);
+        return static_cast<double>(static_cast<int>(v));
+      };
+      BridgeSpec b;
+      b.pos << as_d(bridge_list[i][0]), as_d(bridge_list[i][1]);
+      b.size << as_d(bridge_list[i][2]), as_d(bridge_list[i][3]), as_d(bridge_list[i][4]);
+      _bridges.push_back(b);
+      // keep approach clear of random cuboids
+      _clear_centers.push_back(b.pos);
+    }
+  }
+  ROS_INFO("map_generator: bridges=%zu", _bridges.size());
+  // ################################
+  // C++: load bridge list end
+  // ################################
 
   _x_l = -_x_size / 2.0;
   _x_h = +_x_size / 2.0;

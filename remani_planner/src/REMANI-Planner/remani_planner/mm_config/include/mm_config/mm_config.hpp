@@ -130,6 +130,15 @@ namespace remani_planner
         
         Eigen::VectorXd manipulator_config_;
         double manipulator_thickness_;
+        // ################################
+        // C++: thinner radius for link-link self check begin
+        // ################################
+        // Obstacle envelope can be thick; CR10 wrist spacing ~0.12 m so
+        // 2*manipulator_thickness must not use the obstacle radius.
+        double manipulator_self_thickness_;
+        // ################################
+        // C++: thinner radius for link-link self check end
+        // ################################
         double map_resolution_;
         std::vector<Eigen::Matrix4Xd> manipulator_link_pts_;
         double car_safe_margin_;

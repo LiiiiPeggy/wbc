@@ -13,6 +13,30 @@
 namespace poly_traj
 {
 
+    // ################################
+    // C++: shared wheel params for robot_model switch begin
+    // ################################
+    struct MobileBaseWheelParam {
+        // Defaults = FastArmer upstream; overwritten from mm/*.yaml at planner init.
+        static double &wheel_base_ref(){
+            static double v = 0.37;
+            return v;
+        }
+        static double &wheel_radius_ref(){
+            static double v = 0.07;
+            return v;
+        }
+        static double wheel_base(){ return wheel_base_ref(); }
+        static double wheel_radius(){ return wheel_radius_ref(); }
+        static void set(double wb, double wr){
+            wheel_base_ref() = wb;
+            wheel_radius_ref() = wr;
+        }
+    };
+    // ################################
+    // C++: shared wheel params for robot_model switch end
+    // ################################
+
     // Polynomial degree and trajectory dimension are fixed here
     // [TODO] template <int DIM_, int degree>
     template <int degree>
@@ -28,14 +52,6 @@ namespace poly_traj
         CoefficientMat coeffMat;
         int dim = 8;
         int singul;
-        // ################################
-        // C++: Ranger virtual differential constants begin
-        // ################################
-        double mobile_base_wheel_base = 0.56;   // virtual track width (not Ranger axle length)
-        double mobile_base_wheel_radius = 0.125;
-        // ################################
-        // C++: Ranger virtual differential constants end
-        // ################################
     public:
         Piece() = default;
 
@@ -217,7 +233,7 @@ namespace poly_traj
                     1.0,  0.0;
             double aTBv = acc.transpose() * B_h * vel;
             double omega = aTBv * vTv_inv;
-            double wheel_omega_left = (2.0 * singul * v_norm - mobile_base_wheel_base * omega) / (2 * mobile_base_wheel_radius);
+            double wheel_omega_left = (2.0 * singul * v_norm - MobileBaseWheelParam::wheel_base() * omega) / (2 * MobileBaseWheelParam::wheel_radius());
 
             return wheel_omega_left;
         }
@@ -233,7 +249,7 @@ namespace poly_traj
                     1.0,  0.0;
             double aTBv = acc.transpose() * B_h * vel;
             double omega = aTBv * vTv_inv;
-            double wheel_omega_right = (2.0 * singul * v_norm + mobile_base_wheel_base * omega) / (2 * mobile_base_wheel_radius);
+            double wheel_omega_right = (2.0 * singul * v_norm + MobileBaseWheelParam::wheel_base() * omega) / (2 * MobileBaseWheelParam::wheel_radius());
 
             return wheel_omega_right;
         }
@@ -253,7 +269,7 @@ namespace poly_traj
             double aTBv = acc.transpose() * B_h * vel;
             double jTBv = jer.transpose() * B_h * vel;
             double alpha = jTBv * vTv_inv - 2.0 * aTBv * aTv * vTv_inv2;
-            double wheel_alpha_left = (2.0 * singul * aTv / v_norm - mobile_base_wheel_base * alpha) / (2 * mobile_base_wheel_radius);
+            double wheel_alpha_left = (2.0 * singul * aTv / v_norm - MobileBaseWheelParam::wheel_base() * alpha) / (2 * MobileBaseWheelParam::wheel_radius());
             return wheel_alpha_left;
         }
 
@@ -272,7 +288,7 @@ namespace poly_traj
             double aTBv = acc.transpose() * B_h * vel;
             double jTBv = jer.transpose() * B_h * vel;
             double alpha = jTBv * vTv_inv - 2.0 * aTBv * aTv * vTv_inv2;
-            double wheel_alpha_right = (2.0 * singul * aTv / v_norm + mobile_base_wheel_base * alpha) / (2 * mobile_base_wheel_radius);
+            double wheel_alpha_right = (2.0 * singul * aTv / v_norm + MobileBaseWheelParam::wheel_base() * alpha) / (2 * MobileBaseWheelParam::wheel_radius());
             return wheel_alpha_right;
         }
 
@@ -493,6 +509,8 @@ namespace poly_traj
         }
         EIGEN_MAKE_ALIGNED_OPERATOR_NEW;
     };
+
+    // (MobileBaseWheelParam storage is function-local static — no ODR defs here)
 
     template <int degree>
     class Trajectory

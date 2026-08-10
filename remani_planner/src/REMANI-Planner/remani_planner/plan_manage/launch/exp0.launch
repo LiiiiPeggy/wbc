@@ -1,10 +1,15 @@
   <launch>
-    <arg name="exp_param_file" value="$(find remani_planner)/config/exp0_param.yaml"/>
-
-    <include file="$(find remani_planner)/launch/run_in_sim.launch">
-      <arg name="exp_param_file" value="$(arg exp_param_file)"/>
+    <!-- ################################ -->
+    <!-- XML: original FastArmer exp0 via robot_model switch begin -->
+    <!-- ################################ -->
+    <arg name="use_rviz" default="true"/>
+    <arg name="target_type" default="2"/>
+    <include file="$(find remani_planner)/launch/remani_sim.launch">
+      <arg name="robot_model" value="fast_armer"/>
+      <arg name="use_rviz" value="$(arg use_rviz)"/>
+      <arg name="target_type" value="$(arg target_type)"/>
     </include>
-
-    <node name="rviz" pkg="rviz" type="rviz" args="-d $(find remani_planner)/launch/exp0.rviz"/>
-
+    <!-- ################################ -->
+    <!-- XML: original FastArmer exp0 via robot_model switch end -->
+    <!-- ################################ -->
   </launch>

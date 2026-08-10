@@ -115,6 +115,13 @@ namespace remani_planner
     Eigen::VectorXd min_joint_pos_, max_joint_pos_;
     double max_joint_vel_, max_joint_acc_;
     double manipulator_thickness_;
+    // ################################
+    // C++: self-collision thickness member begin
+    // ################################
+    double manipulator_self_thickness_;
+    // ################################
+    // C++: self-collision thickness member end
+    // ################################
     std::vector<Eigen::Matrix4Xd> manipulator_link_pts_;
     Eigen::VectorXd manipulator_config_;
 
@@ -140,6 +147,7 @@ namespace remani_planner
     inline const std::vector<poly_traj::MinSnapOpt<8>> *getMinSnapOptContainerPtr(void) { return &SnapOpt_container_; }
     inline int get_cps_num_prePiece_(){return cps_num_prePiece_;};
     bool checkCollision(const SingulTrajData &traj, double t, int &coll_type);
+    bool checkCollision(const SingulTrajData &traj, double t, int &coll_type, bool safe);
 
     /* main planning API */
     bool OptimizeTrajectory_lbfgs(const std::vector<Eigen::MatrixXd> &iniStates_container, 

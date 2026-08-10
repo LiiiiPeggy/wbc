@@ -17,7 +17,14 @@ namespace remani_planner
     nh.param("optimization/weight_obstacle", wei_obs_, -1.0);
     nh.param("optimization/weight_base_feasibility", wei_feas_, -1.0);
     nh.param("optimization/weight_time", wei_time_, -1.0);
-    wei_mani_obs_ = wei_obs_ / 5.0;
+    // ################################
+    // C++: stronger manipulator obstacle weight begin
+    // ################################
+    wei_mani_obs_ = wei_obs_;
+    nh.param("optimization/weight_manipulator_obstacle", wei_mani_obs_, wei_mani_obs_);
+    // ################################
+    // C++: stronger manipulator obstacle weight end
+    // ################################
     nh.param("optimization/weight_manipulator_self", wei_mani_self_, -1.0);
     nh.param("optimization/weight_manipulator_feasibility", wei_mani_feas_, -1.0);
 
@@ -40,9 +47,25 @@ namespace remani_planner
     nh.param("mm/mobile_base_width", mobile_base_width_, -1.0);
     nh.param("mm/mobile_base_height", mobile_base_height_, -1.0);
     nh.param("mm/mobile_base_check_radius", mobile_base_check_radius_, -1.0);
+    // ################################
+    // C++: sync Piece wheel params from YAML begin
+    // ################################
+    if(mobile_base_wheel_base_ > 1e-6 && mobile_base_wheel_radius_ > 1e-6){
+      poly_traj::MobileBaseWheelParam::set(mobile_base_wheel_base_, mobile_base_wheel_radius_);
+    }
+    // ################################
+    // C++: sync Piece wheel params from YAML end
+    // ################################
 
     nh.param("mm/manipulator_dof", manipulator_dof_, -1);
     nh.param("mm/manipulator_thickness", manipulator_thickness_, -1.0);
+    // ################################
+    // C++: self-collision thickness for arm-arm cost begin
+    // ################################
+    nh.param("mm/manipulator_self_thickness", manipulator_self_thickness_, manipulator_thickness_);
+    // ################################
+    // C++: self-collision thickness for arm-arm cost end
+    // ################################
     
     std::vector<double> joint_pos_limit;
     nh.getParam("mm/manipulator_min_pos", joint_pos_limit);
@@ -399,21 +422,34 @@ namespace remani_planner
     double dt = 0.01;
     double T_all = traj_data.duration;
     int i_end = floor(T_all / dt); // check all
-    double t = 0.05;  //skip the start point
-    // double t = 0.00;  //do not skip the start point
+    // ################################
+    // C++: stricter traj gate — margin after leave-start begin
+    // ################################
+    // Near-obstacle start: allow thickness-only only for the first 0.8 s.
+    // After that always use soft margin so long detours cannot thread obstacles.
+    Eigen::VectorXd pos0 = traj_data.getPos(0.0);
+    double yaw0 = traj_data.getCarAngle(0.0);
+    int ct0 = -1;
+    const bool start_margin_ok = !mm_config_->checkcollision(
+        Eigen::Vector3d(pos0(0), pos0(1), yaw0), pos0.tail(manipulator_dof_), true, ct0);
+    double t = start_margin_ok ? 0.05 : 0.20;
+    int i0 = start_margin_ok ? 5 : 20;
+    if(!start_margin_ok){
+      ROS_WARN_THROTTLE(2.0, "IsTrajSafe: start in soft margin (coll=%d); thickness-only for t<0.8s", ct0);
+    }
     int coll_type;
-    for (int i = 5; i < i_end; i++){
-      if(checkCollision(traj_data, t, coll_type)){
+    for (int i = i0; i < i_end; i++){
+      const bool use_safe = start_margin_ok || (t >= 0.8);
+      if(checkCollision(traj_data, t, coll_type, use_safe)){
         if(coll_type == 0){
-          ROS_WARN("car collision at time %f!", t);
+          ROS_WARN_THROTTLE(2.0, "car collision at time %f!", t);
         }else if (coll_type == 1){
-          ROS_WARN("mani collision at time %f!", t);
+          ROS_WARN_THROTTLE(2.0, "mani collision at time %f!", t);
         }else if (coll_type == 2){
-          ROS_WARN("car-mani collision at time %f!", t);
+          ROS_WARN_THROTTLE(2.0, "car-mani collision at time %f!", t);
         }else if (coll_type == 3){
-          ROS_WARN("mani-mani collision at time %f!", t);
+          ROS_WARN_THROTTLE(2.0, "mani-mani collision at time %f!", t);
         }
-        // ROS_WARN("mm (%d) collision at time %f! opt failed", coll_type, t);
         return false;
       }
 
@@ -423,15 +459,53 @@ namespace remani_planner
       
       t += dt;
     }
+    // ################################
+    // C++: denser ground-track car sweep begin
+    // ################################
+    // Catch thin gaps between 0.01s samples on long Ranger footprints.
+    const double ds = 0.08;
+    double path_s = 0.0;
+    Eigen::Vector2d last_xy = traj_data.getPos(0.0).head(2);
+    for(double tt = dt; tt < T_all - 1e-6; tt += dt){
+      Eigen::VectorXd pos = traj_data.getPos(tt);
+      path_s += (pos.head(2) - last_xy).norm();
+      last_xy = pos.head(2);
+      if(path_s < ds) continue;
+      path_s = 0.0;
+      if(tt < 0.8 && !start_margin_ok) continue;
+      double yaw = traj_data.getCarAngle(tt);
+      double min_dist = 0.0;
+      if(mm_config_->checkCarObsCollision(Eigen::Vector3d(pos(0), pos(1), yaw), true, true, min_dist)){
+        ROS_WARN_THROTTLE(2.0, "car collision (dense sweep) at time %f! dist=%.3f", tt, min_dist);
+        return false;
+      }
+    }
+    // ################################
+    // C++: denser ground-track car sweep end
+    // ################################
+    // ################################
+    // C++: stricter traj gate — margin after leave-start end
+    // ################################
     return true;
   }
-
   bool PolyTrajOptimizer::checkCollision(const SingulTrajData &traj, double t, int &coll_type)
+  {
+    return checkCollision(traj, t, coll_type, true);
+  }
+
+  bool PolyTrajOptimizer::checkCollision(const SingulTrajData &traj, double t, int &coll_type, bool safe)
   {
     Eigen::VectorXd pos = traj.getPos(t);
     Eigen::VectorXd vel = traj.getVel(t);
     double yaw = traj.getCarAngle(t);
-    return mm_config_->checkcollision(Eigen::Vector3d(pos(0), pos(1), yaw), pos.tail(manipulator_dof_), false, coll_type);
+    // ################################
+    // C++: traj collision gate with selectable margin begin
+    // ################################
+    return mm_config_->checkcollision(Eigen::Vector3d(pos(0), pos(1), yaw),
+                                      pos.tail(manipulator_dof_), safe, coll_type);
+    // ################################
+    // C++: traj collision gate with selectable margin end
+    // ################################
   }
 
   /* callbacks by the L-BFGS optimizer */
@@ -987,7 +1061,7 @@ namespace remani_planner
         pt_on_link = (T_now * manipulator_link_pts_[i].col(j)).head(3);
         for(unsigned int m = 0; m < car_pts.size(); ++m){
           dist = (car_pts[m] - pt_on_link).norm(); // coarse distance
-          dist_err = manipulator_thickness_ + mobile_base_check_radius_ + self_safe_margin_ - dist; //refine distance
+          dist_err = manipulator_self_thickness_ + mobile_base_check_radius_ + self_safe_margin_ - dist; //refine distance
           if(dist_err > 0){
             dist_err_2 = dist_err * dist_err;
             dist_err_3 = dist_err_2 * dist_err;
@@ -1022,7 +1096,13 @@ namespace remani_planner
           for(int n = 0; n < pts_size_temp; ++n){
             pt_on_link_to_check_m = (manipulator_link_pts_[m].col(n)).head(3);
             dist = (pt_on_link_m - pt_on_link_to_check_m).norm(); // coarse distance
-            dist_err = 2 * manipulator_thickness_ + self_safe_margin_ - dist; //refine distance
+            // ################################
+            // C++: arm-arm cost uses self thickness begin
+            // ################################
+            dist_err = 2 * manipulator_self_thickness_ + self_safe_margin_ - dist; //refine distance
+            // ################################
+            // C++: arm-arm cost uses self thickness end
+            // ################################
             if(dist_err > 0){
               dist_err_2 = dist_err * dist_err;
               dist_err_3 = dist_err_2 * dist_err;

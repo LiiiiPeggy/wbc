@@ -37,6 +37,14 @@ void KinoAstar::setParam(ros::NodeHandle& nh, const std::shared_ptr<GridMap> &en
   nh.param("search/sample_time", sample_time_, 0.1);
   nh.param("search/min_turning_radius", min_turning_radius_, 0.1);
   nh.param("search/curvatureDisCoe", curvatureDisCoe_, 0.4);
+  // ################################
+  // C++: log Hybrid A* budget begin
+  // ################################
+  ROS_INFO("KinoAstar: max_seach_time=%.3f s min_turning_radius=%.3f",
+           max_search_time_, min_turning_radius_);
+  // ################################
+  // C++: log Hybrid A* budget end
+  // ################################
   nh.param("mm/mobile_base_non_singul_vel", non_siguav_, 0.01);
 
   double dist_resolution;
@@ -136,7 +144,13 @@ int KinoAstar::KinoAstarSearchAndGetSimplePath(const Eigen::VectorXd &start_pos,
   mm_config_->visMM(local_start_goal_pub_, "start", 0, 0.8, start_state.head(3), start_state.tail(manipulator_dof_), start_gripper);
   mm_config_->visMM(local_start_goal_pub_, "gaol", 1, 0.8, end_state.head(3), end_state.tail(manipulator_dof_), end_gripper);
 
-  std::cout << "continous_failures_count: " << continous_failures_count << "\n";
+  // ################################
+  // C++: throttle failure spam begin
+  // ################################
+  ROS_INFO_THROTTLE(2.0, "continous_failures_count: %d", continous_failures_count);
+  // ################################
+  // C++: throttle failure spam end
+  // ################################
   bool start_goal_is_close = (start_pos - end_pos).head(2).norm() < 8e-2 && (start_pos - end_pos).tail(manipulator_dof_).norm() > 1e-1;
   if(continous_failures_count < try_astar_times_ && (!start_goal_is_close) /*&& false*/){
     // ROS_WARN("ASTAR!");
@@ -217,28 +231,56 @@ int KinoAstar::KinoAstarSearchAndGetSimplePath(const Eigen::VectorXd &start_pos,
         simple_path_container, singul_container,
         yaw_list_container, t_list_container);
   }else{
-    std::vector<Eigen::Vector3d> car_statelist, car_statelist_check;
-    std::vector<double> init_t_list;
-    Eigen::Vector3d start_state_temp, end_state_temp;
-    start_state_temp << start_pos(0), start_pos(1), start_yaw;
-    end_state_temp << end_pos(0), end_pos(1), end_yaw;
-    car_statelist.push_back(start_state_temp);
-    
-    Eigen::Vector3d state_temp;
-    for(int i = 0; i < check_num_; ++i){
-      state_temp = start_state_temp + (end_state_temp - start_state_temp) * (double)i / double(check_num_);
-      car_statelist_check.push_back(state_temp);
+    // ################################
+    // C++: refuse unsafe fallback after Hybrid A* fail begin
+    // ################################
+    // User log (goal 3): KinoA* NO_PATH then opt still "Success" + EXEC through
+    // obstacles. Straight/RRT fallback is not trustworthy for Ranger footprint.
+    // Only allow whole-body RRT after try_astar_times consecutive failures.
+    if(continous_failures_count < try_astar_times_){
+      ROS_WARN_THROTTLE(2.0, "KinoAstar: Hybrid A* NO_PATH; refuse straight/RRT fallback "
+               "(failures=%d/%d). start=(%.2f,%.2f) goal=(%.2f,%.2f)",
+               continous_failures_count, try_astar_times_,
+               start_pos(0), start_pos(1), end_pos(0), end_pos(1));
+      sample_succ = false;
+    }else{
+      // ################################
+      // C++: whole-body RRT without clear-line seed begin
+      // ################################
+      // Straight start->goal often hits obstacles (user log). That must NOT abort
+      // RRT — full-state RRT explores around obstacles; IsTrajSafe still gates EXEC.
+      ROS_WARN_THROTTLE(2.0, "KinoAstar: switching to whole-body RRT after %d failures. "
+               "start=(%.2f,%.2f) goal=(%.2f,%.2f)",
+               continous_failures_count, start_pos(0), start_pos(1), end_pos(0), end_pos(1));
+      std::vector<Eigen::Vector3d> car_statelist, car_statelist_check;
+      std::vector<double> init_t_list;
+      Eigen::Vector3d start_state_temp, end_state_temp;
+      start_state_temp << start_pos(0), start_pos(1), start_yaw;
+      end_state_temp << end_pos(0), end_pos(1), end_yaw;
+      // Endpoints only — do not require the chord to be free.
+      car_statelist.push_back(start_state_temp);
+      car_statelist.push_back(end_state_temp);
+      car_statelist_check.push_back(start_state_temp);
+      car_statelist_check.push_back(end_state_temp);
+      init_t_list.push_back(std::max(1e-2, (start_state_temp - end_state_temp).head(2).norm() / max_vel_));
+      singul_container_temp.push_back(1);
+      sample_succ = mani_sample_->sampleManiSearch(false,
+          start_pos.tail(manipulator_dof_), end_pos.tail(manipulator_dof_),
+          car_statelist, car_statelist_check,
+          init_t_list, singul_container_temp, start_singul,
+          simple_path_container, singul_container,
+          yaw_list_container, t_list_container);
+      if(!sample_succ){
+        ROS_WARN_THROTTLE(2.0, "KinoAstar: whole-body RRT failed. start=(%.2f,%.2f) goal=(%.2f,%.2f)",
+                 start_pos(0), start_pos(1), end_pos(0), end_pos(1));
+      }
+      // ################################
+      // C++: whole-body RRT without clear-line seed end
+      // ################################
     }
-    car_statelist.push_back(end_state_temp);
-    car_statelist_check.push_back(end_state_temp);
-    init_t_list.push_back((start_state_temp - end_state_temp).head(2).norm() / max_vel_);
-    singul_container_temp.push_back(1);
-    sample_succ = mani_sample_->sampleManiSearch(false,
-        start_pos.tail(manipulator_dof_), end_pos.tail(manipulator_dof_), 
-        car_statelist, car_statelist_check, // x, y, yaw
-        init_t_list, singul_container_temp, start_singul,
-        simple_path_container, singul_container,
-        yaw_list_container, t_list_container);
+    // ################################
+    // C++: refuse unsafe fallback after Hybrid A* fail end
+    // ################################
   }
 
   double path_length = 0.0, length_temp;
@@ -263,6 +305,31 @@ int KinoAstar::KinoAstarSearchAndGetSimplePath(const Eigen::VectorXd &start_pos,
       }
     }
     if(achieve_hori) break;
+  }
+  if(sample_succ){
+    // ################################
+    // C++: reject frontend path that fails hard gate begin
+    // ################################
+    // After KinoA* timeout the straight/RRT fallback may be only thickness-clear
+    // (safe=false). IsTrajSafe uses safe=true → car collision @ ~10s. Reject early.
+    for(size_t ti = 0; ti < simple_path_container.size() && sample_succ; ++ti){
+      if(ti >= yaw_list_container.size()) break;
+      for(size_t i = 0; i < simple_path_container[ti].size(); ++i){
+        if(i >= yaw_list_container[ti].size()) break;
+        const Eigen::VectorXd &s = simple_path_container[ti][i];
+        int coll_type = -1;
+        Eigen::Vector3d car_state(s(0), s(1), yaw_list_container[ti][i]);
+        if(mm_config_->checkcollision(car_state, s.tail(manipulator_dof_), false, coll_type)){
+          ROS_WARN_THROTTLE(2.0, "KinoAstar: frontend path not free (coll=%d) at piece %zu idx %zu; reject",
+                   coll_type, ti, i);
+          sample_succ = false;
+          break;
+        }
+      }
+    }
+    // ################################
+    // C++: reject frontend path that fails hard gate end
+    // ################################
   }
   if(sample_succ){
     if(achieve_hori) return KinoAstar::REACH_HORIZON;
@@ -370,15 +437,24 @@ int KinoAstar::search(Eigen::VectorXd &start_state, const Eigen::VectorXd &end_s
   bool initsearch = false;
   double start_time = ros::Time::now().toSec();
   int coll_type;
+  // ################################
+  // C++: start/goal hard gate without soft margin begin
+  // ################################
+  // safe=true (margin) blocks replanning once the robot stops near obstacles —
+  // user symptom: "navigated near obstacle, cannot continue". Only reject
+  // thickness-level penetration here; margin is enforced by opt soft cost / IsTrajSafe.
   if(mm_config_->checkcollision(start_state.head(3), start_state.tail(manipulator_dof_), false, coll_type)){
-    ROS_WARN("KinoAstar: start (%d) is not free!", coll_type);
+    ROS_WARN_THROTTLE(2.0, "KinoAstar: start (%d) is not free!", coll_type);
     return START_COLLISION;
   }
 
   if(mm_config_->checkcollision(end_state.head(3), end_state.tail(manipulator_dof_), false, coll_type)){
-    ROS_WARN("KinoAstar: goal (%d) is not free!", coll_type);
+    ROS_WARN_THROTTLE(2.0, "KinoAstar: goal (%d) is not free!", coll_type);
     return GOAL_COLLISION;
   }
+  // ################################
+  // C++: start/goal hard gate without soft margin end
+  // ################################
 
   start_state_ = start_state.head(4);
   start_ctrl_  = init_ctrl;
@@ -418,7 +494,8 @@ int KinoAstar::search(Eigen::VectorXd &start_state, const Eigen::VectorXd &end_s
     }
     
     if(ros::Time::now().toSec() - start_time > max_search_time_){
-      printf("\033[Kino Astar]: Kino Astar NO_PATH. Exceeds maximum time %lf s \n\033[0m", ros::Time::now().toSec() - start_time);
+      ROS_WARN_THROTTLE(2.0, "[Kino Astar]: NO_PATH. Exceeds maximum time %.3f s",
+                        ros::Time::now().toSec() - start_time);
       has_path_ = false;
       return NO_PATH;
     }
@@ -498,7 +575,7 @@ int KinoAstar::search(Eigen::VectorXd &start_state, const Eigen::VectorXd &end_s
         tmpctrl << input[0], tmparc;
         stateTransit(cur_state, tmpctrl, xt);
         if(fabs(tmparc) >= 1e-4){
-          isocc = mm_config_->checkCarObsCollision(xt, false, false, min_dist);
+          isocc = mm_config_->checkCarObsCollision(xt, false, true, min_dist);
         }
         if(isocc){break;}
       }

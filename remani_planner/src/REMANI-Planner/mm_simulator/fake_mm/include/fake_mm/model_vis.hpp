@@ -41,6 +41,17 @@ namespace model_vis{
             mani_dof_ = mani_dof;
             joint_p.resize(mani_dof_);
             joint_v.resize(mani_dof_);
+            // ################################
+            // C++: zero-init joints before first JointState begin
+            // ################################
+            joint_p.setZero();
+            joint_v.setZero();
+            car_p.setZero();
+            car_q.setIdentity();
+            car_yaw = 0.0;
+            // ################################
+            // C++: zero-init joints before first JointState end
+            // ################################
         }
 
         void feed_odom(const nav_msgs::Odometry::ConstPtr& pMsg){
@@ -69,15 +80,26 @@ namespace model_vis{
         }
 
         void feed_joint(const sensor_msgs::JointState::ConstPtr& pMsg){
+            // ################################
+            // C++: guard joint_state size / empty velocity begin
+            // ################################
             joint_state_msg = *pMsg;
             rcv_stamp = ros::Time::now();
             need_vis = true;
 
-            for(int i = 0; i < mani_dof_; ++i){
-                // FIXME joint_state must be sent in specific order: 
-                joint_p(i) = joint_state_msg.position[i];
-                joint_v(i) = joint_state_msg.velocity[i];
+            if((int)joint_state_msg.position.size() < mani_dof_){
+                ROS_WARN_THROTTLE(1.0, "model_vis: joint position size %zu < %d, skip",
+                                  joint_state_msg.position.size(), mani_dof_);
+                return;
             }
+            const bool has_vel = ((int)joint_state_msg.velocity.size() >= mani_dof_);
+            for(int i = 0; i < mani_dof_; ++i){
+                joint_p(i) = joint_state_msg.position[i];
+                joint_v(i) = has_vel ? joint_state_msg.velocity[i] : 0.0;
+            }
+            // ################################
+            // C++: guard joint_state size / empty velocity end
+            // ################################
         }
     };
 
