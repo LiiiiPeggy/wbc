@@ -336,7 +336,7 @@ Visualization Manager:
           Visual Enabled: true
         - Class: rviz/Group
           Displays:
-            - Class: rviz/Marker
+            - Class: rviz/MarkerArray
               Enabled: false
               Marker Topic: /remani_planner_node/kinoastar/local_start_goal
               Name: start&goal
@@ -345,21 +345,21 @@ Visualization Manager:
               Queue Size: 10
               Value: false
             - Class: rviz/MarkerArray
-              Enabled: false
+              Enabled: true
               Marker Topic: /remani_planner_node/front_end_mm_mesh_vis
               Name: "[Car&Mani] Front End Mesh"
               Namespaces:
                 {}
               Queue Size: 10
-              Value: false
+              Value: true
             - Class: rviz/MarkerArray
-              Enabled: false
+              Enabled: true
               Marker Topic: /remani_planner_node/back_end_mm_mesh_vis
               Name: "[Car&Mani] Back End Mesh"
               Namespaces:
                 vis_mm_back_end: true
               Queue Size: 10
-              Value: false
+              Value: true
             - Alpha: 1
               Autocompute Intensity Bounds: true
               Autocompute Value Bounds:

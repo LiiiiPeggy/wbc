@@ -8,6 +8,42 @@
 namespace remani_planner
 {
 
+  // ################################
+  // C++: print [PLAN TIME] with flush (tee-safe) begin
+  // ################################
+  namespace {
+    std::string fmtPlanStage(bool ran, double ms) {
+      if(!ran) return "skipped";
+      char buf[64];
+      snprintf(buf, sizeof(buf), "%.2f ms", ms);
+      return std::string(buf);
+    }
+
+    void printPlanTime(const char *tag,
+                       const KinoAstar::FrontendTiming &ft,
+                       double init_ms, double opt_ms, double safe_ms, double total_ms,
+                       bool has_backend) {
+      std::cout << "[PLAN TIME]" << (tag && tag[0] ? tag : "") << "\n"
+                << "Hybrid A*       : " << fmtPlanStage(ft.hybrid_ran, ft.hybrid_astar_ms) << "\n"
+                << "Manipulator     : " << fmtPlanStage(ft.manipulator_ran, ft.manipulator_ms) << "\n"
+                << "Whole-body RRT  : " << fmtPlanStage(ft.whole_body_rrt_ran, ft.whole_body_rrt_ms) << "\n"
+                << "Frontend check  : " << fmtPlanStage(ft.frontend_check_ran, ft.frontend_check_ms) << "\n";
+      if(has_backend){
+        std::cout << "Initialization  : " << init_ms << " ms\n"
+                  << "Optimization    : " << opt_ms << " ms\n"
+                  << "Safety check    : " << safe_ms << " ms\n";
+      }else{
+        std::cout << "Initialization  : skipped\n"
+                  << "Optimization    : skipped\n"
+                  << "Safety check    : skipped\n";
+      }
+      std::cout << "Total           : " << total_ms << " ms" << std::endl;
+    }
+  }
+  // ################################
+  // C++: print [PLAN TIME] with flush (tee-safe) end
+  // ################################
+
   MMPlannerManager::MMPlannerManager() {}
 
   MMPlannerManager::~MMPlannerManager()
@@ -392,22 +428,8 @@ namespace remani_planner
       // ################################
       {
         const auto &ft = ploy_traj_opt_->kino_a_star_->getLastFrontendTiming();
-        auto fmt_stage = [](bool ran, double ms) -> std::string {
-          if(!ran) return std::string("skipped");
-          char buf[64];
-          snprintf(buf, sizeof(buf), "%.2f ms", ms);
-          return std::string(buf);
-        };
         const double elapsed_ms = (ros::Time::now() - t_start).toSec() * 1000.0;
-        printf("[PLAN TIME] (frontend failed)\n");
-        printf("Hybrid A*       : %s\n", fmt_stage(ft.hybrid_ran, ft.hybrid_astar_ms).c_str());
-        printf("Manipulator     : %s\n", fmt_stage(ft.manipulator_ran, ft.manipulator_ms).c_str());
-        printf("Whole-body RRT  : %s\n", fmt_stage(ft.whole_body_rrt_ran, ft.whole_body_rrt_ms).c_str());
-        printf("Frontend check  : %s\n", fmt_stage(ft.frontend_check_ran, ft.frontend_check_ms).c_str());
-        printf("Initialization  : skipped\n");
-        printf("Optimization    : skipped\n");
-        printf("Safety check    : skipped\n");
-        printf("Total           : %.2f ms\n", elapsed_ms);
+        printPlanTime(" (frontend failed)", ft, 0.0, 0.0, 0.0, elapsed_ms, false);
       }
       // ################################
       // C++: print [PLAN TIME] on frontend failure end
@@ -520,21 +542,11 @@ namespace remani_planner
       // ################################
       {
         const auto &ft = ploy_traj_opt_->kino_a_star_->getLastFrontendTiming();
-        auto fmt_stage = [](bool ran, double ms) -> std::string {
-          if(!ran) return std::string("skipped");
-          char buf[64];
-          snprintf(buf, sizeof(buf), "%.2f ms", ms);
-          return std::string(buf);
-        };
-        printf("[PLAN TIME] (opt/safety failed)\n");
-        printf("Hybrid A*       : %s\n", fmt_stage(ft.hybrid_ran, ft.hybrid_astar_ms).c_str());
-        printf("Manipulator     : %s\n", fmt_stage(ft.manipulator_ran, ft.manipulator_ms).c_str());
-        printf("Whole-body RRT  : %s\n", fmt_stage(ft.whole_body_rrt_ran, ft.whole_body_rrt_ms).c_str());
-        printf("Frontend check  : %s\n", fmt_stage(ft.frontend_check_ran, ft.frontend_check_ms).c_str());
-        printf("Initialization  : %.2f ms\n", ploy_traj_opt_->getLastMinsnapMs());
-        printf("Optimization    : %.2f ms\n", ploy_traj_opt_->getLastLbfgsMs());
-        printf("Safety check    : %.2f ms\n", ploy_traj_opt_->getLastSafetyCheckMs());
-        printf("Total           : %.2f ms\n", (t_init + t_opt).toSec() * 1000.0);
+        printPlanTime(" (opt/safety failed)", ft,
+                      ploy_traj_opt_->getLastMinsnapMs(),
+                      ploy_traj_opt_->getLastLbfgsMs(),
+                      ploy_traj_opt_->getLastSafetyCheckMs(),
+                      (t_init + t_opt).toSec() * 1000.0, true);
       }
       // ################################
       // C++: print [PLAN TIME] on opt/safety failure end
@@ -559,29 +571,11 @@ namespace remani_planner
     // ################################
     {
       const auto &ft = ploy_traj_opt_->kino_a_star_->getLastFrontendTiming();
-      const double hyb = ft.hybrid_ran ? ft.hybrid_astar_ms : 0.0;
-      const double mani = ft.manipulator_ran ? ft.manipulator_ms : 0.0;
-      const double rrt = ft.whole_body_rrt_ran ? ft.whole_body_rrt_ms : 0.0;
-      const double gate = ft.frontend_check_ran ? ft.frontend_check_ms : 0.0;
-      const double initz = ploy_traj_opt_->getLastMinsnapMs();
-      const double lbfgs = ploy_traj_opt_->getLastLbfgsMs();
-      const double safe = ploy_traj_opt_->getLastSafetyCheckMs();
-      const double total_ms = (t_init + t_opt).toSec() * 1000.0;
-      auto fmt_stage = [](bool ran, double ms) -> std::string {
-        if(!ran) return std::string("skipped");
-        char buf[64];
-        snprintf(buf, sizeof(buf), "%.2f ms", ms);
-        return std::string(buf);
-      };
-      printf("[PLAN TIME]\n");
-      printf("Hybrid A*       : %s\n", fmt_stage(ft.hybrid_ran, hyb).c_str());
-      printf("Manipulator     : %s\n", fmt_stage(ft.manipulator_ran, mani).c_str());
-      printf("Whole-body RRT  : %s\n", fmt_stage(ft.whole_body_rrt_ran, rrt).c_str());
-      printf("Frontend check  : %s\n", fmt_stage(ft.frontend_check_ran, gate).c_str());
-      printf("Initialization  : %.2f ms\n", initz);
-      printf("Optimization    : %.2f ms\n", lbfgs);
-      printf("Safety check    : %.2f ms\n", safe);
-      printf("Total           : %.2f ms\n", total_ms);
+      printPlanTime("", ft,
+                    ploy_traj_opt_->getLastMinsnapMs(),
+                    ploy_traj_opt_->getLastLbfgsMs(),
+                    ploy_traj_opt_->getLastSafetyCheckMs(),
+                    (t_init + t_opt).toSec() * 1000.0, true);
     }
     // ################################
     // C++: unified [PLAN TIME] stage breakdown end

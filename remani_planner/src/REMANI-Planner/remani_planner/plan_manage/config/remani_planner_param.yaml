@@ -71,7 +71,8 @@ fsm:
 # YAML: RViz debug visualization (does not affect planning/collision) begin
 # ################################
 visualization:
-  enable_debug_vis: false   # true: check balls + front/back mesh + history traj
+  enable_debug_vis: false   # true: check balls + history traj + start/goal mesh
+  enable_traj_mesh_vis: true  # true: keep front/back planning phantoms (downsampled)
   vis_rate_hz: 15.0         # model_vis mesh publish rate cap
   tf_rate_hz: 20.0          # model_vis TF broadcast rate (RobotModel)
   mesh_vis_stride: 3        # subsample front/back trajectory meshes

@@ -94,6 +94,7 @@ namespace remani_planner
     // C++: debug vis params (mesh only; no collision effect) begin
     // ################################
     nh.param("visualization/enable_debug_vis", enable_debug_vis_, false);
+    nh.param("visualization/enable_traj_mesh_vis", enable_traj_mesh_vis_, true);
     nh.param("visualization/mesh_vis_stride", mesh_vis_stride_, 3);
     if(mesh_vis_stride_ < 1) mesh_vis_stride_ = 1;
     last_minsnap_ms_ = 0.0;
@@ -276,7 +277,7 @@ namespace remani_planner
     // ################################
     // C++: throttle/downsample back-end mesh (vis only) begin
     // ################################
-    if(!enable_debug_vis_ || back_end_mm_mesh_vis_pub_.getNumSubscribers() < 1) return;
+    if(!enable_traj_mesh_vis_ || back_end_mm_mesh_vis_pub_.getNumSubscribers() < 1) return;
 
     Eigen::Vector3d car_state;
     Eigen::VectorXd joint_state;
@@ -1467,7 +1468,7 @@ namespace remani_planner
     // ################################
     // C++: gate/downsample front-end mesh (vis only) begin
     // ################################
-    if(!enable_debug_vis_ || front_end_mm_mesh_vis_pub_.getNumSubscribers() < 1) return;
+    if(!enable_traj_mesh_vis_ || front_end_mm_mesh_vis_pub_.getNumSubscribers() < 1) return;
 
     Eigen::Vector3d car_state;
     Eigen::VectorXd joint_state;

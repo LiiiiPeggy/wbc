@@ -1,0 +1,619 @@
+... logging to /home/gzz/.ros/log/724fe1f2-954a-11f1-bbbd-e12b9177415c/roslaunch-GZZ-1015192.log
+Checking log directory for disk usage. This may take a while.
+Press Ctrl-C to interrupt
+Done checking log file disk usage. Usage is <1GB.
+]2;/home/gzz/Codes/wbc/remani_planner/src/REMANI-Planner/remani_planner/plan_manage/launch/remani_sim.launch
+[1mstarted roslaunch server http://GZZ:33991/[0m
+
+SUMMARY
+========
+
+PARAMETERS
+ * /fake_mm/fake_mm/pub_urdf_joint_states: True
+ * /fake_mm/fsm/init_gripper_close: False
+ * /fake_mm/fsm/init_state: [-5.0, 0.0, 0.0, ...
+ * /fake_mm/fsm/init_yaw: 0.0
+ * /fake_mm/fsm/waypoint0: [0.0, 0.0, 0.0, 0...
+ * /fake_mm/fsm/waypoint0_gripper_close: True
+ * /fake_mm/fsm/waypoint0_yaw: 0.0
+ * /fake_mm/fsm/waypoint1: [5.0, 0.0, 0.0, 0...
+ * /fake_mm/fsm/waypoint1_gripper_close: False
+ * /fake_mm/fsm/waypoint1_yaw: 0.0
+ * /fake_mm/fsm/waypoint_num: 2
+ * /fake_mm/map/map_type: 0
+ * /fake_mm/mm/base_mani_fixed_joint_xyz_ypr: [0.2462, 0.0, 0.1...
+ * /fake_mm/mm/manipulator_config: [0.1765, 0.607, 0...
+ * /fake_mm/mm/manipulator_dof: 6
+ * /fake_mm/mm/manipulator_max_acc: 1.57
+ * /fake_mm/mm/manipulator_max_pos: [3.0, 1.5, 2.8, 3...
+ * /fake_mm/mm/manipulator_max_vel: 0.8
+ * /fake_mm/mm/manipulator_min_pos: [-3.0, -1.5, -2.8...
+ * /fake_mm/mm/manipulator_self_thickness: 0.045
+ * /fake_mm/mm/manipulator_thickness: 0.1
+ * /fake_mm/mm/manipulator_type: cr10
+ * /fake_mm/mm/mobile_base_check_radius: 0.1
+ * /fake_mm/mm/mobile_base_dof: 2
+ * /fake_mm/mm/mobile_base_height: 0.15
+ * /fake_mm/mm/mobile_base_length: 1.1
+ * /fake_mm/mm/mobile_base_max_wheel_alpha: 8.0
+ * /fake_mm/mm/mobile_base_max_wheel_omega: 4.0
+ * /fake_mm/mm/mobile_base_non_singul_vel: 0.05
+ * /fake_mm/mm/mobile_base_wheel_base: 0.56
+ * /fake_mm/mm/mobile_base_wheel_radius: 0.125
+ * /fake_mm/mm/mobile_base_width: 0.9
+ * /fsm/target_type: 1
+ * /map_generator/bridges: [[0.0, 0.0, 1.0, ...
+ * /map_generator/clear_centers: [[-5.0, 0.0], [-2...
+ * /map_generator/clear_radius: 3.0
+ * /map_generator/fsm/init_gripper_close: False
+ * /map_generator/fsm/init_state: [-5.0, 0.0, 0.0, ...
+ * /map_generator/fsm/init_yaw: 0.0
+ * /map_generator/fsm/waypoint0: [0.0, 0.0, 0.0, 0...
+ * /map_generator/fsm/waypoint0_gripper_close: True
+ * /map_generator/fsm/waypoint0_yaw: 0.0
+ * /map_generator/fsm/waypoint1: [5.0, 0.0, 0.0, 0...
+ * /map_generator/fsm/waypoint1_gripper_close: False
+ * /map_generator/fsm/waypoint1_yaw: 0.0
+ * /map_generator/fsm/waypoint_num: 2
+ * /map_generator/map/float_obs_num: 2
+ * /map_generator/map/map_type: 0
+ * /map_generator/map/obs_num: 4
+ * /map_generator/map/resolution: 0.05
+ * /map_generator/map/seed: 30
+ * /map_generator/map/x_size: 16
+ * /map_generator/map/y_size: 12
+ * /map_generator/map/z_size: 3
+ * /map_generator/min_distance: 2.5
+ * /map_generator/mm/base_mani_fixed_joint_xyz_ypr: [0.2462, 0.0, 0.1...
+ * /map_generator/mm/manipulator_config: [0.1765, 0.607, 0...
+ * /map_generator/mm/manipulator_dof: 6
+ * /map_generator/mm/manipulator_max_acc: 1.57
+ * /map_generator/mm/manipulator_max_pos: [3.0, 1.5, 2.8, 3...
+ * /map_generator/mm/manipulator_max_vel: 0.8
+ * /map_generator/mm/manipulator_min_pos: [-3.0, -1.5, -2.8...
+ * /map_generator/mm/manipulator_self_thickness: 0.045
+ * /map_generator/mm/manipulator_thickness: 0.1
+ * /map_generator/mm/manipulator_type: cr10
+ * /map_generator/mm/mobile_base_check_radius: 0.1
+ * /map_generator/mm/mobile_base_dof: 2
+ * /map_generator/mm/mobile_base_height: 0.15
+ * /map_generator/mm/mobile_base_length: 1.1
+ * /map_generator/mm/mobile_base_max_wheel_alpha: 8.0
+ * /map_generator/mm/mobile_base_max_wheel_omega: 4.0
+ * /map_generator/mm/mobile_base_non_singul_vel: 0.05
+ * /map_generator/mm/mobile_base_wheel_base: 0.56
+ * /map_generator/mm/mobile_base_wheel_radius: 0.125
+ * /map_generator/mm/mobile_base_width: 0.9
+ * /map_generator/pub_rate: 1.0
+ * /mm_controller_node/fsm/emergency_time: 1.5
+ * /mm_controller_node/fsm/global_plan: True
+ * /mm_controller_node/fsm/init_gripper_close: False
+ * /mm_controller_node/fsm/init_state: [-5.0, 0.0, 0.0, ...
+ * /mm_controller_node/fsm/init_yaw: 0.0
+ * /mm_controller_node/fsm/planning_horizon: 5.0
+ * /mm_controller_node/fsm/replan_trajectory_time: 1.7
+ * /mm_controller_node/fsm/target_type: 2
+ * /mm_controller_node/fsm/thresh_replan_time: 2.5
+ * /mm_controller_node/fsm/time_for_gripper: 0.05
+ * /mm_controller_node/fsm/waypoint0: [0.0, 0.0, 0.0, 0...
+ * /mm_controller_node/fsm/waypoint0_gripper_close: True
+ * /mm_controller_node/fsm/waypoint0_yaw: 0.0
+ * /mm_controller_node/fsm/waypoint1: [5.0, 0.0, 0.0, 0...
+ * /mm_controller_node/fsm/waypoint1_gripper_close: False
+ * /mm_controller_node/fsm/waypoint1_yaw: 0.0
+ * /mm_controller_node/fsm/waypoint_num: 2
+ * /mm_controller_node/grid_map/use_global_map: False
+ * /mm_controller_node/grid_map/use_load_map: True
+ * /mm_controller_node/map/map_type: 0
+ * /mm_controller_node/mm/base_mani_fixed_joint_xyz_ypr: [0.2462, 0.0, 0.1...
+ * /mm_controller_node/mm/manipulator_config: [0.1765, 0.607, 0...
+ * /mm_controller_node/mm/manipulator_dof: 6
+ * /mm_controller_node/mm/manipulator_max_acc: 1.57
+ * /mm_controller_node/mm/manipulator_max_pos: [3.0, 1.5, 2.8, 3...
+ * /mm_controller_node/mm/manipulator_max_vel: 0.8
+ * /mm_controller_node/mm/manipulator_min_pos: [-3.0, -1.5, -2.8...
+ * /mm_controller_node/mm/manipulator_self_thickness: 0.045
+ * /mm_controller_node/mm/manipulator_thickness: 0.1
+ * /mm_controller_node/mm/manipulator_type: cr10
+ * /mm_controller_node/mm/mobile_base_check_radius: 0.1
+ * /mm_controller_node/mm/mobile_base_dof: 2
+ * /mm_controller_node/mm/mobile_base_height: 0.15
+ * /mm_controller_node/mm/mobile_base_length: 1.1
+ * /mm_controller_node/mm/mobile_base_max_wheel_alpha: 8.0
+ * /mm_controller_node/mm/mobile_base_max_wheel_omega: 4.0
+ * /mm_controller_node/mm/mobile_base_non_singul_vel: 0.05
+ * /mm_controller_node/mm/mobile_base_wheel_base: 0.56
+ * /mm_controller_node/mm/mobile_base_wheel_radius: 0.125
+ * /mm_controller_node/mm/mobile_base_width: 0.9
+ * /mm_controller_node/optimization/constrain_points_perPiece: 16
+ * /mm_controller_node/optimization/dense_sample_resolution: 16
+ * /mm_controller_node/optimization/ground_safe_dis: 0.03
+ * /mm_controller_node/optimization/ground_safe_margin: 0.03
+ * /mm_controller_node/optimization/mobile_base_opt_gear: True
+ * /mm_controller_node/optimization/safe_margin: 0.1
+ * /mm_controller_node/optimization/safe_margin_mani: 0.15
+ * /mm_controller_node/optimization/self_safe_margin: 0.1
+ * /mm_controller_node/optimization/weight_base_feasibility: 100.0
+ * /mm_controller_node/optimization/weight_manipulator_feasibility: 100.0
+ * /mm_controller_node/optimization/weight_manipulator_obstacle: 80000.0
+ * /mm_controller_node/optimization/weight_manipulator_self: 1000.0
+ * /mm_controller_node/optimization/weight_obstacle: 50000.0
+ * /mm_controller_node/optimization/weight_time: 1.0
+ * /mm_controller_node/search/allocate_num: 100000
+ * /mm_controller_node/search/check_num: 16
+ * /mm_controller_node/search/curvatureDisCoe: 0.4
+ * /mm_controller_node/search/dist_resolution: 0.6
+ * /mm_controller_node/search/goal_rate: 0.4
+ * /mm_controller_node/search/lambda_heu: 1
+ * /mm_controller_node/search/max_arc: 0.4
+ * /mm_controller_node/search/max_loop_num: 5000
+ * /mm_controller_node/search/max_mani_search_time: 0.3
+ * /mm_controller_node/search/max_sample_time: 1.5
+ * /mm_controller_node/search/max_seach_time: 3.0
+ * /mm_controller_node/search/min_turning_radius: 0.2
+ * /mm_controller_node/search/oneshot_check_len: 0.02
+ * /mm_controller_node/search/oneshot_range: 1.0
+ * /mm_controller_node/search/sample_time: 0.1
+ * /mm_controller_node/search/traj_back_penalty: 3.0
+ * /mm_controller_node/search/traj_forward_penalty: 1.0
+ * /mm_controller_node/search/traj_gear_switch_penalty: 10.0
+ * /mm_controller_node/search/traj_steer_change_penalty: 2.0
+ * /mm_controller_node/search/traj_steer_penalty: 5.0
+ * /mm_controller_node/search/try_astar_times: 5
+ * /mm_controller_node/search/yaw_resolution: 0.35
+ * /mm_controller_node/visualization/enable_debug_vis: False
+ * /mm_controller_node/visualization/his_traj_max_points: 500
+ * /mm_controller_node/visualization/mesh_vis_stride: 3
+ * /mm_controller_node/visualization/tf_rate_hz: 20.0
+ * /mm_controller_node/visualization/vis_rate_hz: 15.0
+ * /model_vis/fsm/emergency_time: 1.5
+ * /model_vis/fsm/global_plan: True
+ * /model_vis/fsm/init_gripper_close: False
+ * /model_vis/fsm/init_state: [-5.0, 0.0, 0.0, ...
+ * /model_vis/fsm/init_yaw: 0.0
+ * /model_vis/fsm/planning_horizon: 5.0
+ * /model_vis/fsm/replan_trajectory_time: 1.7
+ * /model_vis/fsm/target_type: 2
+ * /model_vis/fsm/thresh_replan_time: 2.5
+ * /model_vis/fsm/time_for_gripper: 0.05
+ * /model_vis/fsm/waypoint0: [0.0, 0.0, 0.0, 0...
+ * /model_vis/fsm/waypoint0_gripper_close: True
+ * /model_vis/fsm/waypoint0_yaw: 0.0
+ * /model_vis/fsm/waypoint1: [5.0, 0.0, 0.0, 0...
+ * /model_vis/fsm/waypoint1_gripper_close: False
+ * /model_vis/fsm/waypoint1_yaw: 0.0
+ * /model_vis/fsm/waypoint_num: 2
+ * /model_vis/grid_map/use_global_map: False
+ * /model_vis/grid_map/use_load_map: True
+ * /model_vis/map/map_type: 0
+ * /model_vis/mm/base_mani_fixed_joint_xyz_ypr: [0.2462, 0.0, 0.1...
+ * /model_vis/mm/manipulator_config: [0.1765, 0.607, 0...
+ * /model_vis/mm/manipulator_dof: 6
+ * /model_vis/mm/manipulator_max_acc: 1.57
+ * /model_vis/mm/manipulator_max_pos: [3.0, 1.5, 2.8, 3...
+ * /model_vis/mm/manipulator_max_vel: 0.8
+ * /model_vis/mm/manipulator_min_pos: [-3.0, -1.5, -2.8...
+ * /model_vis/mm/manipulator_self_thickness: 0.045
+ * /model_vis/mm/manipulator_thickness: 0.1
+ * /model_vis/mm/manipulator_type: cr10
+ * /model_vis/mm/mobile_base_check_radius: 0.1
+ * /model_vis/mm/mobile_base_dof: 2
+ * /model_vis/mm/mobile_base_height: 0.15
+ * /model_vis/mm/mobile_base_length: 1.1
+ * /model_vis/mm/mobile_base_max_wheel_alpha: 8.0
+ * /model_vis/mm/mobile_base_max_wheel_omega: 4.0
+ * /model_vis/mm/mobile_base_non_singul_vel: 0.05
+ * /model_vis/mm/mobile_base_wheel_base: 0.56
+ * /model_vis/mm/mobile_base_wheel_radius: 0.125
+ * /model_vis/mm/mobile_base_width: 0.9
+ * /model_vis/optimization/constrain_points_perPiece: 16
+ * /model_vis/optimization/dense_sample_resolution: 16
+ * /model_vis/optimization/ground_safe_dis: 0.03
+ * /model_vis/optimization/ground_safe_margin: 0.03
+ * /model_vis/optimization/mobile_base_opt_gear: True
+ * /model_vis/optimization/safe_margin: 0.1
+ * /model_vis/optimization/safe_margin_mani: 0.15
+ * /model_vis/optimization/self_safe_margin: 0.1
+ * /model_vis/optimization/weight_base_feasibility: 100.0
+ * /model_vis/optimization/weight_manipulator_feasibility: 100.0
+ * /model_vis/optimization/weight_manipulator_obstacle: 80000.0
+ * /model_vis/optimization/weight_manipulator_self: 1000.0
+ * /model_vis/optimization/weight_obstacle: 50000.0
+ * /model_vis/optimization/weight_time: 1.0
+ * /model_vis/search/allocate_num: 100000
+ * /model_vis/search/check_num: 16
+ * /model_vis/search/curvatureDisCoe: 0.4
+ * /model_vis/search/dist_resolution: 0.6
+ * /model_vis/search/goal_rate: 0.4
+ * /model_vis/search/lambda_heu: 1
+ * /model_vis/search/max_arc: 0.4
+ * /model_vis/search/max_loop_num: 5000
+ * /model_vis/search/max_mani_search_time: 0.3
+ * /model_vis/search/max_sample_time: 1.5
+ * /model_vis/search/max_seach_time: 3.0
+ * /model_vis/search/min_turning_radius: 0.2
+ * /model_vis/search/oneshot_check_len: 0.02
+ * /model_vis/search/oneshot_range: 1.0
+ * /model_vis/search/sample_time: 0.1
+ * /model_vis/search/traj_back_penalty: 3.0
+ * /model_vis/search/traj_forward_penalty: 1.0
+ * /model_vis/search/traj_gear_switch_penalty: 10.0
+ * /model_vis/search/traj_steer_change_penalty: 2.0
+ * /model_vis/search/traj_steer_penalty: 5.0
+ * /model_vis/search/try_astar_times: 5
+ * /model_vis/search/yaw_resolution: 0.35
+ * /model_vis/visualization/enable_debug_vis: False
+ * /model_vis/visualization/his_traj_max_points: 500
+ * /model_vis/visualization/mesh_vis_stride: 3
+ * /model_vis/visualization/tf_rate_hz: 20.0
+ * /model_vis/visualization/vis_rate_hz: 15.0
+ * /remani_planner_node/fsm/emergency_time: 1.5
+ * /remani_planner_node/fsm/fail_safe: True
+ * /remani_planner_node/fsm/global_plan: True
+ * /remani_planner_node/fsm/init_gripper_close: False
+ * /remani_planner_node/fsm/init_state: [-5.0, 0.0, 0.0, ...
+ * /remani_planner_node/fsm/init_yaw: 0.0
+ * /remani_planner_node/fsm/planning_horizon: 5.0
+ * /remani_planner_node/fsm/replan_trajectory_time: 1.7
+ * /remani_planner_node/fsm/target_type: 1
+ * /remani_planner_node/fsm/thresh_no_replan_meter: 2.5
+ * /remani_planner_node/fsm/thresh_replan_time: 2.5
+ * /remani_planner_node/fsm/time_for_gripper: 0.05
+ * /remani_planner_node/fsm/waypoint0: [0.0, 0.0, 0.0, 0...
+ * /remani_planner_node/fsm/waypoint0_gripper_close: True
+ * /remani_planner_node/fsm/waypoint0_yaw: 0.0
+ * /remani_planner_node/fsm/waypoint1: [5.0, 0.0, 0.0, 0...
+ * /remani_planner_node/fsm/waypoint1_gripper_close: False
+ * /remani_planner_node/fsm/waypoint1_yaw: 0.0
+ * /remani_planner_node/fsm/waypoint_num: 2
+ * /remani_planner_node/grid_map/cx: 321.04638671875
+ * /remani_planner_node/grid_map/cy: 243.44969177246094
+ * /remani_planner_node/grid_map/depth_filter_margin: 2
+ * /remani_planner_node/grid_map/depth_filter_maxdist: 5.0
+ * /remani_planner_node/grid_map/depth_filter_mindist: 0.2
+ * /remani_planner_node/grid_map/depth_filter_tolerance: 0.15
+ * /remani_planner_node/grid_map/esdf_slice_height: -0.1
+ * /remani_planner_node/grid_map/frame_id: world
+ * /remani_planner_node/grid_map/fx: 387.229248046875
+ * /remani_planner_node/grid_map/fy: 387.229248046875
+ * /remani_planner_node/grid_map/ground_height: -0.01
+ * /remani_planner_node/grid_map/k_depth_scaling_factor: 1000.0
+ * /remani_planner_node/grid_map/local_bound_inflate: 0.0
+ * /remani_planner_node/grid_map/local_map_margin: 15
+ * /remani_planner_node/grid_map/local_update_range_x: 17
+ * /remani_planner_node/grid_map/local_update_range_y: 17
+ * /remani_planner_node/grid_map/local_update_range_z: 3.0
+ * /remani_planner_node/grid_map/map_size_x: 20.0
+ * /remani_planner_node/grid_map/map_size_y: 8.0
+ * /remani_planner_node/grid_map/map_size_z: 3.0
+ * /remani_planner_node/grid_map/max_ray_length: 4.5
+ * /remani_planner_node/grid_map/min_ray_length: 0.1
+ * /remani_planner_node/grid_map/obstacles_inflation: 0.08
+ * /remani_planner_node/grid_map/p_hit: 0.65
+ * /remani_planner_node/grid_map/p_max: 0.9
+ * /remani_planner_node/grid_map/p_min: 0.12
+ * /remani_planner_node/grid_map/p_miss: 0.35
+ * /remani_planner_node/grid_map/p_occ: 0.8
+ * /remani_planner_node/grid_map/pose_type: 1
+ * /remani_planner_node/grid_map/resolution: 0.05
+ * /remani_planner_node/grid_map/show_esdf_time: False
+ * /remani_planner_node/grid_map/show_occ_time: False
+ * /remani_planner_node/grid_map/skip_pixel: 2
+ * /remani_planner_node/grid_map/use_depth_filter: True
+ * /remani_planner_node/grid_map/use_global_map: False
+ * /remani_planner_node/grid_map/use_load_map: True
+ * /remani_planner_node/grid_map/virtual_ceil_height: 4.0
+ * /remani_planner_node/grid_map/visualization_truncate_height: 2.8
+ * /remani_planner_node/grid_map/z_length: 0.0
+ * /remani_planner_node/manager/control_points_distance: 0.4
+ * /remani_planner_node/manager/feasibility_tolerance: 0.05
+ * /remani_planner_node/manager/polyTraj_piece_length: 2.0
+ * /remani_planner_node/map/map_type: 0
+ * /remani_planner_node/mm/base_mani_fixed_joint_xyz_ypr: [0.2462, 0.0, 0.1...
+ * /remani_planner_node/mm/manipulator_config: [0.1765, 0.607, 0...
+ * /remani_planner_node/mm/manipulator_dof: 6
+ * /remani_planner_node/mm/manipulator_max_acc: 1.57
+ * /remani_planner_node/mm/manipulator_max_pos: [3.0, 1.5, 2.8, 3...
+ * /remani_planner_node/mm/manipulator_max_vel: 0.8
+ * /remani_planner_node/mm/manipulator_min_pos: [-3.0, -1.5, -2.8...
+ * /remani_planner_node/mm/manipulator_self_thickness: 0.045
+ * /remani_planner_node/mm/manipulator_thickness: 0.1
+ * /remani_planner_node/mm/manipulator_type: cr10
+ * /remani_planner_node/mm/mobile_base_check_radius: 0.1
+ * /remani_planner_node/mm/mobile_base_dof: 2
+ * /remani_planner_node/mm/mobile_base_height: 0.15
+ * /remani_planner_node/mm/mobile_base_length: 1.1
+ * /remani_planner_node/mm/mobile_base_max_wheel_alpha: 8.0
+ * /remani_planner_node/mm/mobile_base_max_wheel_omega: 4.0
+ * /remani_planner_node/mm/mobile_base_non_singul_vel: 0.05
+ * /remani_planner_node/mm/mobile_base_wheel_base: 0.56
+ * /remani_planner_node/mm/mobile_base_wheel_radius: 0.125
+ * /remani_planner_node/mm/mobile_base_width: 0.9
+ * /remani_planner_node/optimization/constrain_points_perPiece: 16
+ * /remani_planner_node/optimization/dense_sample_resolution: 16
+ * /remani_planner_node/optimization/ground_safe_dis: 0.03
+ * /remani_planner_node/optimization/ground_safe_margin: 0.03
+ * /remani_planner_node/optimization/mobile_base_opt_gear: True
+ * /remani_planner_node/optimization/safe_margin: 0.1
+ * /remani_planner_node/optimization/safe_margin_mani: 0.15
+ * /remani_planner_node/optimization/self_safe_margin: 0.1
+ * /remani_planner_node/optimization/weight_base_feasibility: 100.0
+ * /remani_planner_node/optimization/weight_manipulator_feasibility: 100.0
+ * /remani_planner_node/optimization/weight_manipulator_obstacle: 80000.0
+ * /remani_planner_node/optimization/weight_manipulator_self: 1000.0
+ * /remani_planner_node/optimization/weight_obstacle: 50000.0
+ * /remani_planner_node/optimization/weight_time: 1.0
+ * /remani_planner_node/search/allocate_num: 100000
+ * /remani_planner_node/search/check_num: 16
+ * /remani_planner_node/search/curvatureDisCoe: 0.4
+ * /remani_planner_node/search/dist_resolution: 0.6
+ * /remani_planner_node/search/goal_rate: 0.4
+ * /remani_planner_node/search/lambda_heu: 1
+ * /remani_planner_node/search/max_arc: 0.4
+ * /remani_planner_node/search/max_loop_num: 5000
+ * /remani_planner_node/search/max_mani_search_time: 0.3
+ * /remani_planner_node/search/max_sample_time: 1.5
+ * /remani_planner_node/search/max_seach_time: 3.0
+ * /remani_planner_node/search/min_turning_radius: 0.5
+ * /remani_planner_node/search/oneshot_check_len: 0.02
+ * /remani_planner_node/search/oneshot_range: 1.0
+ * /remani_planner_node/search/sample_time: 0.1
+ * /remani_planner_node/search/traj_back_penalty: 3.0
+ * /remani_planner_node/search/traj_forward_penalty: 1.0
+ * /remani_planner_node/search/traj_gear_switch_penalty: 10.0
+ * /remani_planner_node/search/traj_steer_change_penalty: 2.0
+ * /remani_planner_node/search/traj_steer_penalty: 5.0
+ * /remani_planner_node/search/try_astar_times: 5
+ * /remani_planner_node/search/yaw_resolution: 0.35
+ * /remani_planner_node/visualization/enable_debug_vis: False
+ * /remani_planner_node/visualization/his_traj_max_points: 500
+ * /remani_planner_node/visualization/mesh_vis_stride: 3
+ * /remani_planner_node/visualization/tf_rate_hz: 20.0
+ * /remani_planner_node/visualization/vis_rate_hz: 15.0
+ * /robot_description: <?xml version='1....
+ * /rosdistro: noetic
+ * /rosversion: 1.17.4
+ * /search/max_seach_time: 3.0
+ * /search/min_turning_radius: 0.5
+
+NODES
+  /
+    fake_mm (fake_mm/fake_mm)
+    map_generator (map_generator/map_generator)
+    mm_controller_node (mm_controller/mm_controller_node)
+    model_vis (fake_mm/model_vis)
+    remani_planner_node (remani_planner/remani_planner_node)
+    robot_state_publisher (robot_state_publisher/robot_state_publisher)
+    rviz (rviz/rviz)
+[33m[WARN] [1786428241.161936456]: The root link base_link has an inertia specified in the URDF, but KDL does not support a root link with an inertia.  As a workaround, you can add an extra dummy link to your URDF.[0m
+[33m[WARN] [1786428241.290522117]: Finished generate Cuboids Map [0m
+[0m[INFO] [1786428241.412812240]: MMConfig: type=cr10 thickness=0.100 self_thickness=0.045[0m
+[0m[INFO] [1786428241.438168740]: KinoAstar: max_seach_time=3.000 s min_turning_radius=0.500[0m
+[FSM]: from INIT to WAIT_TARGET
+[rospack] Error: failed to parse command-line options: too many positional options have been specified on the command line
+[librospack]: error while executing command
+[rospack] Error: failed to parse command-line options: too many positional options have been specified on the command line
+[librospack]: error while executing command
+[rospack] Error: failed to parse command-line options: too many positional options have been specified on the command line
+[librospack]: error while executing command
+Triggered! traget type: 1
+[0m[INFO] [1786428249.558390881]: FSM goal click: goal_xy=(6.262, -3.750) start_xy=(-5.000, 0.000) yaw=0.0 deg[0m
+[FSM]: from WAIT_TARGET to GEN_NEW_TRAJ
+[47;30m
+[replan 0]==============================================[0m
+[0m[INFO] [1786428249.573074977]: continous_failures_count: 0[0m
+[0m[INFO] [1786428254.549524726]: The optimization result is : Success: met stopping criteria (delta).[0m
+[34mtotal time: 5075.03, init: 1694.49, optimize: 3380.54, avg_time: 5075.03, count_success: 1[0m
+[FSM]: from GEN_NEW_TRAJ to EXEC_TRAJ
+[31m[ERROR] [1786428274.730204104]: Client [/rviz] wants topic /remani_planner_node/kinoastar/local_start_goal to have datatype/md5sum [visualization_msgs/Marker/4048c9de2a16f4ae8e0538085ebf1b97], but our version has [visualization_msgs/MarkerArray/d155b9ce5188fbaf89745847fd5882d7]. Dropping connection.[0m
+Triggered! traget type: 1
+[0m[INFO] [1786428293.358117128]: FSM goal click: goal_xy=(6.298, 5.174) start_xy=(6.262, -3.750) yaw=-37.0 deg[0m
+[TRIG]: from EXEC_TRAJ to GEN_NEW_TRAJ
+[33m[WARN] [1786428296.366347898]: [Kino Astar]: NO_PATH. Exceeds maximum time 3.000 s[0m
+[33m[WARN] [1786428296.366498648]: KinoAstar: Hybrid A* NO_PATH; refuse straight/RRT fallback (failures=0/5). start=(6.26,-3.75) goal=(6.30,5.17)[0m
+[33m[WARN] [1786428299.370023209]: [Kino Astar]: NO_PATH. Exceeds maximum time 3.000 s[0m
+[33m[WARN] [1786428299.370170673]: KinoAstar: Hybrid A* NO_PATH; refuse straight/RRT fallback (failures=1/5). start=(6.26,-3.75) goal=(6.30,5.17)[0m
+[33m[WARN] [1786428302.373573785]: [Kino Astar]: NO_PATH. Exceeds maximum time 3.000 s[0m
+[33m[WARN] [1786428302.373711697]: KinoAstar: Hybrid A* NO_PATH; refuse straight/RRT fallback (failures=2/5). start=(6.26,-3.75) goal=(6.30,5.17)[0m
+[33m[WARN] [1786428305.377065626]: [Kino Astar]: NO_PATH. Exceeds maximum time 3.000 s[0m
+[33m[WARN] [1786428305.377192256]: KinoAstar: Hybrid A* NO_PATH; refuse straight/RRT fallback (failures=3/5). start=(6.26,-3.75) goal=(6.30,5.17)[0m
+[33m[WARN] [1786428308.380407943]: [Kino Astar]: NO_PATH. Exceeds maximum time 3.000 s[0m
+[33m[WARN] [1786428308.380542851]: KinoAstar: Hybrid A* NO_PATH; refuse straight/RRT fallback (failures=4/5). start=(6.26,-3.75) goal=(6.30,5.17)[0m
+[33m[WARN] [1786428308.383883415]: KinoAstar: switching to whole-body RRT after 5 failures. start=(6.26,-3.75) goal=(6.30,5.17)[0m
+[33m[WARN] [1786428310.143725890]: KinoAstar: frontend path not free (coll=0) at piece 0 idx 7; reject[0m
+[33m[WARN] [1786428312.010727523]: KinoAstar: switching to whole-body RRT after 7 failures. start=(6.26,-3.75) goal=(6.30,5.17)[0m
+[33m[WARN] [1786428314.073185357]: KinoAstar: frontend path not free (coll=0) at piece 0 idx 7; reject[0m
+[33m[WARN] [1786428314.073419704]: KinoAstar: switching to whole-body RRT after 8 failures. start=(6.26,-3.75) goal=(6.30,5.17)[0m
+[33m[WARN] [1786428316.245955133]: KinoAstar: frontend path not free (coll=0) at piece 0 idx 7; reject[0m
+[33m[WARN] [1786428316.246249697]: KinoAstar: switching to whole-body RRT after 9 failures. start=(6.26,-3.75) goal=(6.30,5.17)[0m
+[33m[WARN] [1786428318.315907488]: KinoAstar: frontend path not free (coll=0) at piece 0 idx 7; reject[0m
+[33m[WARN] [1786428318.326405544]: KinoAstar: switching to whole-body RRT after 10 failures. start=(6.26,-3.75) goal=(6.30,5.17)[0m
+[33m[WARN] [1786428322.064192731]: KinoAstar: frontend path not free (coll=0) at piece 0 idx 7; reject[0m
+[33m[WARN] [1786428322.064384561]: KinoAstar: switching to whole-body RRT after 12 failures. start=(6.26,-3.75) goal=(6.30,5.17)[0m
+[33m[WARN] [1786428325.805114925]: KinoAstar: frontend path not free (coll=0) at piece 0 idx 7; reject[0m
+[33m[WARN] [1786428325.805295414]: KinoAstar: switching to whole-body RRT after 14 failures. start=(6.26,-3.75) goal=(6.30,5.17)[0m
+[33m[WARN] [1786428328.881687100]: KinoAstar: frontend path not free (coll=0) at piece 0 idx 7; reject[0m
+[33m[WARN] [1786428328.881844099]: KinoAstar: switching to whole-body RRT after 16 failures. start=(6.26,-3.75) goal=(6.30,5.17)[0m
+[33m[WARN] [1786428331.816372000]: KinoAstar: frontend path not free (coll=0) at piece 0 idx 7; reject[0m
+[33m[WARN] [1786428331.816530365]: KinoAstar: switching to whole-body RRT after 18 failures. start=(6.26,-3.75) goal=(6.30,5.17)[0m
+[33m[WARN] [1786428334.725499239]: KinoAstar: frontend path not free (coll=0) at piece 0 idx 7; reject[0m
+[33m[WARN] [1786428334.735966721]: KinoAstar: switching to whole-body RRT after 20 failures. start=(6.26,-3.75) goal=(6.30,5.17)[0m
+[33m[WARN] [1786428337.650086780]: KinoAstar: frontend path not free (coll=0) at piece 0 idx 7; reject[0m
+[33m[WARN] [1786428337.650260637]: KinoAstar: switching to whole-body RRT after 22 failures. start=(6.26,-3.75) goal=(6.30,5.17)[0m
+[33m[WARN] [1786428340.557833652]: KinoAstar: frontend path not free (coll=0) at piece 0 idx 7; reject[0m
+[33m[WARN] [1786428340.557988319]: KinoAstar: switching to whole-body RRT after 24 failures. start=(6.26,-3.75) goal=(6.30,5.17)[0m
+[33m[WARN] [1786428343.609952941]: KinoAstar: frontend path not free (coll=0) at piece 0 idx 7; reject[0m
+[33m[WARN] [1786428343.610269488]: KinoAstar: switching to whole-body RRT after 26 failures. start=(6.26,-3.75) goal=(6.30,5.17)[0m
+[33m[WARN] [1786428346.538832695]: KinoAstar: frontend path not free (coll=0) at piece 0 idx 7; reject[0m
+[33m[WARN] [1786428346.538991039]: KinoAstar: switching to whole-body RRT after 28 failures. start=(6.26,-3.75) goal=(6.30,5.17)[0m
+[33m[WARN] [1786428349.432175018]: KinoAstar: frontend path not free (coll=0) at piece 0 idx 7; reject[0m
+[33m[WARN] [1786428349.442494621]: KinoAstar: switching to whole-body RRT after 30 failures. start=(6.26,-3.75) goal=(6.30,5.17)[0m
+[33m[WARN] [1786428352.343988187]: KinoAstar: frontend path not free (coll=0) at piece 0 idx 7; reject[0m
+[33m[WARN] [1786428352.344160614]: KinoAstar: switching to whole-body RRT after 32 failures. start=(6.26,-3.75) goal=(6.30,5.17)[0m
+[33m[WARN] [1786428355.254195721]: KinoAstar: frontend path not free (coll=0) at piece 0 idx 7; reject[0m
+[33m[WARN] [1786428355.254373080]: KinoAstar: switching to whole-body RRT after 34 failures. start=(6.26,-3.75) goal=(6.30,5.17)[0m
+[33m[WARN] [1786428358.142781627]: KinoAstar: frontend path not free (coll=0) at piece 0 idx 7; reject[0m
+[33m[WARN] [1786428358.142950254]: KinoAstar: switching to whole-body RRT after 36 failures. start=(6.26,-3.75) goal=(6.30,5.17)[0m
+[33m[WARN] [1786428361.030197623]: KinoAstar: frontend path not free (coll=0) at piece 0 idx 7; reject[0m
+[33m[WARN] [1786428361.030370534]: KinoAstar: switching to whole-body RRT after 38 failures. start=(6.26,-3.75) goal=(6.30,5.17)[0m
+[33m[WARN] [1786428363.942126458]: KinoAstar: frontend path not free (coll=0) at piece 0 idx 7; reject[0m
+[33m[WARN] [1786428363.952505708]: KinoAstar: switching to whole-body RRT after 40 failures. start=(6.26,-3.75) goal=(6.30,5.17)[0m
+[33m[WARN] [1786428366.876336607]: KinoAstar: frontend path not free (coll=0) at piece 0 idx 7; reject[0m
+[33m[WARN] [1786428366.876513746]: KinoAstar: switching to whole-body RRT after 42 failures. start=(6.26,-3.75) goal=(6.30,5.17)[0m
+[33m[WARN] [1786428369.832200310]: KinoAstar: frontend path not free (coll=0) at piece 0 idx 7; reject[0m
+[33m[WARN] [1786428369.832360436]: KinoAstar: switching to whole-body RRT after 44 failures. start=(6.26,-3.75) goal=(6.30,5.17)[0m
+[33m[WARN] [1786428372.730753358]: KinoAstar: frontend path not free (coll=0) at piece 0 idx 7; reject[0m
+[47;30m
+[replan 1]==============================================[0m
+[0m[INFO] [1786428293.366228062]: continous_failures_count: 0[0m
+[47;30m
+[replan 2]==============================================[0m
+[0m[INFO] [1786428296.369949358]: continous_failures_count: 1[0m
+[47;30m
+[replan 3]==============================================[0m
+[0m[INFO] [1786428299.373440954]: continous_failures_count: 2[0m
+[47;30m
+[replan 4]==============================================[0m
+[0m[INFO] [1786428302.376983587]: continous_failures_count: 3[0m
+[47;30m
+[replan 5]==============================================[0m
+[0m[INFO] [1786428305.380369396]: continous_failures_count: 4[0m
+[47;30m
+[replan 6]==============================================[0m
+[0m[INFO] [1786428308.383753901]: continous_failures_count: 5[0m
+[47;30m
+[replan 8]==============================================[0m
+[0m[INFO] [1786428312.010596622]: continous_failures_count: 7[0m
+[47;30m
+[replan 9]==============================================[0m
+[0m[INFO] [1786428314.073293471]: continous_failures_count: 8[0m
+[47;30m
+[replan 10]==============================================[0m
+[0m[INFO] [1786428316.246104584]: continous_failures_count: 9[0m
+[0m[INFO] [1786428318.315947554]: [FSM]: stay in GEN_NEW_TRAJ (x2)[0m
+[47;30m
+[replan 11]==============================================[0m
+[0m[INFO] [1786428318.326229432]: continous_failures_count: 10[0m
+[47;30m
+[replan 13]==============================================[0m
+[0m[INFO] [1786428322.064274576]: continous_failures_count: 12[0m
+[47;30m
+[replan 15]==============================================[0m
+[0m[INFO] [1786428325.805196534]: continous_failures_count: 14[0m
+[47;30m
+[replan 17]==============================================[0m
+[0m[INFO] [1786428328.881754118]: continous_failures_count: 16[0m
+[47;30m
+[replan 19]==============================================[0m
+[0m[INFO] [1786428331.816440652]: continous_failures_count: 18[0m
+[0m[INFO] [1786428334.725523823]: [FSM]: stay in GEN_NEW_TRAJ (x3)[0m
+[47;30m
+[replan 21]==============================================[0m
+[0m[INFO] [1786428334.735864605]: continous_failures_count: 20[0m
+[47;30m
+[replan 23]==============================================[0m
+[0m[INFO] [1786428337.650169624]: continous_failures_count: 22[0m
+[47;30m
+[replan 25]==============================================[0m
+[0m[INFO] [1786428340.557898730]: continous_failures_count: 24[0m
+[47;30m
+[replan 27]==============================================[0m
+[0m[INFO] [1786428343.610166712]: continous_failures_count: 26[0m
+[47;30m
+[replan 29]==============================================[0m
+[0m[INFO] [1786428346.538900656]: continous_failures_count: 28[0m
+[0m[INFO] [1786428349.432202285]: [FSM]: stay in GEN_NEW_TRAJ (x4)[0m
+[47;30m
+[replan 31]==============================================[0m
+[0m[INFO] [1786428349.442392206]: continous_failures_count: 30[0m
+[47;30m
+[replan 33]==============================================[0m
+[0m[INFO] [1786428352.344070219]: continous_failures_count: 32[0m
+[47;30m
+[replan 35]==============================================[0m
+[0m[INFO] [1786428355.254280220]: continous_failures_count: 34[0m
+[47;30m
+[replan 37]==============================================[0m
+[0m[INFO] [1786428358.142858323]: continous_failures_count: 36[0m
+[47;30m
+[replan 39]==============================================[0m
+[0m[INFO] [1786428361.030276971]: continous_failures_count: 38[0m
+[0m[INFO] [1786428363.942153451]: [FSM]: stay in GEN_NEW_TRAJ (x5)[0m
+[47;30m
+[replan 41]==============================================[0m
+[0m[INFO] [1786428363.952403464]: continous_failures_count: 40[0m
+[47;30m
+[replan 43]==============================================[0m
+[0m[INFO] [1786428366.876422913]: continous_failures_count: 42[0m
+[47;30m
+[replan 45]==============================================[0m
+[0m[INFO] [1786428369.832266805]: continous_failures_count: 44[0m
+[47;30m
+[replan 47]==============================================[0m
+[33m[WARN] [1786428372.730929612]: KinoAstar: switching to whole-body RRT after 46 failures. start=(6.26,-3.75) goal=(6.30,5.17)[0m
+[33m[WARN] [1786428375.684099629]: KinoAstar: frontend path not free (coll=0) at piece 0 idx 7; reject[0m
+[33m[WARN] [1786428375.684253895]: KinoAstar: switching to whole-body RRT after 48 failures. start=(6.26,-3.75) goal=(6.30,5.17)[0m
+[33m[WARN] [1786428378.686841293]: KinoAstar: frontend path not free (coll=0) at piece 0 idx 7; reject[0m
+[0m[INFO] [1786428372.730834884]: continous_failures_count: 46[0m
+[47;30m
+[replan 49]==============================================[0m
+[0m[INFO] [1786428375.684164147]: continous_failures_count: 48[0m
+[0m[INFO] [1786428378.686867693]: [FSM]: stay in GEN_NEW_TRAJ (x6)[0m
+Triggered! traget type: 1
+[33m[WARN] [1786428378.698105181]: KinoAstar: switching to whole-body RRT after 50 failures. start=(6.26,-3.75) goal=(-3.67,3.05)[0m
+[33m[WARN] [1786428382.143174078]: KinoAstar: frontend path not free (coll=0) at piece 0 idx 4; reject[0m
+[33m[WARN] [1786428382.143347867]: KinoAstar: switching to whole-body RRT after 51 failures. start=(6.26,-3.75) goal=(-3.67,3.05)[0m
+[33m[WARN] [1786428386.353230757]: KinoAstar: frontend path not free (coll=0) at piece 0 idx 8; reject[0m
+[33m[WARN] [1786428386.353394153]: KinoAstar: switching to whole-body RRT after 52 failures. start=(6.26,-3.75) goal=(-3.67,3.05)[0m
+[0m[INFO] [1786428378.692177827]: FSM goal click: goal_xy=(-3.667, 3.052) start_xy=(6.262, -3.750) yaw=-37.0 deg[0m
+[47;30m
+[replan 51]==============================================[0m
+[0m[INFO] [1786428378.698006188]: continous_failures_count: 50[0m
+[47;30m
+[replan 52]==============================================[0m
+[0m[INFO] [1786428382.143256838]: continous_failures_count: 51[0m
+[47;30m
+[replan 53]==============================================[0m
+[0m[INFO] [1786428386.353303071]: continous_failures_count: 52[0m
+[0m[INFO] [1786428391.607294504]: The optimization result is : Success: met stopping criteria (delta).[0m
+[34mtotal time: 5335.96, init: 3803.84, optimize: 1532.12, avg_time: 5205.5, count_success: 2[0m
+[FSM]: from GEN_NEW_TRAJ to EXEC_TRAJ
+[TRIG]: from EXEC_TRAJ to GEN_NEW_TRAJ
+[33m[WARN] [1786428396.410365798]: [Kino Astar]: NO_PATH. Exceeds maximum time 3.000 s[0m
+[33m[WARN] [1786428396.410473858]: KinoAstar: Hybrid A* NO_PATH; refuse straight/RRT fallback (failures=0/5). start=(6.17,-3.51) goal=(-3.67,3.05)[0m
+[33m[WARN] [1786428399.413109785]: [Kino Astar]: NO_PATH. Exceeds maximum time 3.000 s[0m
+[33m[WARN] [1786428399.413215332]: KinoAstar: Hybrid A* NO_PATH; refuse straight/RRT fallback (failures=1/5). start=(6.17,-3.51) goal=(-3.67,3.05)[0m
+[33m[WARN] [1786428402.415951195]: [Kino Astar]: NO_PATH. Exceeds maximum time 3.000 s[0m
+[33m[WARN] [1786428402.416057481]: KinoAstar: Hybrid A* NO_PATH; refuse straight/RRT fallback (failures=2/5). start=(6.17,-3.51) goal=(-3.67,3.05)[0m
+[33m[WARN] [1786428405.418550666]: [Kino Astar]: NO_PATH. Exceeds maximum time 3.000 s[0m
+[33m[WARN] [1786428405.418656933]: KinoAstar: Hybrid A* NO_PATH; refuse straight/RRT fallback (failures=3/5). start=(6.17,-3.51) goal=(-3.67,3.05)[0m
+[33m[WARN] [1786428408.420978683]: [Kino Astar]: NO_PATH. Exceeds maximum time 3.000 s[0m
+[33m[WARN] [1786428408.421083655]: KinoAstar: Hybrid A* NO_PATH; refuse straight/RRT fallback (failures=4/5). start=(6.17,-3.51) goal=(-3.67,3.05)[0m
+[33m[WARN] [1786428408.423702561]: KinoAstar: switching to whole-body RRT after 5 failures. start=(6.17,-3.51) goal=(-3.67,3.05)[0m
+[33m[WARN] [1786428413.309991803]: mani collision at time 11.790000![0m
+[33m[WARN] [1786428413.312996844]: KinoAstar: switching to whole-body RRT after 6 failures. start=(6.17,-3.51) goal=(-3.67,3.05)[0m
+[47;30m
+[replan 54]==============================================[0m
+[0m[INFO] [1786428393.410257021]: continous_failures_count: 0[0m
+[47;30m
+[replan 55]==============================================[0m
+[0m[INFO] [1786428396.413057888]: continous_failures_count: 1[0m
+[47;30m
+[replan 56]==============================================[0m
+[0m[INFO] [1786428399.415832376]: continous_failures_count: 2[0m
+[47;30m
+[replan 57]==============================================[0m
+[0m[INFO] [1786428402.418454719]: continous_failures_count: 3[0m
+[47;30m
+[replan 58]==============================================[0m
+[0m[INFO] [1786428405.420905814]: continous_failures_count: 4[0m
+[47;30m
+[replan 59]==============================================[0m
+[0m[INFO] [1786428408.423609832]: continous_failures_count: 5[0m
+[0m[INFO] [1786428413.280916580]: The optimization result is : Success: met stopping criteria (delta).[0m
+[47;30m
+[replan 60]==============================================[0m
+[0m[INFO] [1786428413.312904271]: continous_failures_count: 6[0m
+[0m[INFO] [1786428417.583957257]: The optimization result is : Success: met stopping criteria (delta).[0m
+[34mtotal time: 4352.46, init: 2997.13, optimize: 1355.33, avg_time: 4921.15, count_success: 3[0m
+[FSM]: from GEN_NEW_TRAJ to EXEC_TRAJ

@@ -134,6 +134,7 @@ namespace remani_planner
     // C++: plan-stage timing + debug vis switch begin
     // ################################
     bool enable_debug_vis_ = false;
+    bool enable_traj_mesh_vis_ = true;
     int mesh_vis_stride_ = 3;
     double last_minsnap_ms_ = 0.0;
     double last_lbfgs_ms_ = 0.0;
