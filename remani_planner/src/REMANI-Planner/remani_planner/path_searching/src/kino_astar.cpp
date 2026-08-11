@@ -53,6 +53,13 @@ void KinoAstar::setParam(ros::NodeHandle& nh, const std::shared_ptr<GridMap> &en
   nh.param("search/allocate_num", allocate_num_, 100000);
   nh.param("search/try_astar_times", try_astar_times_, 20);
   nh.param("fsm/planning_horizon", planning_horizon_, 10.0);
+  // ################################
+  // C++: debug vis gate for start/goal mesh begin
+  // ################################
+  nh.param("visualization/enable_debug_vis", enable_debug_vis_, false);
+  // ################################
+  // C++: debug vis gate for start/goal mesh end
+  // ################################
 
   bool global_plan;
   nh.param("fsm/global_plan", global_plan, false);
@@ -117,11 +124,18 @@ KinoAstar::~KinoAstar(){
   }
 }
 
-int KinoAstar::KinoAstarSearchAndGetSimplePath(const Eigen::VectorXd &start_pos, const Eigen::VectorXd &start_vel, const double start_yaw, const int start_singul, const bool start_gripper,
+  int KinoAstar::KinoAstarSearchAndGetSimplePath(const Eigen::VectorXd &start_pos, const Eigen::VectorXd &start_vel, const double start_yaw, const int start_singul, const bool start_gripper,
                                                 const Eigen::VectorXd &end_pos, const Eigen::VectorXd &end_vel, double end_yaw, const bool end_gripper, const Eigen::Vector2d &init_ctrl, const int continous_failures_count,
                                                 std::vector<std::vector<Eigen::VectorXd>> &simple_path_container, std::vector<std::vector<double>> &yaw_list_container, 
                                                 std::vector<int> &singul_container, std::vector<Eigen::VectorXd> &t_list_container){
   reset();
+  // ################################
+  // C++: reset frontend stage timing begin
+  // ################################
+  last_frontend_timing_ = FrontendTiming();
+  // ################################
+  // C++: reset frontend stage timing end
+  // ################################
   simple_path_container.clear();
   yaw_list_container.clear();
   singul_container.clear();
@@ -141,8 +155,16 @@ int KinoAstar::KinoAstarSearchAndGetSimplePath(const Eigen::VectorXd &start_pos,
   end_state(3) = 0.0;
   end_state.tail(manipulator_dof_) = end_pos.tail(manipulator_dof_);
 
-  mm_config_->visMM(local_start_goal_pub_, "start", 0, 0.8, start_state.head(3), start_state.tail(manipulator_dof_), start_gripper);
-  mm_config_->visMM(local_start_goal_pub_, "gaol", 1, 0.8, end_state.head(3), end_state.tail(manipulator_dof_), end_gripper);
+  // ################################
+  // C++: start/goal mesh only when debug_vis begin
+  // ################################
+  if(enable_debug_vis_){
+    mm_config_->visMM(local_start_goal_pub_, "start", 0, 0.8, start_state.head(3), start_state.tail(manipulator_dof_), start_gripper);
+    mm_config_->visMM(local_start_goal_pub_, "gaol", 1, 0.8, end_state.head(3), end_state.tail(manipulator_dof_), end_gripper);
+  }
+  // ################################
+  // C++: start/goal mesh only when debug_vis end
+  // ################################
 
   // ################################
   // C++: throttle failure spam begin
@@ -153,8 +175,16 @@ int KinoAstar::KinoAstarSearchAndGetSimplePath(const Eigen::VectorXd &start_pos,
   // ################################
   bool start_goal_is_close = (start_pos - end_pos).head(2).norm() < 8e-2 && (start_pos - end_pos).tail(manipulator_dof_).norm() > 1e-1;
   if(continous_failures_count < try_astar_times_ && (!start_goal_is_close) /*&& false*/){
-    // ROS_WARN("ASTAR!");
+    // ################################
+    // C++: time Hybrid A* search begin
+    // ################################
+    last_frontend_timing_.hybrid_ran = true;
+    ros::Time t_hyb = ros::Time::now();
     search(start_state, end_state, init_ctrl);
+    last_frontend_timing_.hybrid_astar_ms = (ros::Time::now() - t_hyb).toSec() * 1000.0;
+    // ################################
+    // C++: time Hybrid A* search end
+    // ################################
   }else{
     // ROS_WARN("FAILED TOO MANY TIMES, use rrt!");
     has_path_ = false;
@@ -230,6 +260,16 @@ int KinoAstar::KinoAstarSearchAndGetSimplePath(const Eigen::VectorXd &start_pos,
         init_t_list, singul_container_temp, start_singul,
         simple_path_container, singul_container,
         yaw_list_container, t_list_container);
+    // ################################
+    // C++: collect mani / RRT timing from SampleMani begin
+    // ################################
+    last_frontend_timing_.manipulator_ran = mani_sample_->last_mani_ran_;
+    last_frontend_timing_.manipulator_ms = mani_sample_->last_mani_search_ms_;
+    last_frontend_timing_.whole_body_rrt_ran = mani_sample_->last_whole_body_rrt_ran_;
+    last_frontend_timing_.whole_body_rrt_ms = mani_sample_->last_whole_body_rrt_ms_;
+    // ################################
+    // C++: collect mani / RRT timing from SampleMani end
+    // ################################
   }else{
     // ################################
     // C++: refuse unsafe fallback after Hybrid A* fail begin
@@ -270,6 +310,10 @@ int KinoAstar::KinoAstarSearchAndGetSimplePath(const Eigen::VectorXd &start_pos,
           init_t_list, singul_container_temp, start_singul,
           simple_path_container, singul_container,
           yaw_list_container, t_list_container);
+      last_frontend_timing_.manipulator_ran = mani_sample_->last_mani_ran_;
+      last_frontend_timing_.manipulator_ms = mani_sample_->last_mani_search_ms_;
+      last_frontend_timing_.whole_body_rrt_ran = mani_sample_->last_whole_body_rrt_ran_;
+      last_frontend_timing_.whole_body_rrt_ms = mani_sample_->last_whole_body_rrt_ms_;
       if(!sample_succ){
         ROS_WARN_THROTTLE(2.0, "KinoAstar: whole-body RRT failed. start=(%.2f,%.2f) goal=(%.2f,%.2f)",
                  start_pos(0), start_pos(1), end_pos(0), end_pos(1));
@@ -311,6 +355,8 @@ int KinoAstar::KinoAstarSearchAndGetSimplePath(const Eigen::VectorXd &start_pos,
     // C++: reject frontend path that fails hard gate begin
     // ################################
     // Use safe=true so soft margin matches IsTrajSafe / runtime safety.
+    last_frontend_timing_.frontend_check_ran = true;
+    ros::Time t_gate = ros::Time::now();
     for(size_t ti = 0; ti < simple_path_container.size() && sample_succ; ++ti){
       if(ti >= yaw_list_container.size()) break;
       for(size_t i = 0; i < simple_path_container[ti].size(); ++i){
@@ -326,6 +372,7 @@ int KinoAstar::KinoAstarSearchAndGetSimplePath(const Eigen::VectorXd &start_pos,
         }
       }
     }
+    last_frontend_timing_.frontend_check_ms = (ros::Time::now() - t_gate).toSec() * 1000.0;
     // ################################
     // C++: reject frontend path that fails hard gate end
     // ################################

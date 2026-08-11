@@ -135,6 +135,16 @@ namespace mani_sample {
                     const std::vector<double> &t_list, const std::vector<int> &singul_container, const int start_singul,// size = t_list.size()
                     std::vector<std::vector<Eigen::VectorXd>> &simple_path_container, std::vector<int> &singul_container_new,
                     std::vector<std::vector<double>> &yaw_list_container, std::vector<Eigen::VectorXd> &t_list_container);
+    // ################################
+    // C++: last mani / whole-body RRT timing begin
+    // ################################
+    double last_mani_search_ms_ = 0.0;
+    double last_whole_body_rrt_ms_ = 0.0;
+    bool last_mani_ran_ = false;
+    bool last_whole_body_rrt_ran_ = false;
+    // ################################
+    // C++: last mani / whole-body RRT timing end
+    // ################################
     typedef shared_ptr<SampleMani> Ptr;
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
   };

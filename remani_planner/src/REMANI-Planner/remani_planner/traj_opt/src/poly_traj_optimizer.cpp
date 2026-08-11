@@ -90,6 +90,19 @@ namespace remani_planner
     C_h_ = Eigen::MatrixXd::Zero(3, 4);
     C_h_.block(0, 0, 3, 3) = Eigen::Matrix3d::Identity();
 
+    // ################################
+    // C++: debug vis params (mesh only; no collision effect) begin
+    // ################################
+    nh.param("visualization/enable_debug_vis", enable_debug_vis_, false);
+    nh.param("visualization/mesh_vis_stride", mesh_vis_stride_, 3);
+    if(mesh_vis_stride_ < 1) mesh_vis_stride_ = 1;
+    last_minsnap_ms_ = 0.0;
+    last_lbfgs_ms_ = 0.0;
+    last_safety_check_ms_ = 0.0;
+    // ################################
+    // C++: debug vis params (mesh only; no collision effect) end
+    // ################################
+
     kino_a_star_.reset(new KinoAstar);
     kino_a_star_->setParam(nh, map, mm_config);
     // kino_a_star_->init();
@@ -204,7 +217,10 @@ namespace remani_planner
     force_stop_type_ = DONT_STOP;
 
     /* ---------- optimize ---------- */
-    // ros::Time t1 = ros::Time::now();
+    // ################################
+    // C++: time L-BFGS and IsTrajSafe separately begin
+    // ################################
+    ros::Time t_lbfgs = ros::Time::now();
     int result = lbfgs::lbfgs_optimize(
         x,
         final_cost,
@@ -213,6 +229,7 @@ namespace remani_planner
         PolyTrajOptimizer::earlyExitCallback,
         this,
         lbfgs_params);
+    last_lbfgs_ms_ = (ros::Time::now() - t_lbfgs).toSec() * 1000.0;
 
     // printf("\033[32miter = %d, time = %5.3f(ms), \n\033[0m", iter_num_, (ros::Time::now() - t1).toSec() * 1000.0);
     if((result != lbfgs::LBFGS_CONVERGENCE)&&(result != lbfgs::LBFGS_STOP)&&(result != lbfgs::LBFGSERR_MAXIMUMLINESEARCH)){
@@ -232,7 +249,12 @@ namespace remani_planner
       traj_start_time = singul_traj_data.singul_traj.back().end_time;
     }
     bool good_traj = true;
+    ros::Time t_safe = ros::Time::now();
     good_traj = IsTrajSafe(singul_traj_data);
+    last_safety_check_ms_ = (ros::Time::now() - t_safe).toSec() * 1000.0;
+    // ################################
+    // C++: time L-BFGS and IsTrajSafe separately end
+    // ################################
     if(result == lbfgs::LBFGSERR_INVALID_FUNCVAL){
       return false;
     }
@@ -251,11 +273,16 @@ namespace remani_planner
   }
 
   void PolyTrajOptimizer::displayBackEndMesh(const SingulTrajData &traj_data, bool init, bool gripper_close){
+    // ################################
+    // C++: throttle/downsample back-end mesh (vis only) begin
+    // ################################
+    if(!enable_debug_vis_ || back_end_mm_mesh_vis_pub_.getNumSubscribers() < 1) return;
+
     Eigen::Vector3d car_state;
     Eigen::VectorXd joint_state;
     joint_state.resize(manipulator_dof_);
 
-    visualization_msgs::MarkerArray marker_array, marker_array_all, marker_array_i;
+    visualization_msgs::MarkerArray marker_array, marker_array_all;
     visualization_msgs::Marker marker_delete_all;
     marker_delete_all.action = visualization_msgs::Marker::DELETEALL;
     marker_array_all.markers.push_back(marker_delete_all);
@@ -263,7 +290,8 @@ namespace remani_planner
     Eigen::VectorXd pos, vel;
     int i = 0;
     double yaw;
-    double t_step = 0.5 / max_vel_;
+    // Sparse samples: larger stride + coarser time step; publish once (no sleep).
+    double t_step = std::max(0.5 / max_vel_, 0.8) * mesh_vis_stride_;
     double duration = traj_data.duration;
     for(double t = 0; t < duration - 1e-3; t += t_step, ++i){
       pos = traj_data.getPos(t);
@@ -275,9 +303,11 @@ namespace remani_planner
       joint_state = pos.tail(manipulator_dof_);
       mm_config_->getMMMarkerArray(marker_array, "vis_mm_back_end", i, 0.17, car_state, joint_state, gripper_close);
       marker_array_all.markers.insert(marker_array_all.markers.end(), marker_array.markers.begin(), marker_array.markers.end());
-      back_end_mm_mesh_vis_pub_.publish(marker_array_all);
-      ros::Duration(0.05).sleep();
     }
+    back_end_mm_mesh_vis_pub_.publish(marker_array_all);
+    // ################################
+    // C++: throttle/downsample back-end mesh (vis only) end
+    // ################################
   }
 
   bool PolyTrajOptimizer::smoothedL1(const double &x, const double &mu, double &f, double &df){
@@ -1337,8 +1367,13 @@ namespace remani_planner
                                                               singul_container, t_list_container);
   
     if(status == KinoAstar::NO_PATH || status == KinoAstar::START_COLLISION || status == KinoAstar::GOAL_COLLISION){
+      last_minsnap_ms_ = 0.0;
       return status;
     }
+    // ################################
+    // C++: time MinSnap trajectory initialization begin
+    // ################################
+    ros::Time t_minsnap = ros::Time::now();
     Eigen::MatrixXd innerPts;
     Eigen::MatrixXd headState, tailState;
     headState.resize(traj_dim_, 4);
@@ -1421,10 +1456,19 @@ namespace remani_planner
       frontendMJ_container[i].reset(headState, tailState, piece_num);
       frontendMJ_container[i].generate(innerPts, t_list_container[i]);
     }
+    last_minsnap_ms_ = (ros::Time::now() - t_minsnap).toSec() * 1000.0;
+    // ################################
+    // C++: time MinSnap trajectory initialization end
+    // ################################
     return status;
   }
 
   void PolyTrajOptimizer::displayFrontEndMesh(std::vector<Eigen::VectorXd> &simple_path_full, vector<double> &yaw_list){
+    // ################################
+    // C++: gate/downsample front-end mesh (vis only) begin
+    // ################################
+    if(!enable_debug_vis_ || front_end_mm_mesh_vis_pub_.getNumSubscribers() < 1) return;
+
     Eigen::Vector3d car_state;
     Eigen::VectorXd joint_state;
     joint_state.resize(manipulator_dof_);
@@ -1434,16 +1478,18 @@ namespace remani_planner
     marker_delete_all.action = visualization_msgs::Marker::DELETEALL;
     marker_array_all.markers.push_back(marker_delete_all);
     
-    for(unsigned int i = 0; i < simple_path_full.size(); i+=1){
+    for(unsigned int i = 0; i < simple_path_full.size(); i += (unsigned int)mesh_vis_stride_){
       car_state.head(2) = simple_path_full[i].head(2);
       car_state(2) = yaw_list[i];
       joint_state = simple_path_full[i].tail(manipulator_dof_);
-      mm_config_->getMMMarkerArray(marker_array, "vis_mm_front_end", i, 0.07, car_state, joint_state, true); // TODO gripper state
+      mm_config_->getMMMarkerArray(marker_array, "vis_mm_front_end", (int)i, 0.07, car_state, joint_state, true); // TODO gripper state
       marker_array_all.markers.insert(marker_array_all.markers.end(), marker_array.markers.begin(), marker_array.markers.end());
     }
 
     front_end_mm_mesh_vis_pub_.publish(marker_array_all);
-
+    // ################################
+    // C++: gate/downsample front-end mesh (vis only) end
+    // ################################
   }
 
   void PolyTrajOptimizer::clear_resize_Cps_container(int container_size){

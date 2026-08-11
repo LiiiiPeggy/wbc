@@ -154,6 +154,13 @@ class KinoAstar{
     std::vector<int> shot_SList;
 
     ros::Publisher frontend_path_pub_, local_start_goal_pub_;
+    // ################################
+    // C++: debug vis gate for start/goal mesh begin
+    // ################################
+    bool enable_debug_vis_ = false;
+    // ################################
+    // C++: debug vis gate for start/goal mesh end
+    // ################################
   
     double mobile_base_wheel_base_;
     std::vector<PathNodePtr> path_nodes_;
@@ -207,6 +214,24 @@ class KinoAstar{
     Eigen::Vector3d evaluatePos(const double &t);
 
     typedef shared_ptr<KinoAstar> Ptr;
+    // ################################
+    // C++: last frontend stage timing for [PLAN TIME] begin
+    // ################################
+    struct FrontendTiming {
+      double hybrid_astar_ms = 0.0;
+      double manipulator_ms = 0.0;
+      double whole_body_rrt_ms = 0.0;
+      double frontend_check_ms = 0.0;
+      bool hybrid_ran = false;
+      bool manipulator_ran = false;
+      bool whole_body_rrt_ran = false;
+      bool frontend_check_ran = false;
+    };
+    FrontendTiming last_frontend_timing_;
+    const FrontendTiming &getLastFrontendTiming() const { return last_frontend_timing_; }
+    // ################################
+    // C++: last frontend stage timing for [PLAN TIME] end
+    // ################################
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 };
 

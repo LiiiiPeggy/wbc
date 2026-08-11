@@ -10,6 +10,18 @@ namespace model_vis{
         have_mani_odom_ = false;
         /*  param  */
         nh.param("mm/manipulator_dof", manipulator_dof_, -1);
+        // ################################
+        // C++: vis throttle / debug switch params begin
+        // ################################
+        nh.param("visualization/enable_debug_vis", enable_debug_vis_, false);
+        nh.param("visualization/vis_rate_hz", vis_rate_hz_, 15.0);
+        nh.param("visualization/his_traj_max_points", his_traj_max_points_, 500);
+        if(vis_rate_hz_ < 1.0) vis_rate_hz_ = 1.0;
+        if(his_traj_max_points_ < 10) his_traj_max_points_ = 10;
+        last_vis_pub_time_ = ros::Time(0);
+        // ################################
+        // C++: vis throttle / debug switch params end
+        // ################################
         
         mm_state_.setParam(manipulator_dof_);
         his_traj_.clear();
@@ -33,16 +45,26 @@ namespace model_vis{
         his_traj_line_strip_.scale.x = 0.1 / 2;
 
         have_gripper_state_ = false;
+        gripper_state_ = false;
 
         /* callback */
-        vis_mm_pub_            = nh.advertise<visualization_msgs::MarkerArray>("vis_mm", 100, true);
-        vis_mm_check_ball_pub_ = nh.advertise<visualization_msgs::Marker>("vis_mm_check_ball", 100, true);
+        vis_mm_pub_            = nh.advertise<visualization_msgs::MarkerArray>("vis_mm", 10, false);
+        vis_mm_check_ball_pub_ = nh.advertise<visualization_msgs::Marker>("vis_mm_check_ball", 10, false);
         joint_state_sub_        = nh.subscribe("joint_state", 1, &ModelManager::jointStateCallback, this);
         gripper_state_sub_      = nh.subscribe("gripper_state", 1, &ModelManager::gripperStateCallback, this);
         odom_sub_               = nh.subscribe("odometry", 1, &ModelManager::odomCallback, this);
-        vis_his_traj_pub_       = nh.advertise<visualization_msgs::Marker>("mm_his_traj", 100, true);
+        vis_his_traj_pub_       = nh.advertise<visualization_msgs::Marker>("mm_his_traj", 10, false);
 
-        tf_timer_ = nh.createTimer(ros::Duration(0.01), &ModelManager::tfTimerCallback, this);
+        // ################################
+        // C++: lower TF rate for RViz (planning does not use these TFs) begin
+        // ################################
+        double tf_rate_hz = 20.0;
+        nh.param("visualization/tf_rate_hz", tf_rate_hz, 20.0);
+        if(tf_rate_hz < 5.0) tf_rate_hz = 5.0;
+        tf_timer_ = nh.createTimer(ros::Duration(1.0 / tf_rate_hz), &ModelManager::tfTimerCallback, this);
+        // ################################
+        // C++: lower TF rate for RViz end
+        // ################################
 
         std::vector<Eigen::Vector3d> car_pts;
         mm_config_->getCarPts(Eigen::Vector3d(0, 0, 0), car_pts, Eigen::Vector3d(0, 0, 0));
@@ -79,27 +101,47 @@ namespace model_vis{
         
     }
 
+    // ################################
+    // C++: rate-limited mesh / check-ball publish begin
+    // ################################
+    void ModelManager::maybePublishVis(){
+        if(!have_car_odom_ || !have_mani_odom_) return;
+        const ros::Time now = ros::Time::now();
+        if(last_vis_pub_time_.toSec() > 0.0 &&
+           (now - last_vis_pub_time_).toSec() < (1.0 / vis_rate_hz_)){
+            return;
+        }
+        last_vis_pub_time_ = now;
+        const Eigen::Vector3d car_state(mm_state_.car_p(0), mm_state_.car_p(1), mm_state_.car_yaw);
+        mm_config_->visMM(vis_mm_pub_, "vis_mm_odom", 0, -0.9, car_state, mm_state_.joint_p, gripper_state_);
+        if(enable_debug_vis_){
+            mm_config_->visMMCheckBall(vis_mm_check_ball_pub_, "vis_mm_check_ball", 0, 0.7, car_state, mm_state_.joint_p);
+        }
+    }
+    // ################################
+    // C++: rate-limited mesh / check-ball publish end
+    // ################################
+
     void ModelManager::odomCallback(const nav_msgs::OdometryConstPtr& odom){
         have_car_odom_ = true;
         Eigen::Vector3d new_car_p(odom->pose.pose.position.x, odom->pose.pose.position.y, odom->pose.pose.position.z);
-        if((mm_state_.car_p - new_car_p).norm() > 1e-2){
+        // ################################
+        // C++: only grow history traj under debug_vis begin
+        // ################################
+        if(enable_debug_vis_ && (mm_state_.car_p - new_car_p).norm() > 1e-2){
             vis_his_traj(new_car_p.head(2));
         }
+        // ################################
+        // C++: only grow history traj under debug_vis end
+        // ################################
         mm_state_.feed_odom(odom);
-        if(have_mani_odom_){
-            mm_config_->visMM(vis_mm_pub_, "vis_mm_odom", 0, -0.9, Eigen::Vector3d(mm_state_.car_p(0), mm_state_.car_p(1), mm_state_.car_yaw), mm_state_.joint_p, gripper_state_);
-            mm_config_->visMMCheckBall(vis_mm_check_ball_pub_, "vis_mm_check_ball", 0, 0.7, Eigen::Vector3d(mm_state_.car_p(0), mm_state_.car_p(1), mm_state_.car_yaw), mm_state_.joint_p);
-        }
-        his_traj_.push_back(Eigen::Vector2d(mm_state_.car_p(0), mm_state_.car_p(1)));
+        maybePublishVis();
     }
 
     void ModelManager::jointStateCallback(const sensor_msgs::JointState::ConstPtr& state){
         have_mani_odom_ = true;
         mm_state_.feed_joint(state);
-        if(have_car_odom_){
-            mm_config_->visMM(vis_mm_pub_, "vis_mm_odom", 0, -0.9, Eigen::Vector3d(mm_state_.car_p(0), mm_state_.car_p(1), mm_state_.car_yaw), mm_state_.joint_p, gripper_state_);
-            mm_config_->visMMCheckBall(vis_mm_check_ball_pub_, "vis_mm_check_ball", 0, 0.7, Eigen::Vector3d(mm_state_.car_p(0), mm_state_.car_p(1), mm_state_.car_yaw), mm_state_.joint_p);
-        }
+        maybePublishVis();
     }
 
     void ModelManager::gripperStateCallback(const std_msgs::Bool::ConstPtr& state){
@@ -117,6 +159,18 @@ namespace model_vis{
         vis_pt.z = 0.0;
         his_traj_sphere_.points.push_back(vis_pt);
         his_traj_line_strip_.points.push_back(vis_pt);
+        // ################################
+        // C++: cap history traj marker length begin
+        // ################################
+        while((int)his_traj_sphere_.points.size() > his_traj_max_points_){
+            his_traj_sphere_.points.erase(his_traj_sphere_.points.begin());
+        }
+        while((int)his_traj_line_strip_.points.size() > his_traj_max_points_){
+            his_traj_line_strip_.points.erase(his_traj_line_strip_.points.begin());
+        }
+        // ################################
+        // C++: cap history traj marker length end
+        // ################################
         vis_his_traj_pub_.publish(his_traj_sphere_);
         if(his_traj_line_strip_.points.size() > 1)
             vis_his_traj_pub_.publish(his_traj_line_strip_);

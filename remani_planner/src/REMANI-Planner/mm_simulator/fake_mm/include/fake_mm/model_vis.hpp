@@ -124,6 +124,17 @@ namespace model_vis{
         void gripperStateCallback(const std_msgs::Bool::ConstPtr& state);
         void tfTimerCallback(const ros::TimerEvent & event);
         void vis_his_traj(Eigen::Vector2d pt);
+        // ################################
+        // C++: throttle model_vis publish rate begin
+        // ################################
+        void maybePublishVis();
+        bool enable_debug_vis_;
+        double vis_rate_hz_;
+        int his_traj_max_points_;
+        ros::Time last_vis_pub_time_;
+        // ################################
+        // C++: throttle model_vis publish rate end
+        // ################################
         ros::Subscriber joint_state_sub_, odom_sub_, gripper_state_sub_;
         ros::Publisher vis_mm_pub_, vis_mm_check_ball_pub_, vis_his_traj_pub_;
         State_Data_t mm_state_;

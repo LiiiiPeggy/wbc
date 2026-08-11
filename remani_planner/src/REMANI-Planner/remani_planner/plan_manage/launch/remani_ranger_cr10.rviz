@@ -68,18 +68,18 @@ Visualization Manager:
           Queue Size: 100
           Value: true
         # ################################
-        # YAML/RViz: show collision proxy balls begin
+        # YAML/RViz: collision proxy balls (enable with visualization/enable_debug_vis) begin
         # ################################
         - Class: rviz/Marker
-          Enabled: true
+          Enabled: false
           Marker Topic: /model_vis/vis_mm_check_ball
           Name: mm_check_ball
           Namespaces:
             {}
-          Queue Size: 100
-          Value: true
+          Queue Size: 10
+          Value: false
         # ################################
-        # YAML/RViz: show collision proxy balls end
+        # YAML/RViz: collision proxy balls end
         # ################################
         - Alpha: 1
           Class: rviz/RobotModel
@@ -331,7 +331,7 @@ Visualization Manager:
           Name: RangerCR10
           Robot Description: robot_description
           TF Prefix: ""
-          Update Interval: 0
+          Update Interval: 0.05
           Value: true
           Visual Enabled: true
         - Class: rviz/Group
@@ -342,7 +342,7 @@ Visualization Manager:
               Name: start&goal
               Namespaces:
                 {}
-              Queue Size: 100
+              Queue Size: 10
               Value: false
             - Class: rviz/MarkerArray
               Enabled: false
@@ -350,16 +350,16 @@ Visualization Manager:
               Name: "[Car&Mani] Front End Mesh"
               Namespaces:
                 {}
-              Queue Size: 100
+              Queue Size: 10
               Value: false
             - Class: rviz/MarkerArray
-              Enabled: true
+              Enabled: false
               Marker Topic: /remani_planner_node/back_end_mm_mesh_vis
               Name: "[Car&Mani] Back End Mesh"
               Namespaces:
                 vis_mm_back_end: true
-              Queue Size: 100
-              Value: true
+              Queue Size: 10
+              Value: false
             - Alpha: 1
               Autocompute Intensity Bounds: true
               Autocompute Value Bounds:

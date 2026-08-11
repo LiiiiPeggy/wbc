@@ -130,6 +130,17 @@ namespace remani_planner
 
     ros::Publisher traj_pt_pub_, traj_init_pt_pub_;
     ros::Publisher front_end_mm_mesh_vis_pub_, back_end_mm_mesh_vis_pub_;
+    // ################################
+    // C++: plan-stage timing + debug vis switch begin
+    // ################################
+    bool enable_debug_vis_ = false;
+    int mesh_vis_stride_ = 3;
+    double last_minsnap_ms_ = 0.0;
+    double last_lbfgs_ms_ = 0.0;
+    double last_safety_check_ms_ = 0.0;
+    // ################################
+    // C++: plan-stage timing + debug vis switch end
+    // ################################
   public:
 
     PolyTrajOptimizer() {}
@@ -175,7 +186,16 @@ namespace remani_planner
                           std::vector<int> &singul_container);
     void displayFrontEndMesh(std::vector<Eigen::VectorXd> &simple_path_full, vector<double> &yaw_list);
     void displayBackEndMesh(const SingulTrajData &traj_data, bool init, bool gripper_close);
-  
+    // ################################
+    // C++: expose last backend stage timing begin
+    // ################################
+    double getLastMinsnapMs() const { return last_minsnap_ms_; }
+    double getLastLbfgsMs() const { return last_lbfgs_ms_; }
+    double getLastSafetyCheckMs() const { return last_safety_check_ms_; }
+    bool enableDebugVis() const { return enable_debug_vis_; }
+    // ################################
+    // C++: expose last backend stage timing end
+    // ################################
   
   private:
     /* callbacks by the L-BFGS optimizer */

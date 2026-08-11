@@ -67,6 +67,19 @@ fsm:
   global_plan: true           # Whether to use global plan
   emergency_time: 1.5         # greater than max replan time
 
+# ################################
+# YAML: RViz debug visualization (does not affect planning/collision) begin
+# ################################
+visualization:
+  enable_debug_vis: false   # true: check balls + front/back mesh + history traj
+  vis_rate_hz: 15.0         # model_vis mesh publish rate cap
+  tf_rate_hz: 20.0          # model_vis TF broadcast rate (RobotModel)
+  mesh_vis_stride: 3        # subsample front/back trajectory meshes
+  his_traj_max_points: 500  # cap mm_his_traj marker growth
+# ################################
+# YAML: RViz debug visualization end
+# ################################
+
 grid_map:
   use_load_map: true     # Whether to use simulation map
   use_global_map: false # Whether to use global map

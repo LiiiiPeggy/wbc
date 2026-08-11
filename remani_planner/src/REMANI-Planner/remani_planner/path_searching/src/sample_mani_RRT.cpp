@@ -11,6 +11,16 @@ namespace mani_sample{
     singul_container_new.clear();
     yaw_list_container.clear();
     t_list_container.clear();
+    // ################################
+    // C++: reset mani / RRT stage timing begin
+    // ################################
+    last_mani_search_ms_ = 0.0;
+    last_whole_body_rrt_ms_ = 0.0;
+    last_mani_ran_ = false;
+    last_whole_body_rrt_ran_ = false;
+    // ################################
+    // C++: reset mani / RRT stage timing end
+    // ################################
     
     std::vector<Eigen::VectorXd> simple_path; // x, y, theta
     std::vector<double> yaw_list, t_list_temp;
@@ -18,7 +28,16 @@ namespace mani_sample{
     std::vector<Eigen::VectorXd> mani_path;
     Eigen::VectorXd state_full(traj_dim_);
     init(car_state_list, car_state_list_check, t_list);
+    // ################################
+    // C++: time manipulator search begin
+    // ################################
+    last_mani_ran_ = true;
+    ros::Time t_mani = ros::Time::now();
     bool mani_status = search(start_state, end_state);
+    last_mani_search_ms_ = (ros::Time::now() - t_mani).toSec() * 1000.0;
+    // ################################
+    // C++: time manipulator search end
+    // ################################
 
     // ROS_ERROR("=====================1");
     if(mani_status && astar_succ){
@@ -208,10 +227,19 @@ namespace mani_sample{
     // rrt搜
     std::vector<Eigen::VectorXd> path_fill;
     std::vector<double> yaw_list_fill, t_list_fill;
+    // ################################
+    // C++: time whole-body RRT begin
+    // ################################
+    last_whole_body_rrt_ran_ = true;
+    ros::Time t_rrt = ros::Time::now();
     bool status = rrt_plan_->RRTSearchAndGetSimplePath(start_list, start_yaw_list, end_list, end_yaw_list, 
                                                       start_g_score_list, start_layer_list, end_g_score_list, end_layer_list,
                                                       start_singul_list, end_singul_list,
                                                       path_fill, yaw_list_fill, t_list_fill);
+    last_whole_body_rrt_ms_ = (ros::Time::now() - t_rrt).toSec() * 1000.0;
+    // ################################
+    // C++: time whole-body RRT end
+    // ################################
     // std::cout << "test 4" << std::endl; 
     if(!status){
       goal_gen_.seed(std::random_device{}());
