@@ -1,0 +1,211 @@
+include:
+  -
+    package: upright_cmd
+    path: config/arrangements.yaml
+
+# all times are in seconds
+timestep: 0.001
+duration: 5.0
+gravity: [0, 0, -9.81]
+arrangement: nothing
+show_contact_points: true
+show_debug_frames: true
+
+# Define virtual cameras to capture static shots of the scene or as a viewpoint
+# for a video. Examples:
+# 1. camera defined by (absolute) target and camera position;
+# 2. camera defined by a target and camera position *relative* to EE initial
+#    position;
+# 3. camera defined by a target position and distance and orientation of the
+#    camera (roll, pitch, yaw in degrees)
+cameras:
+  example1:
+    target: [1, 0, 1]
+    position: [1, 1, 1]
+  example2:
+    relative_target: [0, 0, 0.1]
+    relative_position: [0.4, -1, 0.6]
+  example3:
+    target: [1.28, 0.045, 0.647]
+    distance: 1.8
+    roll: 0
+    pitch: -29
+    yaw: 147.6
+
+# Define videos to be captured during the simulation
+# This needs to be enabled by the command line argument --video
+video:
+  save_frames: true
+  dir: "/media/adam/Data/PhD/Videos/upright/"
+  timestep: 0.040
+  views:
+    -
+      camera: example1
+      name: view1
+
+# Define photos to be taken during the simulation
+# Currently only support doing so a the start or end
+# photos:
+#   start:
+#     -
+#       camera: example1
+#       name: example_start_photo  # file with be saved as {name}.png
+#   end:
+#     -
+#       camera: example1
+#       name: example_end_photo
+
+
+static_obstacles:
+  enabled: false
+  urdf:
+    package: "upright_assets"
+    path: "thing/urdf/obstacles.urdf"
+    includes:
+      - "$(find upright_assets)/thing/xacro/obstacles/simple.urdf.xacro"
+
+dynamic_obstacles:
+  enabled: false
+
+objects:
+  # EE is a special object
+
+  # wood tray
+  ee:
+    shape: cuboid
+    side_lengths: [0.285, 0.285, 0.02]
+    position: [0, 0, -0.01]  # box centroid relative to r_ew_w
+
+  # box tray
+  # ee:
+  #   shape: cuboid
+  #   side_lengths: [0.23, 0.3, 0.064]
+  #   position: [0.1, 0.13, -0.032]  # box centroid relative to r_ew_w
+
+  # restaurant tray
+  # ee:
+  #   shape: cuboid
+  #   side_lengths: [0.356, 0.356, 0.01]
+  #   position: [0.064, 0.127, -0.005]  # box centroid relative to r_ew_w
+
+  bottle:
+    shape: cylinder
+    mass: 0.5
+    radius: 0.0325
+    height: 0.15
+    color: [0, 0, 1, 0.9]
+
+  tall_bottle:
+    mass: 0.72
+    com_offset: [0, 0, 0]
+    shape: cylinder
+    radius: 0.035
+    height: 0.205
+    color: [0, 0, 1, 0.9]
+
+  pink_bottle:
+    mass: 0.827
+    com_offset: [0, 0, 0]
+    shape: cylinder
+    radius: 0.035
+    height: 0.255
+    color: [1, 0.46, 0.73, 0.9]
+
+  foam_die:
+    shape: cuboid
+    mass: 0.02
+    side_lengths: [0.065, 0.065, 0.065]
+    color: [0, 0, 1, 1]
+
+  foam_die_with_markers:
+    mass: 0.034
+    shape: cuboid
+    side_lengths: [0.065, 0.065, 0.065]
+    color: [0, 0, 1, 1]
+
+  wood_block:
+    shape: cuboid
+    mass: 0.18
+    side_lengths: [0.103, 0.09, 0.038]
+    color: [1, 0, 0, 0.9]
+
+  wood_block_rotx:
+    shape: cuboid
+    mass: 0.18
+    side_lengths: [0.103, 0.038, 0.09]
+    color: [1, 0, 0, 0.9]
+
+  wood_block_rotz:
+    shape: cuboid
+    mass: 0.18
+    side_lengths: [0.09, 0.103, 0.038]
+    color: [1, 0, 0, 0.9]
+
+  wood_block_standing:
+    shape: cuboid
+    mass: 0.18
+    side_lengths: [0.038, 0.09, 0.103]
+    color: [1, 0, 0, 0.9]
+
+  cube:
+    shape: cuboid
+    mass: 1.0
+    side_lengths: [0.1, 0.1, 0.1]
+    color: [1, 0, 0, 1]
+
+  fixture:
+    shape: cuboid
+    mass: 0.1
+    side_lengths: [0.05, 0.05, 0.05]
+    color: [0, 0, 1, 1]
+
+  simulation_box:
+    shape: cuboid
+    side_lengths: [0.06, 0.06, 0.2]
+    com_offset: [0, 0, 0]
+    mass: 0.5
+    color: [1, 0, 0, 0.9]
+
+  tall_simulation_box:
+    shape: cuboid
+    side_lengths: [0.06, 0.06, 0.64]
+    com_offset: [0, 0, 0]
+    mass: 0.5
+    color: [1, 0, 0, 0.9]
+
+  wedge:
+    shape: wedge
+    mass: 0.09
+    # side_lengths: [0.0869333, 0.103, 0.0232937]
+    side_lengths: [0.15, 0.15, 0.0401923788646684]
+    color: [0, 1, 0, 1]
+
+  blue_cup:
+    shape: cylinder
+    radius: 0.025
+    height: 0.08
+    com_offset: [0, 0, 0]
+    mass: 0.2
+    color: [0, 0, 1, 1]
+
+  flat_box:
+    shape: cuboid
+    side_lengths: [0.02, 0.02, 0.01]
+    com_offset: [0, 0, 0]
+    mass: 0.1
+    color: [0, 0, 1, 1]
+
+  white_cardboard_box:
+    shape: cuboid
+    side_lengths: [0.11, 0.11, 0.275]
+    # side_lengths: [0.11, 0.11, 0.55]
+    com_offset: [0, 0, 0]
+    mass: 0.115
+    color: [1, 1, 1, 1]
+
+  brown_cardboard_box:
+    shape: cuboid
+    side_lengths: [0.15, 0.15, 0.275]
+    com_offset: [0, 0, 0]
+    mass: 0.11
+    color: [0.7, 0.53, 0.35, 1]

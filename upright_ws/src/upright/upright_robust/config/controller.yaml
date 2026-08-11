@@ -1,0 +1,203 @@
+include:
+  -
+    package: upright_cmd
+    path: config/controller.yaml
+  -
+    package: upright_robust
+    path: config/arrangements.yaml
+
+balancing:
+  enabled: true
+
+objects:
+  # box1
+  box1_center:
+    mass: 1
+    com_offset: [0, 0, 0]
+    shape: cuboid
+    side_lengths: [0.15, 0.15, 0.28]
+
+  box1_top:
+    mass: 1
+    com_offset: [0, 0, 0.14]
+    shape: cuboid
+    side_lengths: [0.15, 0.15, 0.28]
+
+  box1_1:
+    mass: 1
+    com_offset: [0.06, 0.06, 0.14]
+    shape: cuboid
+    side_lengths: [0.15, 0.15, 0.28]
+
+  box1_2:
+    mass: 1
+    com_offset: [0.06, -0.06, 0.14]
+    shape: cuboid
+    side_lengths: [0.15, 0.15, 0.28]
+
+  box1_3:
+    mass: 1
+    com_offset: [-0.06, 0.06, 0.14]
+    shape: cuboid
+    side_lengths: [0.15, 0.15, 0.28]
+
+  box1_4:
+    mass: 1
+    com_offset: [-0.06, -0.06, 0.14]
+    shape: cuboid
+    side_lengths: [0.15, 0.15, 0.28]
+
+  box1_5:
+    mass: 1
+    com_offset: [0.06, 0.06, -0.14]
+    shape: cuboid
+    side_lengths: [0.15, 0.15, 0.28]
+
+  box1_6:
+    mass: 1
+    com_offset: [0.06, -0.06, -0.14]
+    shape: cuboid
+    side_lengths: [0.15, 0.15, 0.28]
+
+  box1_7:
+    mass: 1
+    com_offset: [-0.06, 0.06, -0.14]
+    shape: cuboid
+    side_lengths: [0.15, 0.15, 0.28]
+
+  box1_8:
+    mass: 1
+    com_offset: [-0.06, -0.06, -0.14]
+    shape: cuboid
+    side_lengths: [0.15, 0.15, 0.28]
+
+  # box2
+  box2_center:
+    mass: 1
+    com_offset: [0, 0, 0]
+    shape: cuboid
+    side_lengths: [0.15, 0.15, 0.56]
+
+  box2_top:
+    mass: 1
+    com_offset: [0, 0, 0.28]
+    shape: cuboid
+    side_lengths: [0.15, 0.15, 0.56]
+
+  box2_exact:
+    mass: 1.046
+    com_offset: [0.02588432, -0.02588432, 0.04591778]
+    inertia: [[0.02198214,  0.00031449, -0.00146428], [ 0.00031449,  0.02198214,  0.00146428], [-0.00146428,  0.00146428,  0.00308517]]
+    shape: cuboid
+    side_lengths: [0.15, 0.15, 0.56]
+
+  box2_1:
+    mass: 1
+    com_offset: [0.06, 0.06, 0.28]
+    shape: cuboid
+    side_lengths: [0.15, 0.15, 0.56]
+
+  box2_2:
+    mass: 1
+    com_offset: [0.06, -0.06, 0.28]
+    shape: cuboid
+    side_lengths: [0.15, 0.15, 0.56]
+
+  box2_3:
+    mass: 1
+    com_offset: [-0.06, 0.06, 0.28]
+    shape: cuboid
+    side_lengths: [0.15, 0.15, 0.56]
+
+  box2_4:
+    mass: 1
+    com_offset: [-0.06, -0.06, 0.28]
+    shape: cuboid
+    side_lengths: [0.15, 0.15, 0.56]
+
+  box2_5:
+    mass: 1
+    com_offset: [0.06, 0.06, -0.28]
+    shape: cuboid
+    side_lengths: [0.15, 0.15, 0.56]
+
+  box2_6:
+    mass: 1
+    com_offset: [0.06, -0.06, -0.28]
+    shape: cuboid
+    side_lengths: [0.15, 0.15, 0.56]
+
+  box2_7:
+    mass: 1
+    com_offset: [-0.06, 0.06, -0.28]
+    shape: cuboid
+    side_lengths: [0.15, 0.15, 0.56]
+
+  box2_8:
+    mass: 1
+    com_offset: [-0.06, -0.06, -0.28]
+    shape: cuboid
+    side_lengths: [0.15, 0.15, 0.56]
+
+  # box3
+  box3_center:
+    mass: 1
+    com_offset: [0, 0, 0]
+    shape: cuboid
+    side_lengths: [0.15, 0.15, 0.84]
+
+  box3_top:
+    mass: 1
+    # com_offset: [0, 0, 0.42]
+    com_offset: [0, 0, 0.42]
+    shape: cuboid
+    side_lengths: [0.15, 0.15, 0.84]
+
+  box3_1:
+    mass: 1
+    com_offset: [0.06, 0.06, 0.42]
+    shape: cuboid
+    side_lengths: [0.15, 0.15, 0.84]
+
+  box3_2:
+    mass: 1
+    com_offset: [0.06, -0.06, 0.42]
+    shape: cuboid
+    side_lengths: [0.15, 0.15, 0.84]
+
+  box3_3:
+    mass: 1
+    com_offset: [-0.06, 0.06, 0.42]
+    shape: cuboid
+    side_lengths: [0.15, 0.15, 0.84]
+
+  box3_4:
+    mass: 1
+    com_offset: [-0.06, -0.06, 0.42]
+    shape: cuboid
+    side_lengths: [0.15, 0.15, 0.84]
+
+  box3_5:
+    mass: 1
+    com_offset: [0.06, 0.06, -0.42]
+    shape: cuboid
+    side_lengths: [0.15, 0.15, 0.84]
+
+  box3_6:
+    mass: 1
+    com_offset: [0.06, -0.06, -0.42]
+    shape: cuboid
+    side_lengths: [0.15, 0.15, 0.84]
+
+  box3_7:
+    mass: 1
+    com_offset: [-0.06, 0.06, -0.42]
+    shape: cuboid
+    side_lengths: [0.15, 0.15, 0.84]
+
+  box3_8:
+    mass: 1
+    com_offset: [-0.06, -0.06, -0.42]
+    shape: cuboid
+    side_lengths: [0.15, 0.15, 0.84]
+

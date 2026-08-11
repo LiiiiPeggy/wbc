@@ -1,0 +1,104 @@
+<?xml version="1.0" encoding="utf-8"?>
+<robot name="obstacles" xmlns:xacro="http://wiki.ros.org/xacro">
+  <material name="red">
+    <color rgba="0.0 0.0 1.0 1.0"/>
+  </material>
+  <material name="green">
+    <color rgba="0.0 1.0 0.0 1.0"/>
+  </material>
+
+  <!-- It is convenient to use a macro to avoid accidental mismatches between visual and collision geometry -->
+  <xacro:macro name="obstacle_link" params="name material *origin *geometry">
+    <link name="${name}">
+      <collision>
+        <origin rpy="0 0 0" xyz="0 0 0"/>
+        <xacro:insert_block name="geometry" />
+      </collision>
+      <visual>
+        <origin rpy="0 0 0" xyz="0 0 0"/>
+        <xacro:insert_block name="geometry" />
+        <material name="${material}"/>
+      </visual>
+    </link>
+    <joint name="${name}_joint" type="fixed">
+      <parent link="obstacle_base_link"/>
+      <child link="${name}"/>
+      <xacro:insert_block name="origin" />
+    </joint>
+  </xacro:macro>
+
+  <link name="obstacle_base_link"></link>
+
+  <!-- For the experimental setup figure. -->
+  <!-- <xacro:obstacle_link name="sudden_obstacle_link" material="green"> -->
+  <!--   <origin rpy="0 0 0" xyz="1.25 1.5 0.25"/> -->
+  <!--   <geometry> -->
+  <!--     <sphere radius="0.25"/> -->
+  <!--   </geometry> -->
+  <!-- </xacro:obstacle_link> -->
+
+  <!-- IMPORTANT: collision avoidance is much more numerically stable for the solver when the collision objects are spheres. Make everything a sphere! -->
+  <xacro:obstacle_link name="sphere1_bottom_link" material="red">
+    <origin rpy="0 0 0" xyz="0 0.25 0.25"/>
+    <geometry>
+      <sphere radius="0.25"/>
+    </geometry>
+  </xacro:obstacle_link>
+
+  <xacro:obstacle_link name="sphere1_top_link" material="red">
+    <origin rpy="0 0 0" xyz="0 0.25 0.75"/>
+    <geometry>
+      <sphere radius="0.25"/>
+    </geometry>
+  </xacro:obstacle_link>
+
+  <xacro:obstacle_link name="sphere1_middle_link" material="red">
+    <origin rpy="0 0 0" xyz="0 0.25 0.5"/>
+    <geometry>
+      <sphere radius="0.25"/>
+    </geometry>
+  </xacro:obstacle_link>
+
+  <xacro:obstacle_link name="sphere2_bottom_link" material="red">
+    <origin rpy="0 0 0" xyz="1.5 1 0.25"/>
+    <geometry>
+      <sphere radius="0.25"/>
+    </geometry>
+  </xacro:obstacle_link>
+
+  <xacro:obstacle_link name="sphere2_middle_link" material="red">
+    <origin rpy="0 0 0" xyz="1.5 1 0.5"/>
+    <geometry>
+      <sphere radius="0.25"/>
+    </geometry>
+  </xacro:obstacle_link>
+
+  <xacro:obstacle_link name="sphere2_top_link" material="red">
+    <origin rpy="0 0 0" xyz="1.5 1 0.75"/>
+    <geometry>
+      <sphere radius="0.25"/>
+    </geometry>
+  </xacro:obstacle_link>
+
+  <xacro:obstacle_link name="sphere3_bottom_link" material="red">
+    <origin rpy="0 0 0" xyz="-0.5 2 0.25"/>
+    <geometry>
+      <sphere radius="0.25"/>
+    </geometry>
+  </xacro:obstacle_link>
+
+  <xacro:obstacle_link name="sphere3_top_link" material="red">
+    <origin rpy="0 0 0" xyz="-0.5 2 0.75"/>
+    <geometry>
+      <sphere radius="0.25"/>
+    </geometry>
+  </xacro:obstacle_link>
+
+  <xacro:obstacle_link name="sphere3_middle_link" material="red">
+    <origin rpy="0 0 0" xyz="-0.5 2 0.5"/>
+    <geometry>
+      <sphere radius="0.25"/>
+    </geometry>
+  </xacro:obstacle_link>
+
+</robot>

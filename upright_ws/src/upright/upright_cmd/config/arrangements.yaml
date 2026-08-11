@@ -1,0 +1,353 @@
+# arrangements reference the objects below
+# arrangements are used for both simulation and the controller, but the one
+# used in each can be different
+arrangements:
+  nothing:
+    objects: []
+
+  box_arch:
+    objects:
+      -
+        name: block1
+        type: wood_block_standing
+        parent: ee
+        offset:
+          x: 0.019
+      -
+        name: block2
+        type: wood_block_standing
+        parent: ee
+        offset:
+          x: 0.084
+      -
+        name: block3
+        type: wood_block
+        parent: block2
+        offset:
+          x: -0.0325
+    contacts:
+      -
+        first: ee
+        second: block1
+        mu: 0.30
+        mu_margin: 0.03
+        support_area_inset: 0.005
+      -
+        first: ee
+        second: block2
+        mu: 0.30
+        mu_margin: 0.03
+        support_area_inset: 0.005
+      -
+        first: block1
+        second: block3
+        mu: 0.42
+        mu_margin: 0.042
+      -
+        first: block2
+        second: block3
+        mu: 0.42
+        mu_margin: 0.042
+        # NOTE: doesn't really make sense to have an inset here
+
+  pink_bottle:
+    objects:
+      -
+        name: bottle
+        type: pink_bottle
+        parent: ee
+        offset:
+          x: 0.035
+          y: -0.035
+    contacts:
+      -
+        first: ee
+        second: bottle
+        mu: 0.26
+        mu_margin: 0.026
+        support_area_inset: 0.005
+
+  # single foam die
+  foam_die1:
+    objects:
+      -
+        name: foam_die1
+        type: foam_die
+        parent: ee
+        offset:
+          x: 0.0325
+    contacts:
+      -
+        first: ee
+        second: foam_die1
+        mu: 0.54
+        mu_margin: 0.054
+        support_area_inset: 0.015
+
+  # two foam dice stacked atop one another
+  foam_die2:
+    objects:
+      -
+        name: foam_die1
+        type: foam_die
+        parent: ee
+        offset:
+          x: 0.0325
+      -
+        name: foam_die2
+        type: foam_die
+        parent: foam_die1
+    contacts:
+      -
+        first: ee
+        second: foam_die1
+        mu: 0.54
+        mu_margin: 0.054
+        support_area_inset: 0.015  # NOTE large inset here
+      -
+        first: foam_die1
+        second: foam_die2
+        mu: 0.71
+        mu_margin: 0.071
+        support_area_inset: 0.015
+
+  simulation_box:
+    objects:
+      -
+        name: bottle
+        type: simulation_box
+        parent: ee
+    contacts:
+      -
+        first: ee
+        second: bottle
+        mu: 0.2
+        mu_margin: 0.02
+        support_area_inset: 0.005
+
+  simulation_box_h0:
+    objects:
+      -
+        name: bottle
+        type: simulation_box_h0
+        parent: ee
+    contacts:
+      -
+        first: ee
+        second: bottle
+        mu: 0.5  # TODO under development
+        support_area_inset: 0.005
+        mu_margin: 0.05
+
+  simulation_box_with_fixture:
+    objects:
+      -
+        name: bottle
+        type: simulation_box
+        parent: ee
+      -
+        name: fixture
+        type: fixture
+        parent: ee
+        fixture: true
+        offset:
+          y: -0.055
+    contacts:
+      -
+        first: ee
+        second: bottle
+        mu: 0.2
+        support_area_inset: 0.005
+        mu_margin: 0.02
+      -
+        first: fixture
+        second: bottle
+        mu: 0.2
+        mu_margin: 0.02
+
+  wedge:
+    objects:
+      -
+        name: wedge1
+        type: wedge
+        parent: ee
+      -
+        name: box1
+        type: wood_block
+        orientation: [0, 0.130526, 0, 0.9914449]
+        parent: wedge1
+    contacts:
+      -
+        first: ee
+        second: wedge1
+        mu: 0.3
+        mu_margin: 0.1683 # computed to achieve minimum found by compute_minimum_mu.py script
+        support_area_inset: 0.005
+      -
+        first: wedge1
+        second: box1
+        mu: 0.3
+        mu_margin: 0.1683
+        support_area_inset: 0.005
+
+  blue_cups:
+    objects:
+      -
+        name: cup1
+        type: blue_cup
+        parent: ee
+        offset:
+          x: -0.1075
+          y: -0.0925
+      -
+        name: cup2
+        type: blue_cup
+        parent: ee
+        offset:
+          x: -0.0075
+          y: -0.0925
+      -
+        name: cup3
+        type: blue_cup
+        parent: ee
+        offset:
+          x: 0.0925
+          y: -0.0925
+      -
+        name: cup4
+        type: blue_cup
+        parent: ee
+        offset:
+          x: 0.0925
+      -
+        name: cup5
+        type: blue_cup
+        parent: ee
+        offset:
+          x: 0.0875  # NOTE: moved back slightly to avoid hitting a marker
+          y: 0.0925
+      -
+        name: cup6
+        type: blue_cup
+        parent: ee
+        offset:
+          x: -0.0075
+          y: 0.0925
+      -
+        name: cup7
+        type: blue_cup
+        parent: ee
+        offset:
+          x: -0.1075
+          y: 0.0925
+    contacts:
+      -
+        first: ee
+        second: cup1
+        mu: 0.28
+        mu_margin: 0.028
+        support_area_inset: 0.005
+      -
+        first: ee
+        second: cup2
+        mu: 0.28
+        mu_margin: 0.028
+        support_area_inset: 0.005
+      -
+        first: ee
+        second: cup3
+        mu: 0.28
+        mu_margin: 0.028
+        support_area_inset: 0.005
+      -
+        first: ee
+        second: cup4
+        mu: 0.28
+        mu_margin: 0.028
+        support_area_inset: 0.005
+      -
+        first: ee
+        second: cup5
+        mu: 0.28
+        mu_margin: 0.028
+        support_area_inset: 0.005
+      -
+        first: ee
+        second: cup6
+        mu: 0.28
+        mu_margin: 0.028
+        support_area_inset: 0.005
+      -
+        first: ee
+        second: cup7
+        mu: 0.28
+        mu_margin: 0.028
+        support_area_inset: 0.005
+
+  flat_box:
+    objects:
+      -
+        name: box
+        type: flat_box
+        parent: ee
+    contacts:
+      -
+        first: ee
+        second: box
+        mu: 0.5
+
+  white_cardboard_box_bottle:
+    objects:
+      -
+        name: box
+        type: white_cardboard_box
+        parent: ee
+        offset:
+          x: 0.055
+      -
+        name: bottle
+        type: pink_bottle
+        parent: box
+    contacts:
+      # NOTE: frictions not actually measured since I am only doing aligned and
+      # robust tests for now
+      -
+        first: ee
+        second: box
+        mu: 0.3
+        mu_margin: 0.03
+        support_area_inset: 0.005
+      -
+        first: box
+        second: bottle
+        mu: 0.2  # TODO
+        mu_margin: 0.02
+        support_area_inset: 0.005
+
+  brown_cardboard_box_bottle:
+    objects:
+      -
+        name: box
+        type: brown_cardboard_box
+        parent: ee
+        offset:
+          x: 0.065
+      -
+        name: bottle
+        type: pink_bottle
+        parent: box
+    contacts:
+      # NOTE: frictions not actually measured since I am only doing aligned and
+      # robust tests for now
+      -
+        first: ee
+        second: box
+        mu: 0.3
+        mu_margin: 0.03
+        support_area_inset: 0.005
+      -
+        first: box
+        second: bottle
+        mu: 0.2
+        mu_margin: 0.02
+        support_area_inset: 0.005

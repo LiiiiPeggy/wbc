@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="utf-8"?>
+<robot name="end_effector_gripped_object" xmlns:xacro="http://wiki.ros.org/xacro">
+
+  <xacro:arg name="show_balance_link" default="true"/>
+
+  <joint name="gripped_object_joint" type="fixed">
+    <xacro:transformed_origin name="gripped_object_transform" />
+    <parent link="gripper"/>
+    <child link="gripped_object"/>
+  </joint>
+
+  <!-- Wood tray -->
+  <xacro:macro name="gripped_object_geometry">
+    <origin rpy="0 0 0" xyz="0 0 -0.01"/>
+    <geometry>
+      <box size="0.285 0.285 0.02" />
+    </geometry>
+  </xacro:macro>
+
+  <!-- Extra link for the gripped object, which must be calibrated. -->
+  <link name="gripped_object">
+    <visual>
+      <xacro:gripped_object_geometry />
+      <material name="black"/>
+    </visual>
+
+    <collision>
+      <xacro:gripped_object_geometry />
+    </collision>
+
+    <inertial>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <mass value="0.1"/>
+      <!-- not accurate, but pybullet recomputes this by default -->
+      <inertia ixx="1" ixy="0" ixz="0" iyy="1" iyz="0" izz="1"/>
+    </inertial>
+  </link>
+
+  <!-- The visual_balance link/joint is visual-only and just provides a visual reference for an object that stays in place w.r.t. the tray. -->
+  <xacro:if value="$(arg show_balance_link)">
+    <joint name="visual_balance_joint" type="fixed">
+      <parent link="gripped_object"/>
+      <child link="visual_balance_link"/>
+      <origin rpy="0 0 0" xyz="0 0 0.2"/>
+    </joint>
+
+    <link name="visual_balance_link">
+      <visual>
+        <geometry>
+          <box size="0.1 0.1 0.1" />
+        </geometry>
+        <material name="black"/>
+      </visual>
+    </link>
+  </xacro:if>
+
+</robot>

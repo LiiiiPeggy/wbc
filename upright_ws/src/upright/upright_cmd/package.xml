@@ -1,0 +1,15 @@
+<?xml version="1.0"?>
+<package format="2">
+  <name>upright_cmd</name>
+  <version>0.0.0</version>
+  <description>The upright_cmd package</description>
+  <maintainer email="adam.heins@robotics.utias.utoronto.ca">Adam Heins</maintainer>
+  <license>MIT</license>
+
+  <buildtool_depend>catkin</buildtool_depend>
+
+  <exec_depend>rospy</exec_depend>
+  <exec_depend>roscpp</exec_depend>
+  <exec_depend>upright_sim</exec_depend>
+
+</package>

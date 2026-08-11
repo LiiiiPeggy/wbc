@@ -1,0 +1,8 @@
+<?xml version="1.0"?>
+
+<launch>
+  <arg name="use_joy_stick_relay" default="false" doc="use joy stick for emergency stop"/>
+
+  <!-- Republish Vicon /ridgeback/cmd_vel to /ridgeback_velocity_controller/cmd_vel -->
+  <node name="ridgeback_velocity_relay" pkg="topic_tools" type="relay" respawn="true" args="ridgeback/cmd_vel ridgeback_velocity_controller/cmd_vel" output="screen" unless="$(arg use_joy_stick_relay)"/>
+</launch>

@@ -1,0 +1,8 @@
+*.mp4
+*.pdf
+*.npz
+*.bag
+*.pyc
+artifacts/
+
+.vscode/

@@ -1,0 +1,32 @@
+<?xml version="1.0"?>
+<package format="2">
+  <name>mobile_manipulation_central</name>
+  <version>0.0.0</version>
+  <description>Shared code for mobile manipulator experiments.</description>
+  <maintainer email="adam.heins@robotics.utias.utoronto.ca">Adam Heins</maintainer>
+  <license>MIT</license>
+
+  <buildtool_depend>catkin</buildtool_depend>
+
+  <!-- Build dependencies for C++ -->
+  <build_depend>roscpp</build_depend>
+  <build_depend>geometry_msgs</build_depend>
+  <build_depend>sensor_msgs</build_depend>
+  <build_depend>urdf</build_depend>
+  <build_depend>tf</build_depend>
+
+  <!-- Runtime dependencies for Python and launch files -->
+  <exec_depend>rospy</exec_depend>
+  <exec_depend>std_msgs</exec_depend>
+  <exec_depend>geometry_msgs</exec_depend>
+  <exec_depend>sensor_msgs</exec_depend>
+  <exec_depend>rosgraph_msgs</exec_depend>
+  <exec_depend>tf</exec_depend>
+  <exec_depend>diagnostic_msgs</exec_depend>
+  <exec_depend>vicon_bridge</exec_depend>
+  <exec_depend>ur_robot_driver</exec_depend>
+  <exec_depend>robotiq_3f_gripper_control</exec_depend>
+  <exec_depend>robotiq_3f_gripper_articulated_msgs</exec_depend>
+
+  <export></export>
+</package>

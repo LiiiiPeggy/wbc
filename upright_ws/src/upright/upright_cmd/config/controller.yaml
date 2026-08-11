@@ -1,0 +1,241 @@
+include:
+  -
+    package: upright_cmd
+    path: config/arrangements.yaml
+
+gravity: [0, 0, -9.81]
+recompile_libraries: true
+debug: true
+solver_method: SQP  # only SQP is supported now
+
+# model predictive controller
+mpc:
+  time_horizon: 2.0
+  debug_print: true
+  cold_start: false
+
+# trajectory rollout
+rollout:
+  abs_tol_ode: 1e-5
+  rel_tol_ode: 1e-3
+  timestep: 0.01
+  max_num_steps_per_second: 100000
+  check_numerical_stability: false
+
+estimation:
+  robot_init_variance: 0.1
+  robot_process_variance: 10
+  robot_measurement_variance: 0.001
+
+# low-level reference tracking
+tracking:
+  rate: 125  # Hz
+  min_policy_update_time: 0.01  # seconds
+
+  # state feedback gains
+  # for stability we want kv * ka > kp (third-order Routh-Hurwitz criterion)
+  # these should be set to zero if sqp.use_feedback_policy = true, since the
+  # controller computes its own optimal feedback policy in that case
+  kp: 0
+  kv: 0
+  ka: 0
+
+  enforce_state_limits: true
+  enforce_input_limits: false
+  enforce_ee_position_limits: false
+
+  use_projectile: true
+
+  state_violation_margin: 0.1
+  input_violation_margin: 1.0
+  ee_position_violation_margin: 0.1
+
+# sequential quadratic programming
+sqp:
+  dt: 0.1
+  sqp_iteration: 1
+  init_sqp_iteration: 1
+  delta_tol: 1e-3
+  cost_tol: 1e-4
+  use_feedback_policy: true
+  project_state_input_equality_constraints: false
+  print_solver_status: true
+  print_solver_statistics: true
+  print_line_search: true
+  hpipm:
+    iter_max: 30
+    warm_start: 1  # 0 = no warm start, 1 = primal warm start, 2 = primal and dual warm start
+    slacks:
+      enabled: false
+      input_box: true  # slacks on input box constraints
+      state_box: true  # slacks on state box constraints
+      poly_ineq: true  # slacks on general polytopic inequality constraints
+
+balancing:
+  enabled: false
+  arrangement: nothing
+  use_force_constraints: true
+  frictionless: true
+  force_weight: 0.001
+
+inertial_alignment:
+  cost_enabled: false
+  constraint_enabled: false
+  # take angular acceleration into account (only has an affect if com has non-zero height)
+  use_angular_acceleration: false
+  align_with_fixed_vector: false  # set to true to align with the contact_plane_normal
+  cost_weight: 1
+  contact_plane_normal: [0, 0, 1]
+  com: [0, 0, 0]  # set CoM offset
+
+end_effector_box_constraint:
+  enabled: false
+  xyz_lower: [-1., -1., -0.5]
+  xyz_upper: [1., 1., 0.5]
+
+projectile_path_constraint:
+  enabled: false
+  distances: []
+  scale: 1
+  collision_links: []
+
+obstacles:
+  enabled: false
+
+  # extra margin between objects
+  # Important: this needs to be > 0 for the resulting constraint to be
+  # differentiable
+  minimum_distance: 0.1
+
+operating_points:
+  enabled: false
+
+objects:
+  # EE is a special object
+  # wood tray
+  ee:
+    shape: cuboid
+    side_lengths: [0.285, 0.285, 0.02]
+    position: [0, 0, -0.01]  # box centroid relative to r_ew_w
+
+  cube:
+    mass: 1.0
+    com_offset: [0, 0, 0]
+    shape: cuboid
+    side_lengths: [0.1, 0.1, 0.01]
+
+  bottle:
+    mass: 0.5
+    com_offset: [0, 0, 0]
+    shape: cylinder
+    radius: 0.0325
+    height: 0.15
+
+  tall_bottle:
+    mass: 0.72
+    com_offset: [0, 0, 0]
+    shape: cylinder
+    radius: 0.035
+    height: 0.205
+
+  pink_bottle:
+    mass: 0.827
+    com_offset: [0, 0, 0]
+    shape: cylinder
+    radius: 0.035
+    height: 0.255
+
+  wood_block:
+    mass: 0.18
+    com_offset: [0, 0, 0]  # relative to centroid of shape
+    shape: cuboid
+    side_lengths: [0.103, 0.09, 0.038]
+
+  wood_block_rotx:
+    mass: 0.18
+    com_offset: [0, 0, 0]
+    shape: cuboid
+    side_lengths: [0.103, 0.038, 0.09]
+
+  wood_block_rotz:
+    mass: 0.18
+    com_offset: [0, 0, 0]
+    shape: cuboid
+    side_lengths: [0.09, 0.103, 0.038]
+
+  wood_block_standing:
+    mass: 0.18
+    com_offset: [0, 0, 0]
+    shape: cuboid
+    side_lengths: [0.038, 0.09, 0.103]
+
+  foam_die:
+    mass: 0.02
+    com_offset: [0, 0, 0]
+    shape: cuboid
+    side_lengths: [0.065, 0.065, 0.065]
+
+  foam_die_with_markers:
+    mass: 0.034
+    com_offset: [0, 0, 0]
+    shape: cuboid
+    side_lengths: [0.065, 0.065, 0.065]
+
+  wedge:
+    mass: 0.09
+    com_offset: [0, 0, 0]
+    shape: wedge
+    # approx 15 deg slope with 0.09 long hypoteneuse
+    # side_lengths: [0.0869333, 0.103, 0.0232937]
+    side_lengths: [0.15, 0.15, 0.0401923788646684]
+
+  fixture:
+    shape: cuboid
+    side_lengths: [0.05, 0.05, 0.05]
+    mass: 0.1
+    com_offset: [0, 0, 0]
+
+  simulation_box:
+    shape: cuboid
+    side_lengths: [0.06, 0.06, 0.2]
+    com_offset: [0, 0, 0]
+    mass: 0.5
+
+  simulation_box_h0:
+    shape: cuboid
+    side_lengths: [0.06, 0.06, 0.2]
+    com_offset: [0, 0, -0.1]
+    mass: 0.5
+
+  tall_simulation_box:
+    shape: cuboid
+    side_lengths: [0.06, 0.06, 0.64]
+    com_offset: [0, 0, 0]
+    mass: 0.5
+
+  blue_cup:
+    shape: cylinder
+    radius: 0.025
+    height: 0.08
+    com_offset: [0, 0, 0]
+    mass: 0.2
+
+  flat_box:
+    shape: cuboid
+    side_lengths: [0.02, 0.02, 0.01]
+    com_offset: [0, 0, 0]
+    mass: 0.1
+
+  white_cardboard_box:
+    shape: cuboid
+    side_lengths: [0.11, 0.11, 0.275]
+    # side_lengths: [0.11, 0.11, 0.55]
+    # side_lengths: [0.09, 0.09, 0.275]
+    com_offset: [0, 0, 0]
+    mass: 0.115
+
+  brown_cardboard_box:
+    shape: cuboid
+    side_lengths: [0.15, 0.15, 0.275]
+    com_offset: [0, 0, 0]
+    mass: 0.11

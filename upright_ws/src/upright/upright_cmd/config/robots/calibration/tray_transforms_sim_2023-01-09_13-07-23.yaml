@@ -1,0 +1,13 @@
+# in sim we use the real EE position but everything else is exact/perfect
+base_to_arm_transform:
+  rpy: [0, 0, 0]
+  xyz: [0, 0, 0]
+gripped_object_transform:
+  rpy:
+  - 0
+  - -1.57079633
+  - 3.14159265
+  xyz:
+  - 0.036712437868118286
+  - -0.0004053786105941981
+  - 0.308562308549881

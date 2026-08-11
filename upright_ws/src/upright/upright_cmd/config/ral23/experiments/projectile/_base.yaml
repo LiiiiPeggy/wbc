@@ -1,0 +1,100 @@
+include:
+  -
+    key: simulation
+    package: upright_cmd
+    path: config/simulation.yaml
+  -
+    key: controller
+    package: upright_cmd
+    path: config/controller.yaml
+  -
+    package: upright_cmd
+    path: config/robots/thing.yaml
+  -
+    package: upright_cmd
+    path: config/obstacles/dynamic.yaml
+
+logging:
+  timestep: 0.010
+  log_dir: /media/adam/Data/PhD/Data/upright/bounded
+
+simulation:
+  duration: 10.0
+  arrangement: pink_bottle
+  # arrangement: blue_cups
+
+  dynamic_obstacles:
+    enabled: true
+
+controller:
+  mpc:
+    time_horizon: 2.0
+
+  tracking:
+    enforce_state_limits: true
+    enforce_input_limits: false
+    enforce_ee_position_limits: false
+    use_projectile: true
+
+  balancing:
+    enabled: false
+    frictionless: true
+    use_force_constraints: true
+    arrangement: pink_bottle
+    # arrangement: blue_cups
+    constraint_type: hard
+    enable_normal_constraint: true
+    enable_friction_constraint: true
+    enable_zmp_constraint: true
+
+  inertial_alignment:
+    cost_enabled: false
+    constraint_enabled: false
+    use_angular_acceleration: false
+    align_with_fixed_vector: false
+    cost_weight: 10
+    contact_plane_normal: [0, 0, 1]
+    alpha: 0
+    com: [0, 0, 0]
+
+  weights:
+    input:
+      scale: 0.001
+      diag: [1rep9]
+    state:
+      scale: 0.01
+      diag: [0rep9, 10rep9, 1rep9]
+    end_effector:
+      scale: 1
+      diag: [1, 1, 1, 0, 0, 0]
+
+  obstacles:
+    enabled: true
+    constraint_type: hard
+    minimum_distance: 0.1
+
+  end_effector_box_constraint:
+    enabled: false
+    xyz_lower: [-1., -1., -1.]
+    xyz_upper: [1., 1., 1]
+
+  projectile_path_constraint:
+    enabled: true
+    # distances: [0.35, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2]
+    distances: [0.35]
+    scale: 0.2
+    collision_links:
+      - "balanced_object_collision_link"
+      # - "wrist1_collision_link"
+      # - "wrist3_collision_link"
+      # - "forearm_collision_sphere_link1"
+      # - "forearm_collision_sphere_link2"
+      # - "elbow_collision_link"
+      # - "upper_arm_collision_link2"
+      # - "upper_arm_collision_link3"
+
+  waypoints:
+    -
+      time: 0
+      position: [0, 0, 0]
+      orientation: [0, 0, 0, 1]
