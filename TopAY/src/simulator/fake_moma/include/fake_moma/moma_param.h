@@ -9,6 +9,7 @@
 #include <iostream>
 #include <unordered_map>
 #include <vector>
+#include <stdexcept>
 
 #define PRINTF_WHITE(STRING) std::cout<<STRING
 #define PRINT_GREEN(STRING) std::cout<<"\033[92m"<<STRING<<"\033[m\n"
@@ -30,8 +31,31 @@ using namespace Eigen;
 using namespace std;
 using RowMatrixXd = Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>;
 
+// ################################
+// C++: Typed robot-profile kinematics contract
+// ################################
+enum class KinematicsType
+{
+    TopayAlt,
+    Cr10
+};
+
+struct KinematicResult
+{
+    Eigen::Matrix4d base_T = Eigen::Matrix4d::Identity();
+    Eigen::Matrix4d arm_base_T = Eigen::Matrix4d::Identity();
+    std::vector<Eigen::Matrix4d> arm_link_T;
+    Eigen::Matrix4d ee_T = Eigen::Matrix4d::Identity();
+};
+
 struct MomaParam
 {
+    // ################################
+    // C++: Global /moma profile identity
+    // ################################
+    std::string robot_name = "tracer7";
+    KinematicsType kinematics = KinematicsType::TopayAlt;
+
     // chassis parameters
     double chassis_length = 0.685;
     double chassis_width = 0.57;
@@ -142,6 +166,20 @@ struct MomaParam
             }
         }
     }
+
+    // ################################
+    // C++: MomaParam global profile loader and validation API
+    // ################################
+    static MomaParam fromRos(const ros::NodeHandle& root_nh);
+    static const char* kinematicsName(KinematicsType type);
+    void finalizeKinematics();
+    void finalizeCollision();
+    void finalizeVisualization();
+    void validateCore() const;
+    void validateKinematics() const;
+    void validateCollision() const;
+    void validateVisualization() const;
+    void validateAll() const;
 
     void setColliRs(const Eigen::VectorXd &colli_rs)
     {

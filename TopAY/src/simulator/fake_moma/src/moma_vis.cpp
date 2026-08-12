@@ -232,6 +232,16 @@ int main (int argc, char** argv)
 {        
     ros::init (argc, argv, "moma_vis_node");
     ros::NodeHandle nh( "~" );
+    ros::NodeHandle root_nh;
+
+    // ################################
+    // C++: Load the shared global /moma robot profile
+    // ################################
+    moma_param = MomaParam::fromRos(root_nh);
+    ROS_INFO_STREAM("[moma_vis] robot_name=" << moma_param.robot_name
+                    << " dof_num=" << moma_param.dof_num
+                    << " kinematics=" << MomaParam::kinematicsName(moma_param.kinematics)
+                    << " mount_t=" << moma_param.relative_t.transpose());
 
 	initParams();
     state_sub  = nh.subscribe("state", 1, rcvStateCallBack);

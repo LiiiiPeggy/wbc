@@ -50,19 +50,35 @@ include_directories(
   ${PCL_INCLUDE_DIRS}
 )
 
-add_library(fake_moma src/moma_sim.cpp)
+# ################################
+# CMake: real shared MomaParam library
+# ################################
+add_library(fake_moma
+  src/moma_param_load.cpp
+)
 add_dependencies(fake_moma fake_moma_gencpp)
+target_link_libraries(fake_moma
+  ${catkin_LIBRARIES}
+)
 
+# ################################
+# CMake: fake_moma simulator executable
+# ################################
 add_executable (fake_moma_node src/moma_sim.cpp)
 add_dependencies(fake_moma_node fake_moma_gencpp)
 target_link_libraries(fake_moma_node
+  fake_moma
   ${catkin_LIBRARIES}
   ${PCL_LIBRARIES}
 )
 
+# ################################
+# CMake: fake_moma visualization executable
+# ################################
 add_executable (moma_vis_node src/moma_vis.cpp)
 add_dependencies(moma_vis_node fake_moma_gencpp)
 target_link_libraries(moma_vis_node
+  fake_moma
   ${catkin_LIBRARIES}
   ${PCL_LIBRARIES}
 )

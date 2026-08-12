@@ -7,10 +7,14 @@ int main( int argc, char * argv[] )
 { 
     ros::init(argc, argv, "planner_node");
     ros::NodeHandle nh("~");
+    ros::NodeHandle root_nh;
 
     Planner planner;
     
-    planner.init(nh);
+    // ################################
+    // C++: Pass the root handle for the global /moma profile
+    // ################################
+    planner.init(nh, root_nh);
 
     // ros::MultiThreadedSpinner spinner(2);
     // spinner.spin();

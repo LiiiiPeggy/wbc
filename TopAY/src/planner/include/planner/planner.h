@@ -204,7 +204,10 @@ namespace nmoma_planner
             std::string scene;
 
         public:
-            void init(ros::NodeHandle& nh);
+            // ################################
+            // C++: Planner initialization with private and global handles
+            // ################################
+            void init(ros::NodeHandle& nh, const ros::NodeHandle& root_nh);
             void planCallBack(const geometry_msgs::PoseStamped msg);
 
             void ablationCallback(const geometry_msgs::PoseStamped msg);

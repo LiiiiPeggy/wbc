@@ -2,8 +2,17 @@
 
 namespace nmoma_planner
 {
-    void Planner::init(ros::NodeHandle& nh)
+    // ################################
+    // C++: Load the shared global /moma robot profile
+    // ################################
+    void Planner::init(ros::NodeHandle& nh, const ros::NodeHandle& root_nh)
     {
+        moma_param = MomaParam::fromRos(root_nh);
+        ROS_INFO_STREAM("[planner] robot_name=" << moma_param.robot_name
+                        << " dof_num=" << moma_param.dof_num
+                        << " kinematics=" << MomaParam::kinematicsName(moma_param.kinematics)
+                        << " mount_t=" << moma_param.relative_t.transpose());
+
         GET_PARAM_OR_THROW(nh, "agent/local_mode", local_mode);
         GET_PARAM_OR_THROW(nh, "agent/replan_interval", replan_interval);
         GET_PARAM_OR_THROW(nh, "agent/planning_horizon", planning_horizon);

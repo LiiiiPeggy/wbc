@@ -5,7 +5,12 @@
     <arg name="cmd_topic" value="/moma_cmd" />
     <arg name="use_sim" default="true" />
     <arg name="rviz" default="true" />
+    <arg name="robot" default="tracer7" />
 
+    <!-- ################################ -->
+    <!-- XML: Load the shared robot profile at global /moma scope -->
+    <!-- ################################ -->
+    <rosparam command="load" file="$(find planner)/params/robot_$(arg robot).yaml" />
     <rosparam command="load" file="$(find planner)/params/agent.yaml" />
     <rosparam command="load" file="$(find planner)/params/grid_map.yaml" />
     <rosparam command="load" file="$(find planner)/params/rog_map.yaml" />
