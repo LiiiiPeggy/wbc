@@ -79,6 +79,14 @@ namespace remani_planner
     int continous_failures_count_{0};
 
   public:
+    // ################################
+    // C++: reset failure count on new manual goal begin
+    // ################################
+    void resetFailureCount() { continous_failures_count_ = 0; }
+    int getFailureCount() const { return continous_failures_count_; }
+    // ################################
+    // C++: reset failure count on new manual goal end
+    // ################################
     typedef unique_ptr<MMPlannerManager> Ptr;
 
     // !SECTION

@@ -20,9 +20,6 @@
   <arg name="use_rviz" default="true"/>
   <arg name="target_type" default="1"/>
 
-  <arg name="map_size_x" value="20.0"/>
-  <arg name="map_size_y" value="8.0"/>
-  <arg name="map_size_z" value="3.0"/>
   <arg name="map_resolution" value="0.05"/>
   <arg name="odom_topic" value="/mm/car/odom"/>
   <arg name="joint_state_topic" value="/mm/mani/joint_state"/>
@@ -30,17 +27,35 @@
   <arg name="gripper_cmd_topic" value="/mm_controller_node/gripper_cmd"/>
   <arg name="gripper_state_topic" value="/mm/mani/gripper_state"/>
 
+  <!-- ################################ -->
+  <!-- XML: Ranger GridMap == map_generator 16x12x3 begin -->
+  <!-- ################################ -->
+  <arg name="map_size_x" default="16.0" if="$(eval arg('robot_model') == 'ranger_cr10')"/>
+  <arg name="map_size_y" default="12.0" if="$(eval arg('robot_model') == 'ranger_cr10')"/>
+  <arg name="map_size_z" default="3.0"  if="$(eval arg('robot_model') == 'ranger_cr10')"/>
   <arg name="generate_map_size_x" default="16" if="$(eval arg('robot_model') == 'ranger_cr10')"/>
   <arg name="generate_map_size_y" default="12" if="$(eval arg('robot_model') == 'ranger_cr10')"/>
   <arg name="generate_map_size_z" default="3"  if="$(eval arg('robot_model') == 'ranger_cr10')"/>
   <arg name="min_turning_radius"  default="0.5" if="$(eval arg('robot_model') == 'ranger_cr10')"/>
   <arg name="pub_urdf_joint_states" default="true" if="$(eval arg('robot_model') == 'ranger_cr10')"/>
+  <!-- ################################ -->
+  <!-- XML: Ranger GridMap == map_generator 16x12x3 end -->
+  <!-- ################################ -->
 
+  <!-- ################################ -->
+  <!-- XML: FastArmer keeps original planner 20x8 / gen 8x8 begin -->
+  <!-- ################################ -->
+  <arg name="map_size_x" default="20.0" if="$(eval arg('robot_model') == 'fast_armer')"/>
+  <arg name="map_size_y" default="8.0"  if="$(eval arg('robot_model') == 'fast_armer')"/>
+  <arg name="map_size_z" default="3.0"  if="$(eval arg('robot_model') == 'fast_armer')"/>
   <arg name="generate_map_size_x" default="8" if="$(eval arg('robot_model') == 'fast_armer')"/>
   <arg name="generate_map_size_y" default="8" if="$(eval arg('robot_model') == 'fast_armer')"/>
   <arg name="generate_map_size_z" default="3" if="$(eval arg('robot_model') == 'fast_armer')"/>
   <arg name="min_turning_radius"  default="0.2" if="$(eval arg('robot_model') == 'fast_armer')"/>
   <arg name="pub_urdf_joint_states" default="false" if="$(eval arg('robot_model') == 'fast_armer')"/>
+  <!-- ################################ -->
+  <!-- XML: FastArmer keeps original planner 20x8 / gen 8x8 end -->
+  <!-- ################################ -->
 
   <param name="fsm/target_type" value="$(arg target_type)"/>
   <param name="search/min_turning_radius" value="$(arg min_turning_radius)"/>

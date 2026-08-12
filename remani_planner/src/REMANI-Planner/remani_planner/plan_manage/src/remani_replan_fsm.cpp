@@ -407,6 +407,14 @@ namespace remani_planner
       have_trigger_ = true;
       cout << "Triggered! traget type: " << target_type_ << endl;
 
+      // ################################
+      // C++: preset trigger also resets failure count begin
+      // ################################
+      planner_manager_->resetFailureCount();
+      // ################################
+      // C++: preset trigger also resets failure count end
+      // ################################
+
       std_msgs::Bool flag_msg;
       flag_msg.data = true;
       planner_manager_->global_start_time_ = ros::Time::now();
@@ -420,7 +428,42 @@ namespace remani_planner
     if(msg->pose.position.z < -0.1)
       return;
     cout << "Triggered! traget type: " << target_type_ << endl;
-    // trigger_ = true;
+
+    if(target_type_ != TARGET_TYPE::MANUAL_TARGET){
+      ROS_ERROR("wrong target type: %d", target_type_);
+      return;
+    }
+
+    // ################################
+    // C++: reject out-of-map 2D Nav Goal via GridMap begin
+    // ################################
+    {
+      const double gx = msg->pose.position.x;
+      const double gy = msg->pose.position.y;
+      Eigen::Vector3d map_ori, map_size;
+      planner_manager_->grid_map_->getRegion(map_ori, map_size);
+      if(!planner_manager_->grid_map_->isInMap(Eigen::Vector2d(gx, gy))){
+        ROS_WARN("[GOAL] Reject out-of-map goal: (%.3f, %.3f), valid x=[%.3f, %.3f], y=[%.3f, %.3f]",
+                 gx, gy,
+                 map_ori(0), map_ori(0) + map_size(0),
+                 map_ori(1), map_ori(1) + map_size(1));
+        return;
+      }
+    }
+    // ################################
+    // C++: reject out-of-map 2D Nav Goal via GridMap end
+    // ################################
+
+    // ################################
+    // C++: new manual goal resets failure count begin
+    // ################################
+    // Only on a fresh user 2D Nav Goal — not on auto-retry / mid-traj replan.
+    planner_manager_->resetFailureCount();
+    ROS_INFO("FSM new goal: reset continous_failures_count to 0");
+    // ################################
+    // C++: new manual goal resets failure count end
+    // ################################
+
     // ################################
     // C++: manual goal also sets trigger begin
     // ################################
@@ -430,33 +473,28 @@ namespace remani_planner
     // ################################
     init_state_ = mm_state_pos_;
     end_pt_ = Eigen::VectorXd::Zero(traj_dim_);
-    
-    if(target_type_ == TARGET_TYPE::MANUAL_TARGET){
-      // ################################
-      // C++: manual goal keeps current arm joints begin
-      // ################################
-      end_pt_ = mm_state_pos_;
-      end_pt_(0) = msg->pose.position.x;
-      end_pt_(1) = msg->pose.position.y;
-      // ################################
-      // C++: log clicked goal + current pose begin
-      // ################################
-      ROS_INFO("FSM goal click: goal_xy=(%.3f, %.3f) start_xy=(%.3f, %.3f) yaw=%.1f deg",
-               end_pt_(0), end_pt_(1),
-               mm_state_pos_(0), mm_state_pos_(1),
-               mm_car_yaw_ * 180.0 / M_PI);
-      // ################################
-      // C++: log clicked goal + current pose end
-      // ################################
-      end_yaw_ = tf::getYaw(msg->pose.orientation);
-      // ################################
-      // C++: manual goal keeps current arm joints end
-      // ################################
-    }else{
-      ROS_ERROR("wrong target type: %d", target_type_);
-      return;
-    }
-    
+
+    // ################################
+    // C++: manual goal keeps current arm joints begin
+    // ################################
+    end_pt_ = mm_state_pos_;
+    end_pt_(0) = msg->pose.position.x;
+    end_pt_(1) = msg->pose.position.y;
+    // ################################
+    // C++: log clicked goal + current pose begin
+    // ################################
+    ROS_INFO("FSM goal click: goal_xy=(%.3f, %.3f) start_xy=(%.3f, %.3f) yaw=%.1f deg",
+             end_pt_(0), end_pt_(1),
+             mm_state_pos_(0), mm_state_pos_(1),
+             mm_car_yaw_ * 180.0 / M_PI);
+    // ################################
+    // C++: log clicked goal + current pose end
+    // ################################
+    end_yaw_ = tf::getYaw(msg->pose.orientation);
+    // ################################
+    // C++: manual goal keeps current arm joints end
+    // ################################
+
     planNextWaypoint(end_pt_, end_yaw_);
   }
 

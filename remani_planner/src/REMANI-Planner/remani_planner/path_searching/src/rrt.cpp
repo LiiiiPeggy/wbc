@@ -229,6 +229,15 @@ namespace remani_planner{
           // std::cout << "q_new_1: " << q_new_1->node_state << std::endl;
           // int temp_test = 0;
           while( !((q_new->state - q_new_1->state).norm() < 1.0e-2 && fabs(q_new->yaw - q_new_1->yaw) < 1.0e-2) ){
+            // ################################
+            // C++: enforce max_sample_time inside tree-connect loop begin
+            // ################################
+            if((ros::Time::now() - time_1).toSec() > max_sample_time_){
+              break;
+            }
+            // ################################
+            // C++: enforce max_sample_time inside tree-connect loop end
+            // ################################
             q_new_2 = steer(q_new_1, q_new->state, q_new->yaw, time_resolution_);
             // std::cout << "q_new_1: " << q_new_1->state.transpose() << " " << q_new_1->yaw << std::endl;
             // std::cout << "q_new: " << q_new->state.transpose() << " " << q_new->yaw << std::endl;
@@ -278,6 +287,15 @@ namespace remani_planner{
               break;
             }
           }
+          // ################################
+          // C++: exit outer RRT loop once timed out begin
+          // ################################
+          if((ros::Time::now() - time_1).toSec() > max_sample_time_){
+            break;
+          }
+          // ################################
+          // C++: exit outer RRT loop once timed out end
+          // ################################
 
         }
       }
