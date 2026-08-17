@@ -135,10 +135,28 @@ MomaParam MomaParam::fromRos(const ros::NodeHandle& root_nh)
     getRequired(root_nh, "collision/point_radius", values);
     profile.colli_point_radius = toVector(values, "collision/point_radius");
 
+    // ################################
+    // C++: Preserve legacy minimum tracer collision sphere radius
+    // ################################
+    for (int i = 0; i < profile.colli_point_radius.size(); ++i)
+    {
+        if (profile.colli_point_radius(i) > 1e-4
+            && profile.colli_point_radius(i) < profile.cylinder_radius)
+        {
+            profile.colli_point_radius(i) = profile.cylinder_radius;
+        }
+    }
+
+    // ################################
+    // C++: Validate loaded dimensions before collision finalization indexes arrays
+    // ################################
+    profile.validateCore();
+    profile.validateKinematics();
+    profile.validateCollision();
     profile.finalizeKinematics();
     profile.finalizeCollision();
     profile.finalizeVisualization();
-    profile.validateAll();
+    profile.validateVisualization();
     return profile;
 }
 
