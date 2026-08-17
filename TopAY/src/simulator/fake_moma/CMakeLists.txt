@@ -55,9 +55,20 @@ include_directories(
 # ################################
 add_library(fake_moma
   src/moma_param_load.cpp
+  src/moma_param_cr10.cpp
 )
 add_dependencies(fake_moma fake_moma_gencpp)
 target_link_libraries(fake_moma
+  ${catkin_LIBRARIES}
+)
+
+# ################################
+# CMake: CR10 FK / EE-gradient validation gate
+# ################################
+add_executable(test_topay_cr10_fk src/test_topay_cr10_fk.cpp)
+add_dependencies(test_topay_cr10_fk fake_moma_gencpp)
+target_link_libraries(test_topay_cr10_fk
+  fake_moma
   ${catkin_LIBRARIES}
 )
 

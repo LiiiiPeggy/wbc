@@ -1,0 +1,41 @@
+# ################################
+# YAML: Global shared Ranger + CR10 robot profile (Phase A kinematics)
+# ################################
+moma:
+  robot_name: ranger_cr10
+  kinematics: cr10
+  dof_num: 6
+
+  chassis:
+    length: 1.10
+    width: 0.90
+    height: 0.15
+    collision_radius: 0.711
+
+  limits:
+    max_v: 0.50
+    max_a: 0.80
+    max_w: 1.00
+    max_dw: 1.00
+
+  mount:
+    relative_R: [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0]
+    relative_t: [0.2462, 0.0, 0.1]
+
+  arm:
+    cylinder_radius: 0.10
+    link_length: [0.1765, 0.607, 0.568, 0.191, 0.125, 0.1084]
+    joint_pos_limit_min: [-3.00, -1.50, -2.80, -3.00, -3.00, -3.00]
+    joint_pos_limit_max: [3.00, 1.50, 2.80, 3.00, 3.00, 3.00]
+    joint_vel_limit: [0.80, 0.80, 0.80, 0.80, 0.80, 0.80]
+    joint_acc_limit: [1.57, 1.57, 1.57, 1.57, 1.57, 1.57]
+    joint_eff_limit: [60.0, 60.0, 30.0, 30.0, 10.0, 10.0]
+    joint_offset: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+    joint_dof_axis: [0.0, 0.0, 1.0, 0.0, 0.0, 1.0, 0.0, 0.0, 1.0, 0.0, 0.0, 1.0, 0.0, 0.0, 1.0, 0.0, 0.0, 1.0]
+
+  collision:
+    link_length: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+    points: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+    point_radius: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+
+  mesh_prefix: "package://fake_moma/meshes/ranger_cr10/"

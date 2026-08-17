@@ -176,13 +176,13 @@ const char* MomaParam::kinematicsName(KinematicsType type)
 }
 
 // ################################
-// C++: Finalize Task 1 TopAY alternate kinematics
+// C++: Finalize kinematics backend after profile validation
 // ################################
 void MomaParam::finalizeKinematics()
 {
     if (kinematics == KinematicsType::Cr10)
     {
-        throw std::runtime_error("CR10 kinematics are not available until Task 3");
+        initCr10FixedTransforms();
     }
 }
 
@@ -191,6 +191,11 @@ void MomaParam::finalizeKinematics()
 // ################################
 void MomaParam::finalizeCollision()
 {
+    if (kinematics == KinematicsType::Cr10)
+    {
+        return;
+    }
+
     default_colli_point_radius = colli_point_radius;
     std::vector<Eigen::Vector4d> cpts = getColliPts(Eigen::VectorXd::Zero(3 + dof_num));
     colli_link_map.resize(cpts.size());
@@ -239,13 +244,17 @@ void MomaParam::validateCore() const
 }
 
 // ################################
-// C++: Validate Task 1 TopAY alternate kinematics dimensions
+// C++: Validate kinematics arrays for the loaded backend
 // ################################
 void MomaParam::validateKinematics() const
 {
-    if (kinematics != KinematicsType::TopayAlt || dof_num != 7)
+    if (kinematics == KinematicsType::TopayAlt && dof_num != 7)
     {
-        throw std::runtime_error("Task 1 supports only the 7-DOF topay_alt profile");
+        throw std::runtime_error("topay_alt profile requires dof_num == 7");
+    }
+    if (kinematics == KinematicsType::Cr10 && dof_num != 6)
+    {
+        throw std::runtime_error("cr10 profile requires dof_num == 6");
     }
     if (link_length.size() != static_cast<Eigen::Index>(dof_num)
         || joint_pos_limit_min.size() != static_cast<Eigen::Index>(dof_num)
@@ -265,6 +274,11 @@ void MomaParam::validateKinematics() const
 // ################################
 void MomaParam::validateCollision() const
 {
+    if (kinematics == KinematicsType::Cr10)
+    {
+        return;
+    }
+
     const Eigen::Index expected = static_cast<Eigen::Index>(2 * (dof_num + 1));
     if (colli_length.size() != static_cast<Eigen::Index>(dof_num + 1)
         || colli_points.size() != expected || colli_point_radius.size() != expected)

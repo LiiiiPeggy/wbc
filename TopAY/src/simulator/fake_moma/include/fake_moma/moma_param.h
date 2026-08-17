@@ -9,6 +9,7 @@
 #include <iostream>
 #include <unordered_map>
 #include <vector>
+#include <array>
 #include <stdexcept>
 
 #define PRINTF_WHITE(STRING) std::cout<<STRING
@@ -92,6 +93,11 @@ struct MomaParam
     MatrixXi collision_matrix;
     Matrix3d relative_R;
     Vector3d relative_t;
+
+    // ################################
+    // C++: CR10 fixed joint origins populated in finalizeKinematics
+    // ################################
+    std::array<Eigen::Matrix4d, 6> cr10_joint_fixed_;
 
     MomaParam()
     {
@@ -180,6 +186,17 @@ struct MomaParam
     void validateCollision() const;
     void validateVisualization() const;
     void validateAll() const;
+
+    // ################################
+    // C++: Unified typed kinematics entry points
+    // ################################
+    KinematicResult getLinkTransforms(const Eigen::VectorXd& state) const;
+    void initCr10FixedTransforms();
+    KinematicResult getLinkTransformsCr10(const Eigen::VectorXd& state) const;
+    KinematicResult getLinkTransformsTopayAlt(const Eigen::VectorXd& state) const;
+    Eigen::VectorXd getFKPoseCr10(const Eigen::VectorXd& moma_pos) const;
+    Eigen::VectorXd getEEGradsCr10(const Eigen::VectorXd& moma_pos,
+                                   const Eigen::VectorXd& ee_grad) const;
 
     void setColliRs(const Eigen::VectorXd &colli_rs)
     {
@@ -374,8 +391,16 @@ struct MomaParam
         return colli_grads;
     }
 
-    Eigen::VectorXd getFKPose(const Eigen::VectorXd& moma_pos)
+    Eigen::VectorXd getFKPose(const Eigen::VectorXd& moma_pos) const
     {
+        // ################################
+        // C++: Dispatch FK to the loaded kinematics backend
+        // ################################
+        if (kinematics == KinematicsType::Cr10)
+        {
+            return getFKPoseCr10(moma_pos);
+        }
+
         Eigen::Vector3d now_p(moma_pos[0], moma_pos[1], chassis_height);
         Eigen::Matrix3d now_R;
         now_R << cos(moma_pos[2]), -sin(moma_pos[2]), 0.0,
@@ -411,8 +436,16 @@ struct MomaParam
     }
 
     Eigen::VectorXd getEEGrads(const Eigen::VectorXd& moma_pos,
-                              const Eigen::VectorXd& ee_grad)
+                              const Eigen::VectorXd& ee_grad) const
     {
+        // ################################
+        // C++: Dispatch EE gradients to the loaded kinematics backend
+        // ################################
+        if (kinematics == KinematicsType::Cr10)
+        {
+            return getEEGradsCr10(moma_pos, ee_grad);
+        }
+
         int gidx = 0;
         Eigen::VectorXd moma_grads = Eigen::VectorXd::Zero(3+dof_num);
         Eigen::MatrixXd grad_p_list = Eigen::MatrixXd::Zero(3, dof_num+1);
