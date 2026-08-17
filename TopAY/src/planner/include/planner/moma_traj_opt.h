@@ -151,7 +151,7 @@ namespace nmoma_planner
             Eigen::VectorXd state;
             state.resize(state_dim);
             state.head(3) = car_state.head(3);
-            state.tail(dof_num) = poly_traj.getPos(t).tail(dof_num);
+            state.tail(dof_num) = poly_traj.getPos(t).segment(2, dof_num);
 
             return state;
         }
@@ -166,7 +166,7 @@ namespace nmoma_planner
             t = std::min(std::max(t, 0.0), getTotalDuration());
             state(0) = poly_traj.getVel(t)(1);
             state(1) = poly_traj.getVel(t)(0);
-            state.tail(dof_num) = poly_traj.getVel(t).tail(dof_num);
+            state.tail(dof_num) = poly_traj.getVel(t).segment(2, dof_num);
 
             return state;
         }
