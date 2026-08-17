@@ -4,6 +4,11 @@ using namespace std;
  
 void OMPC::init(ros::NodeHandle &nh)
 {
+    // ################################
+    // C++: Load the shared global /moma robot profile
+    // ################################
+    ros::NodeHandle root_nh;
+    moma_param = MomaParam::fromRos(root_nh);
     nh.param("ompc/du_threshold", du_th, -1.0);
     nh.param("ompc/dt", dt, -1.0);
     nh.param("ompc/ctrl_freq", ctrl_freq, -1.0);
@@ -546,7 +551,10 @@ fake_moma::MomaCmd OMPC::getCmd(Eigen::VectorXd now_moma_state)
         fake_moma::MomaCmd cmd_msg;
         cmd_msg.speed = 0.0;
         cmd_msg.angular_velocity = 0.0;
-        for (size_t i = 0; i < 7; i++)
+        // ################################
+        // C++: Serialize every profile arm joint
+        // ################################
+        for (size_t i = 0; i < moma_param.dof_num; i++)
         {
             cmd_msg.dq.data.push_back(0.0);
             cmd_msg.q.data.push_back(now_moma_state(3+i));
@@ -563,9 +571,12 @@ fake_moma::MomaCmd OMPC::getCmd(Eigen::VectorXd now_moma_state)
         if (t_cur >= traj.getTotalDuration() + 1.0)
             at_goal = true;
         
-        VectorXd next_q = traj.getState(t_cur+1.0/ctrl_freq).tail(7);
-        VectorXd next_dq = traj.getDState(t_cur+1.0/ctrl_freq).tail(7);
-        for (size_t i = 0; i < 7; i++)
+        // ################################
+        // C++: Extract trajectory arm tails using profile DOF
+        // ################################
+        VectorXd next_q = traj.getState(t_cur+1.0/ctrl_freq).tail(moma_param.dof_num);
+        VectorXd next_dq = traj.getDState(t_cur+1.0/ctrl_freq).tail(moma_param.dof_num);
+        for (size_t i = 0; i < moma_param.dof_num; i++)
         {
             cmd_msg.dq.data.push_back(next_dq(i));
             cmd_msg.q.data.push_back(next_q(i));
@@ -592,7 +603,10 @@ fake_moma::MomaCmd OMPC::getCmd(Eigen::VectorXd now_moma_state)
     {
         cmd_msg.speed = 0.0;
         cmd_msg.angular_velocity = 0.0;
-        for (size_t i = 0; i < 7; i++)
+        // ################################
+        // C++: Hold every profile arm joint
+        // ################################
+        for (size_t i = 0; i < moma_param.dof_num; i++)
         {
             cmd_msg.dq.data.push_back(0.0);
             cmd_msg.q.data.push_back(now_moma_state(3+i));

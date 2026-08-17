@@ -106,10 +106,17 @@ void initParams(ros::NodeHandle& nh)
 	lidar_odom.pose.pose.position.y = lidar_pos(1);
 	lidar_odom.pose.pose.position.z = lidar_pos(2);
 
+	// ################################
+	// C++: Define profile-independent simulator marker roles
+	// ################################
+	const size_t kBase = 0;
+	const size_t kArmBase = 1;
+	const size_t kJoint0 = 2;
+	const size_t kGripper = 2 + moma_param.dof_num;
 	//diff_marker
 	visualization_msgs::Marker diff_marker;
 	diff_marker.header.frame_id = "world";
-	diff_marker.id = 0;
+	diff_marker.id = kBase;
 	diff_marker.type = visualization_msgs::Marker::MESH_RESOURCE;
 	diff_marker.action = visualization_msgs::Marker::ADD;
 	diff_marker.pose = moma_state.chassis_odom.pose.pose;
@@ -136,7 +143,7 @@ void initParams(ros::NodeHandle& nh)
 	//link0
 	visualization_msgs::Marker link_marker;
 	link_marker.header.frame_id = "world";
-	link_marker.id = 1;
+	link_marker.id = kArmBase;
 	link_marker.type = visualization_msgs::Marker::MESH_RESOURCE;
 	link_marker.action = visualization_msgs::Marker::ADD;
 	link_marker.pose.position.x = ap.x();
@@ -156,13 +163,13 @@ void initParams(ros::NodeHandle& nh)
 	link_marker.mesh_resource = "package://fake_moma/meshes/link0.STL";
 	moma_marker.markers.push_back(link_marker);
 
-	//link1-7
+	// arm links from the profile DOF
 	for (size_t i = 0; i < moma_param.dof_num; i++)
 	{
 		now_q.push_back(0.0);
 		visualization_msgs::Marker link_marker;
 		link_marker.header.frame_id = "world";
-		link_marker.id = i+2;
+		link_marker.id = kJoint0 + i;
 		link_marker.type = visualization_msgs::Marker::MESH_RESOURCE;
 		link_marker.action = visualization_msgs::Marker::ADD;
 		ap += aq.matrix() * Eigen::Vector3d(0.0, 0.0, moma_param.link_length[i]);
@@ -190,7 +197,7 @@ void initParams(ros::NodeHandle& nh)
 	//gripper
 	visualization_msgs::Marker gripper_marker;
 	gripper_marker.header.frame_id = "world";
-	gripper_marker.id = 9;
+	gripper_marker.id = kGripper;
 	gripper_marker.type = visualization_msgs::Marker::MESH_RESOURCE;
 	gripper_marker.action = visualization_msgs::Marker::ADD;
 	gripper_marker.pose = moma_marker.markers.back().pose;
@@ -256,7 +263,10 @@ void simCallBack(const ros::TimerEvent& event)
     	state_pub.publish(moma_state);
 		lidar_odom.header.stamp = ros::Time::now();
 		lidar_odom_pub.publish(lidar_odom);
-		moma_marker.markers[0].header.stamp = ros::Time::now();
+		// ################################
+		// C++: Update the base marker without a positional literal
+		// ################################
+		moma_marker.markers.front().header.stamp = ros::Time::now();
 		marker_pub.publish(moma_marker);
 		Eigen::VectorXd moma_pos = VectorXd::Zero(3+moma_param.dof_num);
 		moma_pos.head(3) = now_se2;
@@ -284,13 +294,20 @@ void simCallBack(const ros::TimerEvent& event)
 	moma_state.chassis_odom.pose.pose.orientation.z  = sin(now_se2(2)/2);
 	moma_state.chassis_odom.twist.twist.linear.x  = vx;
 	moma_state.chassis_odom.twist.twist.angular.z = wz;
-	moma_marker.markers[0].header.stamp = ros::Time::now();
-	moma_marker.markers[0].pose = moma_state.chassis_odom.pose.pose;
-	moma_marker.markers[0].pose.position.z = moma_param.chassis_height;
-	moma_marker.markers[0].pose.orientation.w = q.w();
-	moma_marker.markers[0].pose.orientation.x = q.x();
-	moma_marker.markers[0].pose.orientation.y = q.y();
-	moma_marker.markers[0].pose.orientation.z = q.z();
+	// ################################
+	// C++: Update simulator markers through profile-based roles
+	// ################################
+	const size_t kBase = 0;
+	const size_t kArmBase = 1;
+	const size_t kJoint0 = 2;
+	const size_t kGripper = 2 + moma_param.dof_num;
+	moma_marker.markers[kBase].header.stamp = ros::Time::now();
+	moma_marker.markers[kBase].pose = moma_state.chassis_odom.pose.pose;
+	moma_marker.markers[kBase].pose.position.z = moma_param.chassis_height;
+	moma_marker.markers[kBase].pose.orientation.w = q.w();
+	moma_marker.markers[kBase].pose.orientation.x = q.x();
+	moma_marker.markers[kBase].pose.orientation.y = q.y();
+	moma_marker.markers[kBase].pose.orientation.z = q.z();
 
 	// lidar
 	Eigen::Quaterniond chasq(cos(now_se2(2)/2), 0.0, 0.0, sin(now_se2(2)/2));
@@ -307,21 +324,21 @@ void simCallBack(const ros::TimerEvent& event)
 		now_q[i] = moma_cmd.q.data[i];
 		// now_q[i] += moma_cmd.dq.data[i]*time_resolution;
 	
-	moma_marker.markers[1].pose = moma_marker.markers[0].pose;
-	Eigen::Vector3d ap(moma_marker.markers[0].pose.position.x, 
-					   moma_marker.markers[0].pose.position.y, 
-					   moma_marker.markers[0].pose.position.z);
+	moma_marker.markers[kArmBase].pose = moma_marker.markers[kBase].pose;
+	Eigen::Vector3d ap(moma_marker.markers[kBase].pose.position.x,
+					   moma_marker.markers[kBase].pose.position.y,
+					   moma_marker.markers[kBase].pose.position.z);
 	Eigen::Quaterniond aq(cos(now_se2(2)/2.0), 0.0, 0.0, sin(now_se2(2)/2.0));
 	ap += aq.matrix() * moma_param.relative_t;
 	aq = aq.matrix() * moma_param.relative_R;
 
-	moma_marker.markers[1].pose.position.x = ap.x();
-	moma_marker.markers[1].pose.position.y = ap.y();
-	moma_marker.markers[1].pose.position.z = ap.z();
-	moma_marker.markers[1].pose.orientation.w = aq.w();
-	moma_marker.markers[1].pose.orientation.x = aq.x();
-	moma_marker.markers[1].pose.orientation.y = aq.y();
-	moma_marker.markers[1].pose.orientation.z = aq.z();
+	moma_marker.markers[kArmBase].pose.position.x = ap.x();
+	moma_marker.markers[kArmBase].pose.position.y = ap.y();
+	moma_marker.markers[kArmBase].pose.position.z = ap.z();
+	moma_marker.markers[kArmBase].pose.orientation.w = aq.w();
+	moma_marker.markers[kArmBase].pose.orientation.x = aq.x();
+	moma_marker.markers[kArmBase].pose.orientation.y = aq.y();
+	moma_marker.markers[kArmBase].pose.orientation.z = aq.z();
 
 	for (size_t i=0; i<moma_param.dof_num; i++)
 	{
@@ -330,20 +347,20 @@ void simCallBack(const ros::TimerEvent& event)
 		ap += aq.matrix() * Eigen::Vector3d(0.0, 0.0, moma_param.link_length[i]);
 		aq = aq.matrix() * euler2rotation(moma_param.joint_offset.row(i))
 						* euler2rotation(moma_param.joint_dof_axis.row(i)*now_q[i]);
-		moma_marker.markers[2+i].pose.position.x = ap.x();
-		moma_marker.markers[2+i].pose.position.y = ap.y();
-		moma_marker.markers[2+i].pose.position.z = ap.z();
-		moma_marker.markers[2+i].pose.orientation.w = aq.w();
-		moma_marker.markers[2+i].pose.orientation.x = aq.x();
-		moma_marker.markers[2+i].pose.orientation.y = aq.y();
-		moma_marker.markers[2+i].pose.orientation.z = aq.z();
-		moma_state.arm_odom[i].pose.pose = moma_marker.markers[2+i].pose;
+		moma_marker.markers[kJoint0 + i].pose.position.x = ap.x();
+		moma_marker.markers[kJoint0 + i].pose.position.y = ap.y();
+		moma_marker.markers[kJoint0 + i].pose.position.z = ap.z();
+		moma_marker.markers[kJoint0 + i].pose.orientation.w = aq.w();
+		moma_marker.markers[kJoint0 + i].pose.orientation.x = aq.x();
+		moma_marker.markers[kJoint0 + i].pose.orientation.y = aq.y();
+		moma_marker.markers[kJoint0 + i].pose.orientation.z = aq.z();
+		moma_state.arm_odom[i].pose.pose = moma_marker.markers[kJoint0 + i].pose;
 		moma_state.arm_odom[i].twist.twist.linear.x = now_q[i];
 		moma_state.arm_odom[i].twist.twist.angular.z = moma_cmd.dq.data[i];
 	}
 
 	// gripper
-	moma_marker.markers.back().pose = moma_marker.markers[8].pose;
+	moma_marker.markers[kGripper].pose = moma_marker.markers[kJoint0 + moma_param.dof_num - 1].pose;
 	if (moma_cmd.gripper_state)
 	{
 		moma_marker.markers.back().color.r = 0.0;

@@ -79,7 +79,10 @@ namespace nmoma_planner
             // data
             Eigen::Vector3d se2_set;
             Eigen::VectorXd now_state;
-            Eigen::VectorXd now_dstate; // v, w, 0, q1-q7
+            // ################################
+            // C++: Document the profile-sized arm derivative tail
+            // ################################
+            Eigen::VectorXd now_dstate; // v, w, 0, arm joint derivatives
             default_random_engine eng;
 
             // trajs

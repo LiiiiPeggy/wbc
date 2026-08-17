@@ -13,9 +13,12 @@ namespace nmoma_planner
         /* sample begin. */
         std::vector<Eigen::VectorXd> sampled_path;
         sampled_path.clear();
+        // ################################
+        // C++: Relaxed optimizer arm segments follow the loaded DOF
+        // ################################
         Eigen::VectorXd state12d = Eigen::VectorXd::Zero(12); // x y theta delta_theta delta_arc, q
         state12d.head(3) = init_path[0].head(3);
-        state12d.tail(7) = init_path[0].tail(7);
+        state12d.tail(moma_param.dof_num) = init_path[0].tail(moma_param.dof_num);
         sampled_path.push_back(state12d);
         for (size_t i = 1; i<init_path.size(); i++)
         {
@@ -32,7 +35,7 @@ namespace nmoma_planner
                     state12d[2] = now_theta;
                     state12d[3] = theta_diff;
                     state12d[4] = 0.0;
-                    state12d.tail(7) = init_path[i].tail(7);
+                    state12d.tail(moma_param.dof_num) = init_path[i].tail(moma_param.dof_num);
                     sampled_path.push_back(state12d);
                 }
                 else
@@ -51,7 +54,7 @@ namespace nmoma_planner
                     state12d[2] = direct_theta;
                     state12d[3] = 0.0;
                     state12d[4] = arc_len;
-                    state12d.tail(7) = init_path[i].tail(7);
+                    state12d.tail(moma_param.dof_num) = init_path[i].tail(moma_param.dof_num);
                     sampled_path.push_back(state12d);
 
                     normalizeAngle(sampled_path.back()[2], now_theta);
@@ -70,7 +73,7 @@ namespace nmoma_planner
                     state12d[2] = now_theta;
                     state12d[3] = 0.0;
                     state12d[4] = arc_len;
-                    state12d.tail(7) = init_path[i].tail(7);
+                    state12d.tail(moma_param.dof_num) = init_path[i].tail(moma_param.dof_num);
                     sampled_path.push_back(state12d);
                 }
             }
@@ -128,7 +131,7 @@ namespace nmoma_planner
                     Eigen::VectorXd pts = Eigen::VectorXd::Zero(9);
                     pts(0) = pre_path_node[2] + (l-l1)/l*(path_node[3]);
                     pts(1) = path_arcs[k-1] + (l-l1)/l*(path_node[4]);
-                    pts.tail(7) = pre_path_node.tail(7) + (l-l1)/l*(path_node.tail(7) - pre_path_node.tail(7));
+                    pts.tail(moma_param.dof_num) = pre_path_node.tail(moma_param.dof_num) + (l-l1)/l*(path_node.tail(moma_param.dof_num) - pre_path_node.tail(moma_param.dof_num));
                     vector_inner_pts.push_back(pts);
 
                     double interp_x = l1/l*pre_path_node[0] + (l-l1)/l*(path_node[0]);
@@ -148,17 +151,17 @@ namespace nmoma_planner
         minco_start_state(0, 2) = boundary_acc_(1, 0);
         minco_start_state(1, 1) = boundary_vel_(0, 0);
         minco_start_state(1, 2) = boundary_acc_(0, 0);
-        minco_start_state.col(0).tail(7) = sampled_path[0].tail(7);
-        minco_start_state.col(1).tail(7) = boundary_vel_.col(0).tail(7);
-        minco_start_state.col(2).tail(7) = boundary_acc_.col(0).tail(7);
+        minco_start_state.col(0).tail(moma_param.dof_num) = sampled_path[0].tail(moma_param.dof_num);
+        minco_start_state.col(1).tail(moma_param.dof_num) = boundary_vel_.col(0).tail(moma_param.dof_num);
+        minco_start_state.col(2).tail(moma_param.dof_num) = boundary_acc_.col(0).tail(moma_param.dof_num);
 
         // end pva
         minco_end_state = Eigen::MatrixXd::Zero(9, 3);
         minco_end_state(0, 0) = sampled_path.back()[2];
         minco_end_state(1, 0) = path_arcs.back();
-        minco_end_state.col(0).tail(7) = sampled_path.back().tail(7);
-        minco_end_state.col(1).tail(7) = boundary_vel_.col(1).tail(7);
-        minco_end_state.col(2).tail(7) = boundary_acc_.col(1).tail(7);
+        minco_end_state.col(0).tail(moma_param.dof_num) = sampled_path.back().tail(moma_param.dof_num);
+        minco_end_state.col(1).tail(moma_param.dof_num) = boundary_vel_.col(1).tail(moma_param.dof_num);
+        minco_end_state.col(2).tail(moma_param.dof_num) = boundary_acc_.col(1).tail(moma_param.dof_num);
 
         // GO!
         piece_num = vector_inner_pts.size() + 1;
@@ -423,7 +426,10 @@ namespace nmoma_planner
         // update grad
         gradTheta.head(obj.piece_num-1) = gdP.row(0);
         gradArc.head(obj.piece_num-1) = gdP.row(1);
-        Eigen::MatrixXd gradQ = gdP.bottomRows(7);
+        // ################################
+        // C++: Extract relaxed optimizer joint gradients using profile DOF
+        // ################################
+        Eigen::MatrixXd gradQ = gdP.bottomRows(obj.moma_param.dof_num);
         for (int i = 0; i < obj.piece_num-1; i++)
             for (size_t j = 0; j < obj.moma_param.dof_num; j++)
                 gradVq(j, i) = gradQ(j, i) * obj.getQtoVqGrad(Vq(j, i), obj.moma_param.joint_pos_limit_max(j));
@@ -500,7 +506,10 @@ namespace nmoma_planner
         // update grad
         gradTheta.head(obj.piece_num-1) = gdP.row(0);
         gradArc.head(obj.piece_num-1) = gdP.row(1);
-        Eigen::MatrixXd gradQ = gdP.bottomRows(7);
+        // ################################
+        // C++: Extract relaxed optimizer joint gradients using profile DOF
+        // ################################
+        Eigen::MatrixXd gradQ = gdP.bottomRows(obj.moma_param.dof_num);
         for (int i = 0; i < obj.piece_num-1; i++)
             for (size_t j = 0; j < obj.moma_param.dof_num; j++)
                 gradVq(j, i) = gradQ(j, i) * obj.getQtoVqGrad(Vq(j, i), obj.moma_param.joint_pos_limit_max(j));
@@ -1074,7 +1083,10 @@ namespace nmoma_planner
                     VecCoeffChainY.head(i*(inner_num+1)+j+1).array() += moma_grad.y();
                     gdC.block<6, 1>(i*6, 0) += beta0 * moma_grad(2);
                     gdT(i) += moma_grad(2) * dstate(0) * real_alpha;
-                    gradBeta.block<1, 7>(0, 0) = moma_grad.tail(moma_param.dof_num);
+                    // ################################
+                    // C++: Project relaxed trajectory gradients across the profile arm DOF
+                    // ################################
+                    gradBeta.block(0, 0, 1, moma_param.dof_num) = moma_grad.tail(moma_param.dof_num);
                     gdT(i) += moma_grad.tail(moma_param.dof_num).dot(dstate.tail(moma_param.dof_num)) * real_alpha;
                                         
                     // joint vel and acc
@@ -1114,7 +1126,7 @@ namespace nmoma_planner
                             }
                         }
                     }
-                    gdC.block<6, 7>(i*6, 2) += beta0 * gradBeta.row(0) 
+                    gdC.block(i*6, 2, 6, moma_param.dof_num) += beta0 * gradBeta.row(0)
                                                + beta1 * gradBeta.row(1) 
                                                + beta2 * gradBeta.row(2);
                 }
@@ -1235,8 +1247,11 @@ namespace nmoma_planner
             Eigen::VectorXd grad_ee2moma = moma_param.getEEGrads(end_moma_state, grad_ee);
             
             gdC.block<6, 1>((piece_num-1)*6, 0) += beta0 * grad_ee2moma(2);
-            Eigen::Matrix<double, 1, 7> grad_temp_tail = grad_ee2moma.tail(moma_param.dof_num);
-            gdC.block<6, 7>((piece_num-1)*6, 2) += beta0 * grad_temp_tail;
+            // ################################
+            // C++: Apply terminal gradients across the profile arm DOF
+            // ################################
+            Eigen::RowVectorXd grad_temp_tail = grad_ee2moma.tail(moma_param.dof_num).transpose();
+            gdC.block((piece_num-1)*6, 2, 6, moma_param.dof_num) += beta0 * grad_temp_tail;
             gdT(piece_num-1) += grad_ee2moma(2) * dstate(0);
             gdT(piece_num-1) += grad_ee2moma.tail(moma_param.dof_num).dot(dstate.tail(moma_param.dof_num));
 

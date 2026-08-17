@@ -36,8 +36,14 @@ namespace nmoma_planner
         std::vector<Eigen::Vector4d> car_seq;
 
         MomaTraj() {}
+        // ################################
+        // C++: Preserve the profile arm DOF with trajectory samples
+        // ################################
+        size_t dof_num = 0;
+
         MomaTraj(PolyTrajectory<9, 5> ploy_traj_, 
-                 const Eigen::Vector3d& start_state_) : start_state(start_state_), poly_traj(ploy_traj_)
+                 const Eigen::Vector3d& start_state_, size_t dof_num_) :
+                 start_state(start_state_), poly_traj(ploy_traj_), dof_num(dof_num_)
         {
             double Integral_appr_res = seq_res / approx_res;
             double half_Integral_appr_res = Integral_appr_res / 2.0;
@@ -138,21 +144,29 @@ namespace nmoma_planner
             car_state.y() += diff_t/6.0 * (v1.y()*sin(p1.x()) + 4.0*v2.y()*sin(p2.x()) + v3.y()*sin(p3.x()));
             car_state.z() = p3.x();
 
+            // ################################
+            // C++: Whole-body trajectory state dimension follows the arm DOF
+            // ################################
+            const int state_dim = 3 + static_cast<int>(dof_num);
             Eigen::VectorXd state;
-            state.resize(10);
+            state.resize(state_dim);
             state.head(3) = car_state.head(3);
-            state.tail(7) = poly_traj.getPos(t).tail(7);
+            state.tail(dof_num) = poly_traj.getPos(t).tail(dof_num);
 
             return state;
         }
 
         Eigen::VectorXd getDState(double t) const
         {
-            Eigen::VectorXd state = Eigen::VectorXd::Zero(10);
+            // ################################
+            // C++: Whole-body derivative dimension follows the arm DOF
+            // ################################
+            const int state_dim = 3 + static_cast<int>(dof_num);
+            Eigen::VectorXd state = Eigen::VectorXd::Zero(state_dim);
             t = std::min(std::max(t, 0.0), getTotalDuration());
             state(0) = poly_traj.getVel(t)(1);
             state(1) = poly_traj.getVel(t)(0);
-            state.tail(7) = poly_traj.getVel(t).tail(7);
+            state.tail(dof_num) = poly_traj.getVel(t).tail(dof_num);
 
             return state;
         }
@@ -184,11 +198,15 @@ namespace nmoma_planner
             points_vec.push_back(x);
             assert((int) points_vec.size() == num+2);
             
+            // ################################
+            // C++: Sampled trajectory rows include state plus yaw sine and cosine
+            // ################################
+            const int state_dim = 3 + static_cast<int>(dof_num);
             RowMatrixXd points;
-            points.resize(points_vec.size(), 12);
+            points.resize(points_vec.size(), state_dim + 2);
             for (size_t i = 0; i < points_vec.size(); i++)
             {
-                points.row(i).head(10) = points_vec[i];
+                points.row(i).head(state_dim) = points_vec[i];
                 points.row(i).tail(2) = Eigen::Vector2d(cos(points_vec[i](2)), sin(points_vec[i](2)));
             }
             return points;
@@ -233,15 +251,23 @@ namespace nmoma_planner
 
             if ((int)points_vec.size() != num+2)
             {
-                points.resize(1, 10);
+                // ################################
+                // C++: Arc-sampling fallback preserves whole-body width
+                // ################################
+                const int state_dim = 3 + static_cast<int>(dof_num);
+                points.resize(1, state_dim);
                 return points;
             }
 
             // assert((int) points_vec.size() == num+2);
 
-            points.resize(points_vec.size(), 10);
+            // ################################
+            // C++: Arc-sampling rows use the profile whole-body width
+            // ################################
+            const int state_dim = 3 + static_cast<int>(dof_num);
+            points.resize(points_vec.size(), state_dim);
             for (size_t i = 0; i < points_vec.size(); i++)
-                points.row(i) = points_vec[i].head(10);
+                points.row(i) = points_vec[i].head(state_dim);
             return points;
         }
     };
@@ -844,6 +870,11 @@ namespace nmoma_planner
 
     inline void MomaTrajOpt::init(ros::NodeHandle& nh)
     {
+        // ################################
+        // C++: Load the shared global /moma robot profile
+        // ################################
+        ros::NodeHandle root_nh;
+        moma_param = MomaParam::fromRos(root_nh);
         nh.getParam("moma_traj_opt/int_K", opt_param.int_K);
         nh.getParam("moma_traj_opt/min_piece_num", opt_param.min_piece_num);
         nh.getParam("moma_traj_opt/relu_mu", opt_param.relu_mu);
@@ -942,7 +973,10 @@ namespace nmoma_planner
 
     inline MomaTraj MomaTrajOpt::getTraj() const
     {
-        return MomaTraj(minco_opt.getTraj(), start_state.head(3));
+        // ################################
+        // C++: Attach the loaded arm DOF to the generated trajectory
+        // ################################
+        return MomaTraj(minco_opt.getTraj(), start_state.head(3), moma_param.dof_num);
     }
 
     inline bool MomaTrajOpt::checkFeasible(MomaTraj traj)

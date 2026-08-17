@@ -38,7 +38,10 @@ namespace nmoma_planner
         string key;
         double cost;
         NodeState node_state = INIT;
-        Eigen::VectorXd robo_state;  // xytheta, q1-q7
+        // ################################
+        // C++: Document the profile-sized arm state tail
+        // ################################
+        Eigen::VectorXd robo_state;  // xytheta, arm joint positions
         RRTNodePtr parent = nullptr;
         std::map<string, RRTNodePtr> children;
     };

@@ -87,6 +87,10 @@ private:
     int control_state = 0; // 0: common, 1: in out
     Eigen::Vector3d direct_pos;
     ros::Time begin_time;
+    // ################################
+    // C++: Store the profile DOF for arm command serialization
+    // ################################
+    MomaParam moma_param;
     MomaTraj traj;
 
     OMPCState now_state;

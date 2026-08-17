@@ -44,10 +44,17 @@ Eigen::Quaterniond euler2rotation(Eigen::Vector3d rpy)
 
 void initParams()
 {
+	// ################################
+	// C++: Define profile-independent visualizer marker roles
+	// ################################
+	const size_t kBase = 0;
+	const size_t kArmBase = 1;
+	const size_t kJoint0 = 2;
+	const size_t kGripper = 2 + moma_param.dof_num;
 	//diff_marker
 	visualization_msgs::Marker diff_marker;
 	diff_marker.header.frame_id = "world";
-	diff_marker.id = 0;
+	diff_marker.id = kBase;
 	diff_marker.type = visualization_msgs::Marker::MESH_RESOURCE;
 	diff_marker.action = visualization_msgs::Marker::ADD;
 	diff_marker.pose.orientation.w = 1.0;
@@ -75,7 +82,7 @@ void initParams()
 	//link0
 	visualization_msgs::Marker link_marker;
 	link_marker.header.frame_id = "world";
-	link_marker.id = 1;
+	link_marker.id = kArmBase;
 	link_marker.type = visualization_msgs::Marker::MESH_RESOURCE;
 	link_marker.action = visualization_msgs::Marker::ADD;
 	link_marker.pose.position.x = ap.x();
@@ -95,13 +102,13 @@ void initParams()
 	link_marker.mesh_resource = "package://fake_moma/meshes/link0.STL";
 	moma_marker.markers.push_back(link_marker);
 
-	//link1-7
+	// arm links from the profile DOF
 	for (size_t i = 0; i < moma_param.dof_num; i++)
 	{
 		now_q.push_back(0.0);
 		visualization_msgs::Marker link_marker;
 		link_marker.header.frame_id = "world";
-		link_marker.id = i+2;
+		link_marker.id = kJoint0 + i;
 		link_marker.type = visualization_msgs::Marker::MESH_RESOURCE;
 		link_marker.action = visualization_msgs::Marker::ADD;
 		ap += aq.matrix() * Eigen::Vector3d(0.0, 0.0, moma_param.link_length[i]);
@@ -127,7 +134,7 @@ void initParams()
 	//gripper
 	visualization_msgs::Marker gripper_marker;
 	gripper_marker.header.frame_id = "world";
-	gripper_marker.id = 9;
+	gripper_marker.id = kGripper;
 	gripper_marker.type = visualization_msgs::Marker::MESH_RESOURCE;
 	gripper_marker.action = visualization_msgs::Marker::ADD;
 	gripper_marker.pose = moma_marker.markers.back().pose;
@@ -162,34 +169,41 @@ void rcvStateCallBack(const fake_moma::MomaStatePtr msg)
 	now_se2[2] = atan2(2.0*ori_z*ori_w, 
 						2.0*ori_w*ori_w-1.0);
 	Eigen::Quaterniond q = euler2rotation(M_PI_2, now_se2(2), 0.0);
-	moma_marker.markers[0].header.stamp = ros::Time::now();
-	moma_marker.markers[0].pose = msg->chassis_odom.pose.pose;
-	moma_marker.markers[0].pose.position.z = moma_param.chassis_height;
-	moma_marker.markers[0].pose.orientation.w = q.w();
-	moma_marker.markers[0].pose.orientation.x = q.x();
-	moma_marker.markers[0].pose.orientation.y = q.y();
-	moma_marker.markers[0].pose.orientation.z = q.z();
+	// ################################
+	// C++: Update visualizer markers through profile-based roles
+	// ################################
+	const size_t kBase = 0;
+	const size_t kArmBase = 1;
+	const size_t kJoint0 = 2;
+	const size_t kGripper = 2 + moma_param.dof_num;
+	moma_marker.markers[kBase].header.stamp = ros::Time::now();
+	moma_marker.markers[kBase].pose = msg->chassis_odom.pose.pose;
+	moma_marker.markers[kBase].pose.position.z = moma_param.chassis_height;
+	moma_marker.markers[kBase].pose.orientation.w = q.w();
+	moma_marker.markers[kBase].pose.orientation.x = q.x();
+	moma_marker.markers[kBase].pose.orientation.y = q.y();
+	moma_marker.markers[kBase].pose.orientation.z = q.z();
 
 	// arm
 	// now_q = moma_cmd.q.data;
 	for (size_t i=0; i<moma_param.dof_num; i++)
 		now_q[i] = msg->arm_odom[i].twist.twist.linear.x;
 	
-	moma_marker.markers[1].pose = moma_marker.markers[0].pose;
-	Eigen::Vector3d ap(moma_marker.markers[0].pose.position.x, 
-					   moma_marker.markers[0].pose.position.y, 
-					   moma_marker.markers[0].pose.position.z);
+	moma_marker.markers[kArmBase].pose = moma_marker.markers[kBase].pose;
+	Eigen::Vector3d ap(moma_marker.markers[kBase].pose.position.x,
+					   moma_marker.markers[kBase].pose.position.y,
+					   moma_marker.markers[kBase].pose.position.z);
 	Eigen::Quaterniond aq(cos(now_se2(2)/2.0), 0.0, 0.0, sin(now_se2(2)/2.0));
 	ap += aq.matrix() * moma_param.relative_t;
 	aq = aq.matrix() * moma_param.relative_R;
 
-	moma_marker.markers[1].pose.position.x = ap.x();
-	moma_marker.markers[1].pose.position.y = ap.y();
-	moma_marker.markers[1].pose.position.z = ap.z();
-	moma_marker.markers[1].pose.orientation.w = aq.w();
-	moma_marker.markers[1].pose.orientation.x = aq.x();
-	moma_marker.markers[1].pose.orientation.y = aq.y();
-	moma_marker.markers[1].pose.orientation.z = aq.z();
+	moma_marker.markers[kArmBase].pose.position.x = ap.x();
+	moma_marker.markers[kArmBase].pose.position.y = ap.y();
+	moma_marker.markers[kArmBase].pose.position.z = ap.z();
+	moma_marker.markers[kArmBase].pose.orientation.w = aq.w();
+	moma_marker.markers[kArmBase].pose.orientation.x = aq.x();
+	moma_marker.markers[kArmBase].pose.orientation.y = aq.y();
+	moma_marker.markers[kArmBase].pose.orientation.z = aq.z();
 
 	for (size_t i=0; i<moma_param.dof_num; i++)
 	{
@@ -198,17 +212,17 @@ void rcvStateCallBack(const fake_moma::MomaStatePtr msg)
 		ap += aq.matrix() * Eigen::Vector3d(0.0, 0.0, moma_param.link_length[i]);
 		aq = aq.matrix() * euler2rotation(moma_param.joint_offset.row(i))
 						* euler2rotation(moma_param.joint_dof_axis.row(i)*now_q[i]);
-		moma_marker.markers[2+i].pose.position.x = ap.x();
-		moma_marker.markers[2+i].pose.position.y = ap.y();
-		moma_marker.markers[2+i].pose.position.z = ap.z();
-		moma_marker.markers[2+i].pose.orientation.w = aq.w();
-		moma_marker.markers[2+i].pose.orientation.x = aq.x();
-		moma_marker.markers[2+i].pose.orientation.y = aq.y();
-		moma_marker.markers[2+i].pose.orientation.z = aq.z();
+		moma_marker.markers[kJoint0 + i].pose.position.x = ap.x();
+		moma_marker.markers[kJoint0 + i].pose.position.y = ap.y();
+		moma_marker.markers[kJoint0 + i].pose.position.z = ap.z();
+		moma_marker.markers[kJoint0 + i].pose.orientation.w = aq.w();
+		moma_marker.markers[kJoint0 + i].pose.orientation.x = aq.x();
+		moma_marker.markers[kJoint0 + i].pose.orientation.y = aq.y();
+		moma_marker.markers[kJoint0 + i].pose.orientation.z = aq.z();
 	}
 
 	// gripper
-	moma_marker.markers.back().pose = moma_marker.markers[8].pose;
+	moma_marker.markers[kGripper].pose = moma_marker.markers[kJoint0 + moma_param.dof_num - 1].pose;
 
 	// collision detection
 	Eigen::VectorXd moma_pos(3+moma_param.dof_num);

@@ -38,7 +38,10 @@ namespace nmoma_planner
         string key;
         double cost;
         NodeState node_state = INIT;
-        MCState robo_state;  // idx, q1-q7
+        // ################################
+        // C++: Document the profile-sized arm state tail
+        // ################################
+        MCState robo_state;  // idx, arm joint positions
         MCRRTNodePtr parent = nullptr;
         std::map<string, MCRRTNodePtr> children;
     };

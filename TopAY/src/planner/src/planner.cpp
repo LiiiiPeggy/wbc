@@ -611,7 +611,11 @@ namespace nmoma_planner
             ros::Time start_time = ros::Time::now();
             if (tsvr->has_goal && tsvr->has_traj && tsvr->is_safe && (!tsvr->in_plan) )
             {
-                Eigen::VectorXd temp_state = Eigen::VectorXd::Zero(10);
+                // ################################
+                // C++: Whole-body state dimension from dof_num
+                // ################################
+                const int state_dim = 3 + static_cast<int>(tsvr->moma_param.dof_num);
+                Eigen::VectorXd temp_state = Eigen::VectorXd::Zero(state_dim);
                 std::vector<Eigen::Vector4d> min_dist_mani = tsvr->moma_param.getColliPts(temp_state);
                 double res = 0.01;
                 for (double t=0.0; t<tsvr->end_traj.getTotalDuration(); t+=res)
@@ -879,8 +883,12 @@ namespace nmoma_planner
                             break;
                         }
                         boost::this_thread::interruption_point();
-                        Eigen::MatrixXd boundary_vel = Eigen::MatrixXd::Zero(10, 2);
-                        Eigen::MatrixXd boundary_acc = Eigen::MatrixXd::Zero(10, 2);
+                        // ################################
+                        // C++: Whole-body state dimension from dof_num
+                        // ################################
+                        const int state_dim = 3 + static_cast<int>(moma_param.dof_num);
+                        Eigen::MatrixXd boundary_vel = Eigen::MatrixXd::Zero(state_dim, 2);
+                        Eigen::MatrixXd boundary_acc = Eigen::MatrixXd::Zero(state_dim, 2);
                         boundary_vel.col(0) = start_v;
     
                         _succ = 
@@ -985,8 +993,12 @@ namespace nmoma_planner
         do {
             auto ompl_path = planOmpls(start, end, start_v);
             if (ompl_path.empty()) break; // OMPL failed
-            Eigen::MatrixXd boundary_vel = Eigen::MatrixXd::Zero(10, 2);
-            Eigen::MatrixXd boundary_acc = Eigen::MatrixXd::Zero(10, 2);
+            // ################################
+            // C++: Whole-body state dimension from dof_num
+            // ################################
+            const int state_dim = 3 + static_cast<int>(moma_param.dof_num);
+            Eigen::MatrixXd boundary_vel = Eigen::MatrixXd::Zero(state_dim, 2);
+            Eigen::MatrixXd boundary_acc = Eigen::MatrixXd::Zero(state_dim, 2);
             boundary_vel.col(0) = start_v;
             if (!this->traj_opters[0]->optimizeTraj(ompl_path, boundary_vel, boundary_acc)
                 || !this->traj_opters[0]->printConstraintsSituations(traj_opters[0]->getTraj())
@@ -1132,8 +1144,12 @@ namespace nmoma_planner
                         return;
                     }
                     
-                    Eigen::MatrixXd boundary_vel = Eigen::MatrixXd::Zero(10, 2);
-                    Eigen::MatrixXd boundary_acc = Eigen::MatrixXd::Zero(10, 2);
+                    // ################################
+                    // C++: Whole-body state dimension from dof_num
+                    // ################################
+                    const int state_dim = 3 + static_cast<int>(moma_param.dof_num);
+                    Eigen::MatrixXd boundary_vel = Eigen::MatrixXd::Zero(state_dim, 2);
+                    Eigen::MatrixXd boundary_acc = Eigen::MatrixXd::Zero(state_dim, 2);
                     boundary_vel.col(0) = start_v;
 
                     bool _succ = 
@@ -1172,8 +1188,12 @@ namespace nmoma_planner
         do {
             auto ompl_path = planOmpls(start, end, start_v);
             if (ompl_path.empty()) break; // OMPL failed
-            Eigen::MatrixXd boundary_vel = Eigen::MatrixXd::Zero(10, 2);
-            Eigen::MatrixXd boundary_acc = Eigen::MatrixXd::Zero(10, 2);
+            // ################################
+            // C++: Whole-body state dimension from dof_num
+            // ################################
+            const int state_dim = 3 + static_cast<int>(moma_param.dof_num);
+            Eigen::MatrixXd boundary_vel = Eigen::MatrixXd::Zero(state_dim, 2);
+            Eigen::MatrixXd boundary_acc = Eigen::MatrixXd::Zero(state_dim, 2);
             boundary_vel.col(0) = start_v;
             if (!this->traj_opters[0]->optimizeTraj(ompl_path, boundary_vel, boundary_acc)
                 || !this->traj_opters[0]->printConstraintsSituations(traj_opters[0]->getTraj())
@@ -1312,8 +1332,12 @@ namespace nmoma_planner
                             break;
                         }
                         boost::this_thread::interruption_point();
-                        Eigen::MatrixXd boundary_vel = Eigen::MatrixXd::Zero(10, 2);
-                        Eigen::MatrixXd boundary_acc = Eigen::MatrixXd::Zero(10, 2);
+                        // ################################
+                        // C++: Whole-body state dimension from dof_num
+                        // ################################
+                        const int state_dim = 3 + static_cast<int>(moma_param.dof_num);
+                        Eigen::MatrixXd boundary_vel = Eigen::MatrixXd::Zero(state_dim, 2);
+                        Eigen::MatrixXd boundary_acc = Eigen::MatrixXd::Zero(state_dim, 2);
                         boundary_vel.col(0) = start_v;
     
                         _succ = 
@@ -1386,8 +1410,12 @@ namespace nmoma_planner
         do {
             auto ompl_path = planOmpls(start, end, start_v);
             if (ompl_path.empty()) break; // OMPL failed
-            Eigen::MatrixXd boundary_vel = Eigen::MatrixXd::Zero(10, 2);
-            Eigen::MatrixXd boundary_acc = Eigen::MatrixXd::Zero(10, 2);
+            // ################################
+            // C++: Whole-body state dimension from dof_num
+            // ################################
+            const int state_dim = 3 + static_cast<int>(moma_param.dof_num);
+            Eigen::MatrixXd boundary_vel = Eigen::MatrixXd::Zero(state_dim, 2);
+            Eigen::MatrixXd boundary_acc = Eigen::MatrixXd::Zero(state_dim, 2);
             boundary_vel.col(0) = start_v;
             if (!this->traj_opters[0]->optimizeTraj(ompl_path, boundary_vel, boundary_acc)
                 || !this->traj_opters[0]->printConstraintsSituations(traj_opters[0]->getTraj())
@@ -1742,7 +1770,10 @@ namespace nmoma_planner
             }
             moma_marker.markers.push_back(link_marker);
 
-            //link1-7
+            // ################################
+            // C++: Render arm links from the profile DOF
+            // ################################
+            // arm links
             for (size_t i = 0; i < moma_param.dof_num; i++)
             {
                 visualization_msgs::Marker link_marker;
@@ -1802,12 +1833,16 @@ namespace nmoma_planner
         RowMatrixXd path_m = traj.sampleTimePoints(nsample);
         std::vector<Eigen::VectorXd> path;
 
-        Eigen::VectorXd prev_state = path_m.row(0).head(10);
-        Eigen::VectorXd end_state = path_m.row(path_m.rows()-1).head(10);
+        // ################################
+        // C++: Visualized trajectory states use the profile whole-body width
+        // ################################
+        const int state_dim = 3 + static_cast<int>(moma_param.dof_num);
+        Eigen::VectorXd prev_state = path_m.row(0).head(state_dim);
+        Eigen::VectorXd end_state = path_m.row(path_m.rows()-1).head(state_dim);
         path.push_back(prev_state);
 
         for (int i = 0; i < path_m.rows(); i++) {
-            Eigen::VectorXd state = path_m.row(i).head(10);
+            Eigen::VectorXd state = path_m.row(i).head(state_dim);
             if ((state.head(2) - prev_state.head(2)).norm() > 0.5
             && (state.head(2) - end_state.head(2)).norm() > 0.5) {
                 path.push_back(state);
