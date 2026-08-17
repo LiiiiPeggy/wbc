@@ -97,9 +97,27 @@ namespace remani_planner
     nh.param("visualization/enable_traj_mesh_vis", enable_traj_mesh_vis_, true);
     nh.param("visualization/mesh_vis_stride", mesh_vis_stride_, 3);
     if(mesh_vis_stride_ < 1) mesh_vis_stride_ = 1;
+    // ################################
+    // C++: load dynamic time scaling params begin
+    // ################################
+    nh.param("optimization/enable_dynamic_time_scaling", enable_dynamic_time_scaling_, true);
+    nh.param("optimization/wheel_limit_ratio", wheel_limit_ratio_, 0.95);
+    nh.param("optimization/max_time_scale", max_time_scale_, 2.0);
+    nh.param("optimization/max_time_scaling_attempts", max_time_scaling_attempts_, 2);
+    if(wheel_limit_ratio_ < 0.5) wheel_limit_ratio_ = 0.5;
+    if(wheel_limit_ratio_ > 1.0) wheel_limit_ratio_ = 1.0;
+    if(max_time_scale_ < 1.0) max_time_scale_ = 1.0;
+    if(max_time_scaling_attempts_ < 1) max_time_scaling_attempts_ = 1;
+    // ################################
+    // C++: load dynamic time scaling params end
+    // ################################
     last_minsnap_ms_ = 0.0;
     last_lbfgs_ms_ = 0.0;
     last_safety_check_ms_ = 0.0;
+    last_time_scale_ms_ = 0.0;
+    last_safety_recheck_ms_ = 0.0;
+    last_time_scale_ran_ = false;
+    last_safety_recheck_ran_ = false;
     // ################################
     // C++: debug vis params (mesh only; no collision effect) end
     // ################################
@@ -231,33 +249,51 @@ namespace remani_planner
         this,
         lbfgs_params);
     last_lbfgs_ms_ = (ros::Time::now() - t_lbfgs).toSec() * 1000.0;
+    last_time_scale_ms_ = 0.0;
+    last_safety_recheck_ms_ = 0.0;
+    last_time_scale_ran_ = false;
+    last_safety_recheck_ran_ = false;
 
     // printf("\033[32miter = %d, time = %5.3f(ms), \n\033[0m", iter_num_, (ros::Time::now() - t1).toSec() * 1000.0);
-    if((result != lbfgs::LBFGS_CONVERGENCE)&&(result != lbfgs::LBFGS_STOP)&&(result != lbfgs::LBFGSERR_MAXIMUMLINESEARCH)){
-      ROS_ERROR("The optimization result is : %s", lbfgs::lbfgs_strerror(result));      
-    }else if(result == lbfgs::LBFGSERR_MAXIMUMLINESEARCH){
-      ROS_WARN("The optimization result is : %s", lbfgs::lbfgs_strerror(result));
+    if(result == lbfgs::LBFGSERR_INVALID_FUNCVAL){
+      ROS_ERROR("The optimization result is : %s", lbfgs::lbfgs_strerror(result));
+      clearRejectedFrontEndMesh();
+      return false;
+    }
+    if((result != lbfgs::LBFGS_CONVERGENCE)&&(result != lbfgs::LBFGS_STOP)&&(result != lbfgs::LBFGSERR_MAXIMUMLINESEARCH)
+       &&(result != lbfgs::LBFGSERR_MINIMUMSTEP)){
+      ROS_ERROR("The optimization result is : %s", lbfgs::lbfgs_strerror(result));
+    }else if(result == lbfgs::LBFGSERR_MAXIMUMLINESEARCH || result == lbfgs::LBFGSERR_MINIMUMSTEP){
+      ROS_WARN("The optimization result is : %s (candidate traj still checked)", lbfgs::lbfgs_strerror(result));
     }else{
-      ROS_INFO("The optimization result is : %s", lbfgs::lbfgs_strerror(result));      
+      ROS_INFO("The optimization result is : %s", lbfgs::lbfgs_strerror(result));
     }
 
-    // test collision
-    SingulTrajData singul_traj_data;
-    double traj_start_time = 0;
-    singul_traj_data.clearSingulTraj();
-    for(unsigned int i = 0; i < singul_container.size(); ++i){
-      singul_traj_data.addSingulTraj(SnapOpt_container_[i].getTraj(singul_container[i]), traj_start_time);
-      traj_start_time = singul_traj_data.singul_traj.back().end_time;
+    // Finite candidate check: reject NaN/Inf state before safety / time-scale.
+    SingulTrajData singul_traj_data = buildSingulTrajFromSnapOpt(singul_container);
+    {
+      Eigen::VectorXd p0 = singul_traj_data.getPos(0.0);
+      if(!p0.allFinite()){
+        ROS_ERROR("[TIME SCALE] candidate trajectory has NaN/Inf; reject");
+        clearRejectedFrontEndMesh();
+        return false;
+      }
     }
-    bool good_traj = true;
+
     ros::Time t_safe = ros::Time::now();
-    good_traj = IsTrajSafe(singul_traj_data);
+    TrajSafetyResult safety = evaluateTrajSafety(singul_traj_data);
     last_safety_check_ms_ = (ros::Time::now() - t_safe).toSec() * 1000.0;
+
+    bool good_traj = safety.safe;
+    if(!good_traj && enable_dynamic_time_scaling_ && safety.dynamicsOnly()){
+      good_traj = tryDynamicTimeScaling(singul_container, singul_traj_data, safety);
+    }
     // ################################
     // C++: time L-BFGS and IsTrajSafe separately end
     // ################################
-    if(result == lbfgs::LBFGSERR_INVALID_FUNCVAL){
-      return false;
+
+    if(!good_traj){
+      clearRejectedFrontEndMesh();
     }
 
     optCps_container.clear();
@@ -376,88 +412,132 @@ namespace remani_planner
   }
 
   bool PolyTrajOptimizer::IsNotFeasibie(const SingulTrajData &traj_data, double t){
-    Eigen::VectorXd vel, acc, jer;
-    double pen;
-    double feas_tol_percent_ = 0.05;
+    TrajSafetyResult tmp;
+    tmp.wheel_omega_limit = max_wheel_omega_;
+    tmp.wheel_alpha_limit = max_wheel_alpha_;
+    return sampleFeasibility(traj_data, t, tmp);
+  }
 
-    vel = traj_data.getVel(t).head(2);
-    acc = traj_data.getAcc(t).head(2);
-    jer = traj_data.getJer(t).head(2);
+  // ################################
+  // C++: sample wheel/joint feasibility into TrajSafetyResult begin
+  // ################################
+  bool PolyTrajOptimizer::sampleFeasibility(const SingulTrajData &traj_data, double t, TrajSafetyResult &res){
+    const double feas_tol_percent_ = 0.05;
+    Eigen::VectorXd vel = traj_data.getVel(t).head(2);
+    Eigen::VectorXd acc = traj_data.getAcc(t).head(2);
+    Eigen::VectorXd jer = traj_data.getJer(t).head(2);
     int singul = traj_data.getSingul(t);
+
+    if(vel.norm() < 1e-6){
+      // near-zero speed: skip wheel model (same as soft-cost path)
+      Eigen::VectorXd jv = traj_data.getVel(t).tail(manipulator_dof_);
+      Eigen::VectorXd ja = traj_data.getAcc(t).tail(manipulator_dof_);
+      res.max_abs_joint_vel = std::max(res.max_abs_joint_vel, jv.lpNorm<Eigen::Infinity>());
+      res.max_abs_joint_acc = std::max(res.max_abs_joint_acc, ja.lpNorm<Eigen::Infinity>());
+      if(jv.lpNorm<Eigen::Infinity>() - max_joint_vel_ * (1.0 + feas_tol_percent_) > 0){
+        if(!res.joint_vel_violation) res.violation_time = t;
+        res.joint_vel_violation = true;
+        res.safe = false;
+        return true;
+      }
+      if(ja.lpNorm<Eigen::Infinity>() - max_joint_acc_ * (1.0 + feas_tol_percent_) > 0){
+        if(!res.joint_acc_violation) res.violation_time = t;
+        res.joint_acc_violation = true;
+        res.safe = false;
+        return true;
+      }
+      return false;
+    }
 
     double aTv = acc.transpose() * vel;
     double aTBv = acc.transpose() * B_h_ * vel;
     double jTBv = jer.transpose() * B_h_ * vel;
     double v_norm = vel.norm();
-    double vTv_inv = 1.0 / vel.squaredNorm(); // avoid siguality vel = 0
+    double vTv_inv = 1.0 / vel.squaredNorm();
     double vTv_inv2 = vTv_inv * vTv_inv;
 
-    // Check minimum speed
-    // pen =  non_singul_v_ *  non_singul_v_ * (1.0 - feas_tol_percent_) * (1.0 - feas_tol_percent_) - vel.squaredNorm();
-    // if(pen > 0.0){
-    //   ROS_WARN("%f min vel is not feasible at relative time %f! opt failed", vel.norm(), t);
-    //   return true;
-    // }
-
     double omega = aTBv * vTv_inv;
-    // Check maximum rotation speed of the left wheel
-    double wheel_omega_left = (2.0 * singul * v_norm - mobile_base_wheel_base_ * omega) / (2 * mobile_base_wheel_radius_);
-    pen =  wheel_omega_left * wheel_omega_left - max_wheel_omega_ * max_wheel_omega_ * (1.0 + feas_tol_percent_) * (1.0 + feas_tol_percent_);
-    if(pen > 0.0){
-      ROS_WARN("%f max left wheel omega is not feasible at relative time %f! opt failed", wheel_omega_left, t );
-      return true;
+    double wheel_omega_left = (2.0 * singul * v_norm - mobile_base_wheel_base_ * omega) / (2.0 * mobile_base_wheel_radius_);
+    double wheel_omega_right = (2.0 * singul * v_norm + mobile_base_wheel_base_ * omega) / (2.0 * mobile_base_wheel_radius_);
+    res.max_abs_wheel_omega = std::max(res.max_abs_wheel_omega,
+        std::max(std::fabs(wheel_omega_left), std::fabs(wheel_omega_right)));
+
+    double omega_lim = max_wheel_omega_ * (1.0 + feas_tol_percent_);
+    if(wheel_omega_left * wheel_omega_left - omega_lim * omega_lim > 0.0 ||
+       wheel_omega_right * wheel_omega_right - omega_lim * omega_lim > 0.0){
+      if(!res.wheel_omega_violation){
+        res.violation_time = t;
+        ROS_WARN("%f max left wheel omega is not feasible at relative time %f! opt failed",
+                 wheel_omega_left, t);
+      }
+      res.wheel_omega_violation = true;
+      res.safe = false;
     }
 
-    // Check maximum rotation speed of the right wheel
-    double wheel_omega_right = (2.0 * singul * v_norm + mobile_base_wheel_base_ * omega) / (2 * mobile_base_wheel_radius_);
-    pen =  wheel_omega_right * wheel_omega_right - max_wheel_omega_ * max_wheel_omega_ * (1.0 + feas_tol_percent_) * (1.0 + feas_tol_percent_);
-    if(pen > 0.0){
-      ROS_WARN("%f max right wheel omega is not feasible at relative time %f! opt failed", wheel_omega_right, t );
-      return true;
-    }
-
-    // Check maximum rotational acceleration of the left wheel
     double alpha = jTBv * vTv_inv - 2.0 * aTBv * aTv * vTv_inv2;
-    double wheel_alpha_left = (2.0 * singul * aTv / v_norm - mobile_base_wheel_base_ * alpha) / (2 * mobile_base_wheel_radius_);
-    pen =  wheel_alpha_left * wheel_alpha_left - max_wheel_alpha_ * max_wheel_alpha_ * (1.0 + feas_tol_percent_) * (1.0 + feas_tol_percent_);
-    if(pen > 0.0){
-      ROS_WARN("%f max left wheel alpha is not feasible at relative time %f! opt failed", wheel_alpha_left, t );
-      return true;
+    double wheel_alpha_left = (2.0 * singul * aTv / v_norm - mobile_base_wheel_base_ * alpha) / (2.0 * mobile_base_wheel_radius_);
+    double wheel_alpha_right = (2.0 * singul * aTv / v_norm + mobile_base_wheel_base_ * alpha) / (2.0 * mobile_base_wheel_radius_);
+    res.max_abs_wheel_alpha = std::max(res.max_abs_wheel_alpha,
+        std::max(std::fabs(wheel_alpha_left), std::fabs(wheel_alpha_right)));
+
+    double alpha_lim = max_wheel_alpha_ * (1.0 + feas_tol_percent_);
+    if(wheel_alpha_left * wheel_alpha_left - alpha_lim * alpha_lim > 0.0 ||
+       wheel_alpha_right * wheel_alpha_right - alpha_lim * alpha_lim > 0.0){
+      if(!res.wheel_alpha_violation){
+        res.violation_time = t;
+        ROS_WARN("%f max left wheel alpha is not feasible at relative time %f! opt failed",
+                 wheel_alpha_left, t);
+      }
+      res.wheel_alpha_violation = true;
+      res.safe = false;
     }
 
-    // Check maximum acceleration of the right wheel
-    double wheel_alpha_right = (2.0 * singul * aTv / v_norm + mobile_base_wheel_base_ * alpha) / (2 * mobile_base_wheel_radius_);
-    pen =  wheel_alpha_right * wheel_alpha_right - max_wheel_alpha_ * max_wheel_alpha_ * (1.0 + feas_tol_percent_) * (1.0 + feas_tol_percent_);
-    if(pen > 0.0){
-      ROS_WARN("%f max right wheel alpha is not feasible at relative time %f! opt failed", wheel_alpha_right, t );
-      return true;
+    Eigen::VectorXd jv = traj_data.getVel(t).tail(manipulator_dof_);
+    Eigen::VectorXd ja = traj_data.getAcc(t).tail(manipulator_dof_);
+    res.max_abs_joint_vel = std::max(res.max_abs_joint_vel, jv.lpNorm<Eigen::Infinity>());
+    res.max_abs_joint_acc = std::max(res.max_abs_joint_acc, ja.lpNorm<Eigen::Infinity>());
+    if(jv.lpNorm<Eigen::Infinity>() - max_joint_vel_ * (1.0 + feas_tol_percent_) > 0){
+      if(!res.joint_vel_violation){
+        res.violation_time = t;
+        ROS_WARN("mani vel %f is not feasible at relative time %f! opt failed",
+                 jv.lpNorm<Eigen::Infinity>(), t);
+      }
+      res.joint_vel_violation = true;
+      res.safe = false;
     }
-
-    // Manipulator
-    vel = traj_data.getVel(t).tail(manipulator_dof_);
-    acc = traj_data.getAcc(t).tail(manipulator_dof_);
-    if(vel.lpNorm<Eigen::Infinity>() - max_joint_vel_ * (1.0 + feas_tol_percent_) > 0){
-      ROS_WARN("mani vel %f is not feasible at relative time %f! opt failed", vel.lpNorm<Eigen::Infinity>(), t);
-      return true;
+    if(ja.lpNorm<Eigen::Infinity>() - max_joint_acc_ * (1.0 + feas_tol_percent_) > 0){
+      if(!res.joint_acc_violation){
+        res.violation_time = t;
+        ROS_WARN("mani acc %f is not feasible at relative time %f! opt failed",
+                 ja.lpNorm<Eigen::Infinity>(), t);
+      }
+      res.joint_acc_violation = true;
+      res.safe = false;
     }
-
-    if(acc.lpNorm<Eigen::Infinity>() - max_joint_acc_ * (1.0 + feas_tol_percent_) > 0){
-      ROS_WARN("mani acc %f is not feasible at relative time %f! opt failed", acc.lpNorm<Eigen::Infinity>(), t);
-      return true;
-    }
-
-    return false;
+    return res.wheel_omega_violation || res.wheel_alpha_violation ||
+           res.joint_vel_violation || res.joint_acc_violation;
   }
+  // ################################
+  // C++: sample wheel/joint feasibility into TrajSafetyResult end
+  // ################################
 
   bool PolyTrajOptimizer::IsTrajSafe(const SingulTrajData &traj_data){
+    return evaluateTrajSafety(traj_data).safe;
+  }
+
+  // ################################
+  // C++: full traj safety diagnostic begin
+  // ################################
+  PolyTrajOptimizer::TrajSafetyResult PolyTrajOptimizer::evaluateTrajSafety(const SingulTrajData &traj_data){
+    TrajSafetyResult res;
+    res.wheel_omega_limit = max_wheel_omega_;
+    res.wheel_alpha_limit = max_wheel_alpha_;
+    res.safe = true;
+
     double dt = 0.01;
     double T_all = traj_data.duration;
-    int i_end = floor(T_all / dt); // check all
-    // ################################
-    // C++: stricter traj gate — margin after leave-start begin
-    // ################################
-    // Near-obstacle start: allow thickness-only only for the first 0.8 s.
-    // After that always use soft margin so long detours cannot thread obstacles.
+    int i_end = floor(T_all / dt);
+
     Eigen::VectorXd pos0 = traj_data.getPos(0.0);
     double yaw0 = traj_data.getCarAngle(0.0);
     int ct0 = -1;
@@ -468,32 +548,25 @@ namespace remani_planner
     if(!start_margin_ok){
       ROS_WARN_THROTTLE(2.0, "IsTrajSafe: start in soft margin (coll=%d); thickness-only for t<0.8s", ct0);
     }
+
     int coll_type;
     for (int i = i0; i < i_end; i++){
       const bool use_safe = start_margin_ok || (t >= 0.8);
       if(checkCollision(traj_data, t, coll_type, use_safe)){
-        if(coll_type == 0){
-          ROS_WARN_THROTTLE(2.0, "car collision at time %f!", t);
-        }else if (coll_type == 1){
-          ROS_WARN_THROTTLE(2.0, "mani collision at time %f!", t);
-        }else if (coll_type == 2){
-          ROS_WARN_THROTTLE(2.0, "car-mani collision at time %f!", t);
-        }else if (coll_type == 3){
-          ROS_WARN_THROTTLE(2.0, "mani-mani collision at time %f!", t);
-        }
-        return false;
+        res.collision = true;
+        res.collision_type = coll_type;
+        res.safe = false;
+        res.violation_time = t;
+        if(coll_type == 0) ROS_WARN_THROTTLE(2.0, "car collision at time %f!", t);
+        else if(coll_type == 1) ROS_WARN_THROTTLE(2.0, "mani collision at time %f!", t);
+        else if(coll_type == 2) ROS_WARN_THROTTLE(2.0, "car-mani collision at time %f!", t);
+        else if(coll_type == 3) ROS_WARN_THROTTLE(2.0, "mani-mani collision at time %f!", t);
+        return res; // geometry failure: do not time-scale
       }
-
-      if(IsNotFeasibie(traj_data, t)){
-        return false;
-      }
-      
+      sampleFeasibility(traj_data, t, res);
       t += dt;
     }
-    // ################################
-    // C++: denser ground-track car sweep begin
-    // ################################
-    // Catch thin gaps between 0.01s samples on long Ranger footprints.
+
     const double ds = 0.08;
     double path_s = 0.0;
     Eigen::Vector2d last_xy = traj_data.getPos(0.0).head(2);
@@ -508,16 +581,162 @@ namespace remani_planner
       double min_dist = 0.0;
       if(mm_config_->checkCarObsCollision(Eigen::Vector3d(pos(0), pos(1), yaw), true, true, min_dist)){
         ROS_WARN_THROTTLE(2.0, "car collision (dense sweep) at time %f! dist=%.3f", tt, min_dist);
-        return false;
+        res.collision = true;
+        res.collision_type = 0;
+        res.safe = false;
+        res.violation_time = tt;
+        return res;
       }
     }
-    // ################################
-    // C++: denser ground-track car sweep end
-    // ################################
-    // ################################
-    // C++: stricter traj gate — margin after leave-start end
-    // ################################
+    return res;
+  }
+  // ################################
+  // C++: full traj safety diagnostic end
+  // ################################
+
+  SingulTrajData PolyTrajOptimizer::buildSingulTrajFromSnapOpt(const std::vector<int> &singul_container) const {
+    SingulTrajData singul_traj_data;
+    double traj_start_time = 0;
+    singul_traj_data.clearSingulTraj();
+    for(unsigned int i = 0; i < singul_container.size(); ++i){
+      singul_traj_data.addSingulTraj(SnapOpt_container_[i].getTraj(singul_container[i]), traj_start_time);
+      traj_start_time = singul_traj_data.singul_traj.back().end_time;
+    }
+    return singul_traj_data;
+  }
+
+  bool PolyTrajOptimizer::rebuildSnapOptScaled(int trajid, int singul, double scale){
+    poly_traj::Trajectory<7> traj = SnapOpt_container_[trajid].getTraj(singul);
+    const int PN = traj.getPieceNum();
+    if(PN < 1) return false;
+
+    Eigen::MatrixXd headState(traj_dim_, 4), tailState(traj_dim_, 4);
+    const double s = scale;
+    const double s2 = s * s;
+    const double s3 = s2 * s;
+    headState << traj.getJuncPos(0),
+                 traj.getJuncVel(0) / s,
+                 traj.getJuncAcc(0) / s2,
+                 traj.getJuncJerk(0) / s3;
+    tailState << traj.getJuncPos(PN),
+                 traj.getJuncVel(PN) / s,
+                 traj.getJuncAcc(PN) / s2,
+                 traj.getJuncJerk(PN) / s3;
+
+    Eigen::MatrixXd all_pos = traj.getPositions();
+    Eigen::MatrixXd innerPts;
+    if(PN > 1){
+      innerPts = all_pos.block(0, 1, traj_dim_, PN - 1);
+    }else{
+      innerPts.resize(traj_dim_, 0);
+    }
+    Eigen::VectorXd T = SnapOpt_container_[trajid].get_T1() * s;
+    SnapOpt_container_[trajid].reset(PN);
+    SnapOpt_container_[trajid].generate(innerPts, T, headState, tailState);
     return true;
+  }
+
+  bool PolyTrajOptimizer::tryDynamicTimeScaling(const std::vector<int> &singul_container,
+                                                SingulTrajData &singul_traj_data,
+                                                TrajSafetyResult &res){
+    last_time_scale_ran_ = true;
+    ros::Time t0 = ros::Time::now();
+
+    const double target_omega = max_wheel_omega_ * wheel_limit_ratio_;
+    const double target_alpha = max_wheel_alpha_ * wheel_limit_ratio_;
+    const double target_jvel = max_joint_vel_ * wheel_limit_ratio_;
+    const double target_jacc = max_joint_acc_ * wheel_limit_ratio_;
+
+    double scale_omega = 1.0;
+    double scale_alpha = 1.0;
+    double scale_jvel = 1.0;
+    double scale_jacc = 1.0;
+    if(res.max_abs_wheel_omega > 1e-9 && target_omega > 1e-9)
+      scale_omega = res.max_abs_wheel_omega / target_omega;
+    if(res.max_abs_wheel_alpha > 1e-9 && target_alpha > 1e-9)
+      scale_alpha = std::sqrt(res.max_abs_wheel_alpha / target_alpha);
+    if(res.max_abs_joint_vel > 1e-9 && target_jvel > 1e-9)
+      scale_jvel = res.max_abs_joint_vel / target_jvel;
+    if(res.max_abs_joint_acc > 1e-9 && target_jacc > 1e-9)
+      scale_jacc = std::sqrt(res.max_abs_joint_acc / target_jacc);
+
+    double time_scale = std::max(1.0, std::max(std::max(scale_omega, scale_alpha),
+                                               std::max(scale_jvel, scale_jacc)));
+    time_scale *= 1.02;
+
+    std::cout << "[TIME SCALE] wheel dynamics violation detected\n"
+              << "[TIME SCALE] peak omega = " << res.max_abs_wheel_omega << " rad/s\n"
+              << "[TIME SCALE] omega limit = " << max_wheel_omega_ << " rad/s\n"
+              << "[TIME SCALE] target omega = " << target_omega << " rad/s\n"
+              << "[TIME SCALE] peak alpha = " << res.max_abs_wheel_alpha << " rad/s^2\n"
+              << "[TIME SCALE] alpha limit = " << max_wheel_alpha_ << " rad/s^2\n"
+              << "[TIME SCALE] scale_omega = " << scale_omega << "\n"
+              << "[TIME SCALE] scale_alpha = " << scale_alpha << "\n"
+              << "[TIME SCALE] selected scale = " << time_scale << std::endl;
+
+    if(time_scale > max_time_scale_ + 1e-9){
+      std::cout << "[TIME SCALE] required scale " << time_scale
+                << " exceeds max_time_scale " << max_time_scale_ << "; reject" << std::endl;
+      last_time_scale_ms_ = (ros::Time::now() - t0).toSec() * 1000.0;
+      return false;
+    }
+
+    const double dur0 = singul_traj_data.duration;
+    for(int attempt = 0; attempt < max_time_scaling_attempts_; ++attempt){
+      for(int i = 0; i < traj_num_; ++i){
+        if(!rebuildSnapOptScaled(i, singul_container[i], time_scale)){
+          last_time_scale_ms_ = (ros::Time::now() - t0).toSec() * 1000.0;
+          return false;
+        }
+      }
+      singul_traj_data = buildSingulTrajFromSnapOpt(singul_container);
+      std::cout << "[TIME SCALE] duration: " << dur0 << " -> " << singul_traj_data.duration << " s" << std::endl;
+      last_time_scale_ms_ = (ros::Time::now() - t0).toSec() * 1000.0;
+
+      last_safety_recheck_ran_ = true;
+      ros::Time t1 = ros::Time::now();
+      res = evaluateTrajSafety(singul_traj_data);
+      last_safety_recheck_ms_ = (ros::Time::now() - t1).toSec() * 1000.0;
+
+      if(res.safe){
+        std::cout << "[TIME SCALE] safety recheck passed\n"
+                  << "[TIME SCALE] peak wheel omega after scaling = "
+                  << res.max_abs_wheel_omega << " rad/s\n"
+                  << "[TIME SCALE] trajectory accepted" << std::endl;
+        return true;
+      }
+      if(res.collision){
+        std::cout << "[TIME SCALE] safety recheck failed: collision type="
+                  << res.collision_type << std::endl;
+        return false;
+      }
+      // still dynamics: grow scale once more if room
+      double need = 1.0;
+      if(res.max_abs_wheel_omega > target_omega)
+        need = std::max(need, res.max_abs_wheel_omega / target_omega);
+      if(res.max_abs_wheel_alpha > target_alpha)
+        need = std::max(need, std::sqrt(res.max_abs_wheel_alpha / target_alpha));
+      need *= 1.02;
+      if(need <= 1.0 + 1e-6 || time_scale * need > max_time_scale_ + 1e-9){
+        std::cout << "[TIME SCALE] safety recheck failed: wheel omega still exceeds limit"
+                  << " (peak=" << res.max_abs_wheel_omega << ")" << std::endl;
+        return false;
+      }
+      // Note: SnapOpt already scaled; further scale relative to current.
+      time_scale = need;
+      std::cout << "[TIME SCALE] retry with additional scale = " << time_scale << std::endl;
+    }
+    std::cout << "[TIME SCALE] safety recheck failed after attempts" << std::endl;
+    return false;
+  }
+
+  void PolyTrajOptimizer::clearRejectedFrontEndMesh(){
+    if(front_end_mm_mesh_vis_pub_.getNumSubscribers() < 1) return;
+    visualization_msgs::MarkerArray arr;
+    visualization_msgs::Marker del;
+    del.action = visualization_msgs::Marker::DELETEALL;
+    arr.markers.push_back(del);
+    front_end_mm_mesh_vis_pub_.publish(arr);
   }
   bool PolyTrajOptimizer::checkCollision(const SingulTrajData &traj, double t, int &coll_type)
   {

@@ -56,6 +56,17 @@ optimization:
   mobile_base_opt_gear: true              # Whether to optimize the gear
   constrain_points_perPiece: 16           # Constraint points per piece
   dense_sample_resolution: 16             # Resolution for dense sampling
+
+  # ################################
+  # YAML: dynamic time scaling for wheel/joint feasibility begin
+  # ################################
+  enable_dynamic_time_scaling: true
+  wheel_limit_ratio: 0.95
+  max_time_scale: 2.0
+  max_time_scaling_attempts: 2
+  # ################################
+  # YAML: dynamic time scaling for wheel/joint feasibility end
+  # ################################
   
 fsm:
   target_type  : 2            # 1: manual set 2D goal; 2: preset targets, pass through waypoint in order

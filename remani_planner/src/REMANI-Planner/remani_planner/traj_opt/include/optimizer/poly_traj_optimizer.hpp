@@ -131,7 +131,7 @@ namespace remani_planner
     ros::Publisher traj_pt_pub_, traj_init_pt_pub_;
     ros::Publisher front_end_mm_mesh_vis_pub_, back_end_mm_mesh_vis_pub_;
     // ################################
-    // C++: plan-stage timing + debug vis switch begin
+    // C++: plan-stage timing + debug vis + time-scale params begin
     // ################################
     bool enable_debug_vis_ = false;
     bool enable_traj_mesh_vis_ = true;
@@ -139,10 +139,46 @@ namespace remani_planner
     double last_minsnap_ms_ = 0.0;
     double last_lbfgs_ms_ = 0.0;
     double last_safety_check_ms_ = 0.0;
+    double last_time_scale_ms_ = 0.0;
+    double last_safety_recheck_ms_ = 0.0;
+    bool last_time_scale_ran_ = false;
+    bool last_safety_recheck_ran_ = false;
+    bool enable_dynamic_time_scaling_ = true;
+    double wheel_limit_ratio_ = 0.95;
+    double max_time_scale_ = 2.0;
+    int max_time_scaling_attempts_ = 2;
     // ################################
-    // C++: plan-stage timing + debug vis switch end
+    // C++: plan-stage timing + debug vis + time-scale params end
     // ################################
   public:
+
+    // ################################
+    // C++: traj safety diagnostic for dynamics vs collision begin
+    // ################################
+    struct TrajSafetyResult {
+      bool safe = true;
+      bool collision = false;
+      int collision_type = -1; // 0 car, 1 mani, 2 car-mani, 3 mani-mani
+      bool wheel_omega_violation = false;
+      bool wheel_alpha_violation = false;
+      bool joint_vel_violation = false;
+      bool joint_acc_violation = false;
+      double max_abs_wheel_omega = 0.0;
+      double max_abs_wheel_alpha = 0.0;
+      double max_abs_joint_vel = 0.0;
+      double max_abs_joint_acc = 0.0;
+      double wheel_omega_limit = 0.0;
+      double wheel_alpha_limit = 0.0;
+      double violation_time = -1.0;
+      bool dynamicsOnly() const {
+        return !collision &&
+               (wheel_omega_violation || wheel_alpha_violation ||
+                joint_vel_violation || joint_acc_violation);
+      }
+    };
+    // ################################
+    // C++: traj safety diagnostic for dynamics vs collision end
+    // ################################
 
     PolyTrajOptimizer() {}
     ~PolyTrajOptimizer() {}
@@ -188,14 +224,19 @@ namespace remani_planner
     void displayFrontEndMesh(std::vector<Eigen::VectorXd> &simple_path_full, vector<double> &yaw_list);
     void displayBackEndMesh(const SingulTrajData &traj_data, bool init, bool gripper_close);
     // ################################
-    // C++: expose last backend stage timing begin
+    // C++: expose last backend stage timing + clear rejected frontend begin
     // ################################
     double getLastMinsnapMs() const { return last_minsnap_ms_; }
     double getLastLbfgsMs() const { return last_lbfgs_ms_; }
     double getLastSafetyCheckMs() const { return last_safety_check_ms_; }
+    double getLastTimeScaleMs() const { return last_time_scale_ms_; }
+    double getLastSafetyRecheckMs() const { return last_safety_recheck_ms_; }
+    bool lastTimeScaleRan() const { return last_time_scale_ran_; }
+    bool lastSafetyRecheckRan() const { return last_safety_recheck_ran_; }
     bool enableDebugVis() const { return enable_debug_vis_; }
+    void clearRejectedFrontEndMesh();
     // ################################
-    // C++: expose last backend stage timing end
+    // C++: expose last backend stage timing + clear rejected frontend end
     // ################################
   
   private:
@@ -253,6 +294,19 @@ namespace remani_planner
                                   double &cost_joint_feasible);
     bool IsTrajSafe(const SingulTrajData &traj_data);
     bool IsNotFeasibie(const SingulTrajData &traj_data, double t);
+    // ################################
+    // C++: safety diagnose + dynamic time scaling begin
+    // ################################
+    TrajSafetyResult evaluateTrajSafety(const SingulTrajData &traj_data);
+    bool sampleFeasibility(const SingulTrajData &traj_data, double t, TrajSafetyResult &res);
+    bool tryDynamicTimeScaling(const std::vector<int> &singul_container,
+                               SingulTrajData &singul_traj_data,
+                               TrajSafetyResult &res);
+    bool rebuildSnapOptScaled(int trajid, int singul, double scale);
+    SingulTrajData buildSingulTrajFromSnapOpt(const std::vector<int> &singul_container) const;
+    // ################################
+    // C++: safety diagnose + dynamic time scaling end
+    // ################################
 
   public:
     typedef unique_ptr<PolyTrajOptimizer> Ptr;

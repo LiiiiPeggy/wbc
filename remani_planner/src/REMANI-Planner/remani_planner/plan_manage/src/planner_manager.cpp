@@ -22,7 +22,9 @@ namespace remani_planner
     void printPlanTime(const char *tag,
                        const KinoAstar::FrontendTiming &ft,
                        double init_ms, double opt_ms, double safe_ms, double total_ms,
-                       bool has_backend) {
+                       bool has_backend,
+                       bool time_scale_ran = false, double time_scale_ms = 0.0,
+                       bool recheck_ran = false, double recheck_ms = 0.0) {
       std::cout << "[PLAN TIME]" << (tag && tag[0] ? tag : "") << "\n"
                 << "Hybrid A*       : " << fmtPlanStage(ft.hybrid_ran, ft.hybrid_astar_ms) << "\n"
                 << "Manipulator     : " << fmtPlanStage(ft.manipulator_ran, ft.manipulator_ms) << "\n"
@@ -31,11 +33,15 @@ namespace remani_planner
       if(has_backend){
         std::cout << "Initialization  : " << init_ms << " ms\n"
                   << "Optimization    : " << opt_ms << " ms\n"
-                  << "Safety check    : " << safe_ms << " ms\n";
+                  << "Safety check    : " << safe_ms << " ms\n"
+                  << "Time scaling    : " << fmtPlanStage(time_scale_ran, time_scale_ms) << "\n"
+                  << "Safety recheck  : " << fmtPlanStage(recheck_ran, recheck_ms) << "\n";
       }else{
         std::cout << "Initialization  : skipped\n"
                   << "Optimization    : skipped\n"
-                  << "Safety check    : skipped\n";
+                  << "Safety check    : skipped\n"
+                  << "Time scaling    : skipped\n"
+                  << "Safety recheck  : skipped\n";
       }
       std::cout << "Total           : " << total_ms << " ms" << std::endl;
     }
@@ -546,7 +552,11 @@ namespace remani_planner
                       ploy_traj_opt_->getLastMinsnapMs(),
                       ploy_traj_opt_->getLastLbfgsMs(),
                       ploy_traj_opt_->getLastSafetyCheckMs(),
-                      (t_init + t_opt).toSec() * 1000.0, true);
+                      (t_init + t_opt).toSec() * 1000.0, true,
+                      ploy_traj_opt_->lastTimeScaleRan(),
+                      ploy_traj_opt_->getLastTimeScaleMs(),
+                      ploy_traj_opt_->lastSafetyRecheckRan(),
+                      ploy_traj_opt_->getLastSafetyRecheckMs());
       }
       // ################################
       // C++: print [PLAN TIME] on opt/safety failure end
@@ -575,7 +585,11 @@ namespace remani_planner
                     ploy_traj_opt_->getLastMinsnapMs(),
                     ploy_traj_opt_->getLastLbfgsMs(),
                     ploy_traj_opt_->getLastSafetyCheckMs(),
-                    (t_init + t_opt).toSec() * 1000.0, true);
+                    (t_init + t_opt).toSec() * 1000.0, true,
+                    ploy_traj_opt_->lastTimeScaleRan(),
+                    ploy_traj_opt_->getLastTimeScaleMs(),
+                    ploy_traj_opt_->lastSafetyRecheckRan(),
+                    ploy_traj_opt_->getLastSafetyRecheckMs());
     }
     // ################################
     // C++: unified [PLAN TIME] stage breakdown end
