@@ -2,6 +2,8 @@
 
 #include <sstream>
 
+#include <xmlrpcpp/XmlRpcValue.h>
+
 namespace
 {
 // ################################
@@ -50,6 +52,54 @@ Eigen::MatrixX3d toMatrixX3(const std::vector<double>& values, size_t rows,
         }
     }
     return result;
+}
+
+// ################################
+// C++: Parse AG95 fixed-closed collision envelope from global /moma/*
+// ################################
+void loadAg95Spheres(const ros::NodeHandle& root_nh, std::vector<CollisionSphere>& spheres)
+{
+    XmlRpc::XmlRpcValue ag95_spheres;
+    if (!root_nh.getParam("moma/ag95_spheres", ag95_spheres))
+    {
+        return;
+    }
+    if (ag95_spheres.getType() != XmlRpc::XmlRpcValue::TypeArray || ag95_spheres.size() == 0)
+    {
+        throw std::runtime_error("Global parameter /moma/ag95_spheres must be a non-empty array");
+    }
+
+    spheres.clear();
+    for (int idx = 0; idx < ag95_spheres.size(); ++idx)
+    {
+        if (ag95_spheres[idx].getType() != XmlRpc::XmlRpcValue::TypeStruct)
+        {
+            throw std::runtime_error("Global parameter /moma/ag95_spheres entries must be maps");
+        }
+
+        CollisionSphere sphere;
+        const auto& entry = ag95_spheres[idx];
+        if (!entry.hasMember("xyz") || !entry.hasMember("obstacle_radius")
+            || !entry.hasMember("self_radius"))
+        {
+            throw std::runtime_error(
+                "Global parameter /moma/ag95_spheres entries require xyz, obstacle_radius, self_radius");
+        }
+
+        if (entry["xyz"].getType() != XmlRpc::XmlRpcValue::TypeArray
+            || entry["xyz"].size() != 3)
+        {
+            throw std::runtime_error("Global parameter /moma/ag95_spheres xyz must contain 3 values");
+        }
+
+        sphere.local_offset << static_cast<double>(entry["xyz"][0]),
+            static_cast<double>(entry["xyz"][1]),
+            static_cast<double>(entry["xyz"][2]);
+        sphere.obstacle_radius = static_cast<double>(entry["obstacle_radius"]);
+        sphere.self_radius = static_cast<double>(entry["self_radius"]);
+        sphere.link_id = 0;
+        spheres.push_back(sphere);
+    }
 }
 }  // namespace
 
@@ -128,22 +178,41 @@ MomaParam MomaParam::fromRos(const ros::NodeHandle& root_nh)
     getRequired(root_nh, "arm/joint_dof_axis", values);
     profile.joint_dof_axis = toMatrixX3(values, profile.dof_num, "arm/joint_dof_axis");
 
-    getRequired(root_nh, "collision/link_length", values);
-    profile.colli_length = toVector(values, "collision/link_length");
-    getRequired(root_nh, "collision/points", values);
-    profile.colli_points = toVector(values, "collision/points");
-    getRequired(root_nh, "collision/point_radius", values);
-    profile.colli_point_radius = toVector(values, "collision/point_radius");
-
-    // ################################
-    // C++: Preserve legacy minimum tracer collision sphere radius
-    // ################################
-    for (int i = 0; i < profile.colli_point_radius.size(); ++i)
+    if (profile.kinematics == KinematicsType::Cr10)
     {
-        if (profile.colli_point_radius(i) > 1e-4
-            && profile.colli_point_radius(i) < profile.cylinder_radius)
+        getRequired(root_nh, "obstacle_thickness", profile.obstacle_thickness);
+        getRequired(root_nh, "self_thickness", profile.self_thickness);
+        getRequired(root_nh, "sphere_spacing_factor", profile.sphere_spacing_factor);
+        if (root_nh.getParam("moma/chassis_ignore_link_ids", values))
         {
-            profile.colli_point_radius(i) = profile.cylinder_radius;
+            profile.chassis_ignore_link_ids.clear();
+            profile.chassis_ignore_link_ids.reserve(values.size());
+            for (double value : values)
+            {
+                profile.chassis_ignore_link_ids.push_back(static_cast<int>(value));
+            }
+        }
+        loadAg95Spheres(root_nh, profile.ag95_spheres);
+    }
+    else
+    {
+        getRequired(root_nh, "collision/link_length", values);
+        profile.colli_length = toVector(values, "collision/link_length");
+        getRequired(root_nh, "collision/points", values);
+        profile.colli_points = toVector(values, "collision/points");
+        getRequired(root_nh, "collision/point_radius", values);
+        profile.colli_point_radius = toVector(values, "collision/point_radius");
+
+        // ################################
+        // C++: Preserve legacy minimum tracer collision sphere radius
+        // ################################
+        for (int i = 0; i < profile.colli_point_radius.size(); ++i)
+        {
+            if (profile.colli_point_radius(i) > 1e-4
+                && profile.colli_point_radius(i) < profile.cylinder_radius)
+            {
+                profile.colli_point_radius(i) = profile.cylinder_radius;
+            }
         }
     }
 
@@ -193,11 +262,19 @@ void MomaParam::finalizeCollision()
 {
     if (kinematics == KinematicsType::Cr10)
     {
+        buildCollisionProxies();
+        buildCollisionIgnoreMatrix();
         return;
     }
 
     default_colli_point_radius = colli_point_radius;
     std::vector<Eigen::Vector4d> cpts = getColliPts(Eigen::VectorXd::Zero(3 + dof_num));
+    colli_self_radii_.clear();
+    colli_self_radii_.reserve(cpts.size());
+    for (const Eigen::Vector4d& colli_pt : cpts)
+    {
+        colli_self_radii_.push_back(colli_pt[3]);
+    }
     colli_link_map.resize(cpts.size());
     colli_link_map << 0, 0, 1, 2, 2, 3, 4, 4, 5, 6, 6, 7;
     collision_matrix.resize(cpts.size(), cpts.size());
@@ -276,6 +353,18 @@ void MomaParam::validateCollision() const
 {
     if (kinematics == KinematicsType::Cr10)
     {
+        if (obstacle_thickness <= 0.0 || self_thickness <= 0.0 || sphere_spacing_factor <= 0.0)
+        {
+            throw std::runtime_error("Global /moma CR10 collision thickness values must be positive");
+        }
+        if (ag95_spheres.empty())
+        {
+            throw std::runtime_error("Global /moma/ag95_spheres must contain at least one sphere");
+        }
+        if (link_length.size() != static_cast<Eigen::Index>(dof_num))
+        {
+            throw std::runtime_error("Global /moma arm/link_length must match dof_num for CR10 collision");
+        }
         return;
     }
 

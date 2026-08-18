@@ -1,5 +1,6 @@
 #include "fake_moma/moma_param.h"
 
+#include <algorithm>
 #include <cmath>
 
 namespace
@@ -271,4 +272,252 @@ Eigen::VectorXd MomaParam::getEEGradsCr10(const Eigen::VectorXd& moma_pos,
     moma_grads(1) += eePoseDirectionalGrad(ee_grad_y, ee_grad);
 
     return moma_grads;
+}
+
+// ################################
+// C++: Directional gradient of a CR10 sphere center position
+// ################################
+double positionDirectionalGrad(const Eigen::Matrix4d& transform_grad,
+                               const Eigen::Vector3d& local_offset,
+                               const Eigen::Vector3d& pos_grad)
+{
+    const Eigen::Vector3d dp = transform_grad.block<3, 3>(0, 0) * local_offset
+                               + transform_grad.block<3, 1>(0, 3);
+    return pos_grad.dot(dp);
+}
+
+Eigen::Matrix4d cr10LinkTransformAt(const KinematicResult& transforms, int link_id, size_t dof_num)
+{
+    if (link_id <= 0)
+    {
+        return transforms.base_T;
+    }
+    if (link_id == 1)
+    {
+        return transforms.arm_base_T;
+    }
+    if (link_id >= 2 && link_id < static_cast<int>(2 + dof_num))
+    {
+        return transforms.arm_link_T[static_cast<size_t>(link_id - 2)];
+    }
+    return transforms.ee_T;
+}
+
+// ################################
+// C++: Sample CR10 link segments and AG95 envelope into collision proxies
+// ################################
+void MomaParam::buildCollisionProxies()
+{
+    collision_proxies_.clear();
+    colli_self_radii_.clear();
+
+    for (size_t joint = 0; joint < dof_num; ++joint)
+    {
+        const Eigen::Vector3d segment = cr10_joint_fixed_[joint].block<3, 1>(0, 3);
+        const double segment_length = segment.norm();
+        if (segment_length <= 1e-6)
+        {
+            continue;
+        }
+
+        const int link_id = static_cast<int>(1 + joint);
+        const int sphere_count = std::max(
+            1,
+            static_cast<int>(std::ceil(segment_length
+                                       / (sphere_spacing_factor * obstacle_thickness))));
+
+        for (int sample = 0; sample < sphere_count; ++sample)
+        {
+            CollisionSphere proxy;
+            proxy.link_id = link_id;
+            proxy.obstacle_radius = obstacle_thickness;
+            proxy.self_radius = self_thickness;
+            const double frac =
+                (static_cast<double>(sample) + 0.5) / static_cast<double>(sphere_count);
+            proxy.local_offset = frac * segment;
+            collision_proxies_.push_back(proxy);
+            colli_self_radii_.push_back(proxy.self_radius);
+        }
+    }
+
+    const int ag95_link_id = static_cast<int>(2 + dof_num);
+    for (const CollisionSphere& ag95 : ag95_spheres)
+    {
+        CollisionSphere proxy = ag95;
+        proxy.link_id = ag95_link_id;
+        collision_proxies_.push_back(proxy);
+        colli_self_radii_.push_back(proxy.self_radius);
+    }
+
+    colli_link_map.resize(static_cast<Eigen::Index>(collision_proxies_.size()));
+    for (size_t idx = 0; idx < collision_proxies_.size(); ++idx)
+    {
+        colli_link_map(static_cast<Eigen::Index>(idx)) = collision_proxies_[idx].link_id;
+    }
+}
+
+// ################################
+// C++: Build CR10 self-collision ignore topology from link ids
+// ################################
+void MomaParam::buildCollisionIgnoreMatrix()
+{
+    const size_t sphere_count = collision_proxies_.size();
+    collision_matrix.resize(static_cast<Eigen::Index>(sphere_count),
+                            static_cast<Eigen::Index>(sphere_count));
+    collision_matrix.setConstant(-1);
+
+    const int ag95_link_id = static_cast<int>(2 + dof_num);
+    int last_arm_link_id = 0;
+    for (const CollisionSphere& proxy : collision_proxies_)
+    {
+        if (proxy.link_id != ag95_link_id)
+        {
+            last_arm_link_id = std::max(last_arm_link_id, proxy.link_id);
+        }
+    }
+
+    for (size_t i = 0; i < sphere_count; ++i)
+    {
+        for (size_t j = i; j < sphere_count; ++j)
+        {
+            if (i == j)
+            {
+                collision_matrix(static_cast<Eigen::Index>(i),
+                                 static_cast<Eigen::Index>(j)) = 1;
+                continue;
+            }
+
+            const int link_i = collision_proxies_[i].link_id;
+            const int link_j = collision_proxies_[j].link_id;
+            const bool ignore =
+                (link_i == link_j)
+                || (std::abs(link_i - link_j) == 1)
+                || ((link_i == last_arm_link_id && link_j == ag95_link_id)
+                    || (link_j == last_arm_link_id && link_i == ag95_link_id));
+
+            const int ignore_value = ignore ? 1 : -1;
+            collision_matrix(static_cast<Eigen::Index>(i), static_cast<Eigen::Index>(j)) =
+                ignore_value;
+            collision_matrix(static_cast<Eigen::Index>(j), static_cast<Eigen::Index>(i)) =
+                ignore_value;
+        }
+    }
+}
+
+// ################################
+// C++: CR10 collision sphere centers from typed link transforms
+// ################################
+std::vector<Eigen::Vector4d> MomaParam::getColliPtsCr10(const Eigen::VectorXd& moma_pos) const
+{
+    std::vector<Eigen::Vector4d> colli_pts;
+    colli_pts.reserve(collision_proxies_.size());
+
+    const KinematicResult transforms = getLinkTransformsCr10(moma_pos);
+    for (const CollisionSphere& proxy : collision_proxies_)
+    {
+        const Eigen::Matrix4d link_T = cr10LinkTransformAt(transforms, proxy.link_id, dof_num);
+        const Eigen::Vector4d local = (Eigen::Vector4d() << proxy.local_offset, 1.0).finished();
+        Eigen::Vector4d colli_pt;
+        colli_pt.head(3) = (link_T * local).head(3);
+        colli_pt[3] = proxy.obstacle_radius;
+        colli_pts.push_back(colli_pt);
+    }
+    return colli_pts;
+}
+
+// ################################
+// C++: CR10 analytic collision-point gradients on the exact transform chain
+// ################################
+Eigen::VectorXd MomaParam::getColliGradsCr10(
+    const Eigen::VectorXd& moma_pos,
+    const std::vector<Eigen::Vector3d>& pos_grads) const
+{
+    Eigen::VectorXd colli_grads = Eigen::VectorXd::Zero(3 + static_cast<int>(dof_num));
+
+    const Eigen::Matrix4d base_T = baseTransform2d(moma_pos(0), moma_pos(1), moma_pos(2));
+    Eigen::Matrix4d dbase_dyaw = Eigen::Matrix4d::Zero();
+    dbase_dyaw(0, 0) = -std::sin(moma_pos(2));
+    dbase_dyaw(0, 1) = -std::cos(moma_pos(2));
+    dbase_dyaw(1, 0) = std::cos(moma_pos(2));
+    dbase_dyaw(1, 1) = -std::sin(moma_pos(2));
+    Eigen::Matrix4d dbase_dx = Eigen::Matrix4d::Zero();
+    dbase_dx(0, 3) = 1.0;
+    Eigen::Matrix4d dbase_dy = Eigen::Matrix4d::Zero();
+    dbase_dy(1, 3) = 1.0;
+
+    const Eigen::Matrix4d mount_T = mountTransform(relative_R, relative_t);
+    std::vector<Eigen::Matrix4d> joint_transform(dof_num);
+    std::vector<Eigen::Matrix4d> joint_transform_grad(dof_num);
+    std::vector<Eigen::Matrix4d> prefix(dof_num + 1);
+    prefix[0] = base_T * mount_T;
+
+    for (size_t joint = 0; joint < dof_num; ++joint)
+    {
+        cr10JointTransform(cr10_joint_fixed_[joint], moma_pos(3 + joint),
+                           joint_transform[joint], joint_transform_grad[joint]);
+        prefix[joint + 1] = prefix[joint] * joint_transform[joint];
+    }
+
+    for (size_t sphere_idx = 0; sphere_idx < collision_proxies_.size(); ++sphere_idx)
+    {
+        const CollisionSphere& proxy = collision_proxies_[sphere_idx];
+        const Eigen::Vector3d pos_grad = pos_grads[sphere_idx];
+        const int link_id = proxy.link_id;
+        const int last_joint_index =
+            link_id >= 2 ? std::min(static_cast<int>(dof_num) - 1, link_id - 2) : -1;
+
+        for (int joint = 0; joint <= last_joint_index; ++joint)
+        {
+            Eigen::Matrix4d grad_transform = prefix[static_cast<size_t>(joint)]
+                                             * joint_transform_grad[static_cast<size_t>(joint)];
+            for (int later = joint + 1; later <= last_joint_index; ++later)
+            {
+                grad_transform = grad_transform * joint_transform[static_cast<size_t>(later)];
+            }
+            colli_grads(3 + joint) += positionDirectionalGrad(
+                grad_transform, proxy.local_offset, pos_grad);
+        }
+
+        if (link_id >= 1)
+        {
+            Eigen::Matrix4d grad_yaw = dbase_dyaw * mount_T;
+            Eigen::Matrix4d grad_x = dbase_dx * mount_T;
+            Eigen::Matrix4d grad_y = dbase_dy * mount_T;
+            for (int joint = 0; joint <= last_joint_index; ++joint)
+            {
+                grad_yaw = grad_yaw * joint_transform[static_cast<size_t>(joint)];
+                grad_x = grad_x * joint_transform[static_cast<size_t>(joint)];
+                grad_y = grad_y * joint_transform[static_cast<size_t>(joint)];
+            }
+            colli_grads(2) += positionDirectionalGrad(grad_yaw, proxy.local_offset, pos_grad);
+            colli_grads(0) += positionDirectionalGrad(grad_x, proxy.local_offset, pos_grad);
+            colli_grads(1) += positionDirectionalGrad(grad_y, proxy.local_offset, pos_grad);
+        }
+    }
+
+    return colli_grads;
+}
+
+// ################################
+// C++: Dual-radius lookup for self-collision consumers
+// ################################
+double MomaParam::getColliSelfRadius(size_t idx) const
+{
+    if (idx < colli_self_radii_.size())
+    {
+        return colli_self_radii_[idx];
+    }
+    return 0.0;
+}
+
+bool MomaParam::isChassisArmCollisionIgnored(int link_id) const
+{
+    for (int ignored_link : chassis_ignore_link_ids)
+    {
+        if (ignored_link == link_id)
+        {
+            return true;
+        }
+    }
+    return false;
 }

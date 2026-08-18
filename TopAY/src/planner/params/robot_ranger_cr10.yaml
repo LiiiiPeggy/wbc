@@ -33,9 +33,16 @@ moma:
     joint_offset: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
     joint_dof_axis: [0.0, 0.0, 1.0, 0.0, 0.0, 1.0, 0.0, 0.0, 1.0, 0.0, 0.0, 1.0, 0.0, 0.0, 1.0, 0.0, 0.0, 1.0]
 
-  collision:
-    link_length: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
-    points: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
-    point_radius: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+  # ################################
+  # YAML: CR10 dual-radius variable collision envelope
+  # ################################
+  obstacle_thickness: 0.10
+  self_thickness: 0.045
+  sphere_spacing_factor: 1.0
+  chassis_ignore_link_ids: [0, 1]
+  ag95_spheres:
+    - {xyz: [0.0, 0.0, 0.06], obstacle_radius: 0.05, self_radius: 0.04}
+    - {xyz: [0.04, 0.03, 0.10], obstacle_radius: 0.03, self_radius: 0.025}
+    - {xyz: [0.04, -0.03, 0.10], obstacle_radius: 0.03, self_radius: 0.025}
 
   mesh_prefix: "package://fake_moma/meshes/ranger_cr10/"

@@ -3,6 +3,17 @@
 using nmoma_planner::random_map::Box;
 namespace nmoma_planner
 {
+    // ################################
+    // C++: Inject shared finalized /moma profile for whole-body collision
+    // ################################
+    void GridMap::setMomaParam(const std::shared_ptr<const MomaParam>& profile)
+    {
+        if (profile)
+        {
+            moma_param = *profile;
+        }
+    }
+
     void GridMap:: init(ros::NodeHandle& nh)
     {
         GET_PARAM_OR_THROW(nh, "grid_map/map_size_x", map_size[0]);

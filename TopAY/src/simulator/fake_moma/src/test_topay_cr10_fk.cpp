@@ -6,6 +6,7 @@
 #include <cmath>
 #include <iostream>
 #include <random>
+#include <algorithm>
 
 namespace
 {
@@ -52,12 +53,64 @@ MomaParam makeCr10Profile()
     profile.dof_num = 6;
     profile.relative_R = Eigen::Matrix3d::Identity();
     profile.relative_t << 0.2462, 0.0, 0.1;
+    profile.obstacle_thickness = 0.10;
+    profile.self_thickness = 0.045;
+    profile.sphere_spacing_factor = 1.0;
+    profile.chassis_ignore_link_ids = {0, 1};
+    profile.link_length.resize(6);
+    profile.link_length << 0.1765, 0.607, 0.568, 0.191, 0.125, 0.1084;
     profile.joint_pos_limit_min.resize(6);
     profile.joint_pos_limit_max.resize(6);
     profile.joint_pos_limit_min << -3.0, -1.5, -2.8, -3.0, -3.0, -3.0;
     profile.joint_pos_limit_max << 3.0, 1.5, 2.8, 3.0, 3.0, 3.0;
+    profile.ag95_spheres = {
+        {Eigen::Vector3d(0.0, 0.0, 0.06), 0.05, 0.04, 0},
+        {Eigen::Vector3d(0.04, 0.03, 0.10), 0.03, 0.025, 0},
+        {Eigen::Vector3d(0.04, -0.03, 0.10), 0.03, 0.025, 0},
+    };
     profile.initCr10FixedTransforms();
+    profile.buildCollisionProxies();
+    profile.buildCollisionIgnoreMatrix();
     return profile;
+}
+
+double scalarSphere(const MomaParam& profile, const Eigen::VectorXd& state,
+                    size_t sphere_idx, const Eigen::Vector3d& direction)
+{
+    const std::vector<Eigen::Vector4d> colli_pts = profile.getColliPts(state);
+    return direction.dot(colli_pts[sphere_idx].head(3));
+}
+
+bool checkLongLinkCoverage(const MomaParam& profile, double max_gap)
+{
+    bool found_long_link = false;
+    for (size_t joint = 0; joint < profile.dof_num; ++joint)
+    {
+        const Eigen::Vector3d segment = profile.cr10_joint_fixed_[joint].block<3, 1>(0, 3);
+        const double segment_length = segment.norm();
+        if (segment_length < 0.4)
+        {
+            continue;
+        }
+
+        found_long_link = true;
+        const int link_id = static_cast<int>(1 + joint);
+        const Eigen::Vector3d mid = 0.5 * segment;
+        double best = 1e9;
+        for (const CollisionSphere& proxy : profile.collision_proxies_)
+        {
+            if (proxy.link_id != link_id)
+            {
+                continue;
+            }
+            best = std::min(best, (proxy.local_offset - mid).norm());
+        }
+        if (best > max_gap)
+        {
+            return false;
+        }
+    }
+    return found_long_link;
 }
 
 double scalarFk(const MomaParam& profile, const Eigen::VectorXd& state,
@@ -162,6 +215,80 @@ int main()
     }
 
     std::cout << "CR10 FK/EE-grad validation PASSED" << std::endl;
+
+    if (!checkLongLinkCoverage(profile, 0.05))
+    {
+        std::cerr << "CR10 long-link collision coverage FAILED" << std::endl;
+        return 1;
+    }
+
+    double max_colli_grad_err = 0.0;
+    const int colli_samples = 100;
+    for (int sample = 0; sample < colli_samples; ++sample)
+    {
+        Eigen::VectorXd state = Eigen::VectorXd::Zero(9);
+        for (int joint = 0; joint < 6; ++joint)
+        {
+            const double lower = profile.joint_pos_limit_min(joint);
+            const double upper = profile.joint_pos_limit_max(joint);
+            state(3 + joint) = lower + (upper - lower) * unit(generator);
+        }
+
+        const size_t sphere_idx = static_cast<size_t>(sample % profile.collision_proxies_.size());
+        Eigen::Vector3d direction(grad_unit(generator), grad_unit(generator), grad_unit(generator));
+        if (direction.norm() < 1e-6)
+        {
+            direction = Eigen::Vector3d::UnitX();
+        }
+        direction.normalize();
+
+        std::vector<Eigen::Vector3d> pos_grads(profile.collision_proxies_.size(),
+                                                 Eigen::Vector3d::Zero());
+        pos_grads[sphere_idx] = direction;
+        const Eigen::VectorXd analytic_grad = profile.getColliGrads(state, pos_grads);
+
+        for (int joint = 0; joint < 6; ++joint)
+        {
+            Eigen::VectorXd plus = state;
+            Eigen::VectorXd minus = state;
+            plus(3 + joint) += fd_eps;
+            minus(3 + joint) -= fd_eps;
+            const double fd_grad = (scalarSphere(profile, plus, sphere_idx, direction)
+                                    - scalarSphere(profile, minus, sphere_idx, direction))
+                                   / (2.0 * fd_eps);
+            const double denom = std::max(std::abs(fd_grad), 1e-12);
+            max_colli_grad_err = std::max(
+                max_colli_grad_err,
+                std::abs(analytic_grad(3 + joint) - fd_grad) / denom);
+        }
+    }
+
+    std::cout << "colli_samples=" << colli_samples
+              << " max_colli_grad_rel_err=" << max_colli_grad_err << std::endl;
+    if (max_colli_grad_err >= 1e-4)
+    {
+        std::cerr << "CR10 collision-gradient validation FAILED" << std::endl;
+        return 1;
+    }
+    std::cout << "CR10 collision-gradient validation PASSED" << std::endl;
+
+    Eigen::VectorXi collision_link;
+    const Eigen::VectorXd home_state = Eigen::VectorXd::Zero(9);
+    if (profile.isSelfCollision(home_state, collision_link))
+    {
+        std::cerr << "CR10 home pose self-collision regression FAILED" << std::endl;
+        return 1;
+    }
+
+    Eigen::VectorXd folded_state = Eigen::VectorXd::Zero(9);
+    folded_state << 0.0, 0.0, 0.0, 0.0, 1.2, -2.0, 1.5, -2.0, 1.5;
+    if (!profile.isSelfCollision(folded_state, collision_link))
+    {
+        std::cerr << "CR10 folded unsafe pose regression FAILED" << std::endl;
+        return 1;
+    }
+    std::cout << "CR10 collision pose regression PASSED" << std::endl;
+
     return 0;
 }
 // ################################

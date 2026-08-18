@@ -10,6 +10,9 @@
 #include <unordered_map>
 #include <vector>
 #include <array>
+#include <cmath>
+#include <algorithm>
+#include <memory>
 #include <stdexcept>
 
 #define PRINTF_WHITE(STRING) std::cout<<STRING
@@ -47,6 +50,17 @@ struct KinematicResult
     Eigen::Matrix4d arm_base_T = Eigen::Matrix4d::Identity();
     std::vector<Eigen::Matrix4d> arm_link_T;
     Eigen::Matrix4d ee_T = Eigen::Matrix4d::Identity();
+};
+
+// ################################
+// C++: CR10 collision proxy with dual env/self radii
+// ################################
+struct CollisionSphere
+{
+    Eigen::Vector3d local_offset = Eigen::Vector3d::Zero();
+    double obstacle_radius = 0.0;
+    double self_radius = 0.0;
+    int link_id = 0;
 };
 
 struct MomaParam
@@ -98,6 +112,17 @@ struct MomaParam
     // C++: CR10 fixed joint origins populated in finalizeKinematics
     // ################################
     std::array<Eigen::Matrix4d, 6> cr10_joint_fixed_;
+
+    // ################################
+    // C++: CR10 variable collision sphere model (Task 4)
+    // ################################
+    double obstacle_thickness = 0.10;
+    double self_thickness = 0.045;
+    double sphere_spacing_factor = 1.0;
+    std::vector<int> chassis_ignore_link_ids;
+    std::vector<CollisionSphere> ag95_spheres;
+    std::vector<CollisionSphere> collision_proxies_;
+    std::vector<double> colli_self_radii_;
 
     MomaParam()
     {
@@ -156,6 +181,12 @@ struct MomaParam
         relative_t << 0.0, 0.115, 0.016;
         
         std::vector<Eigen::Vector4d> cpts = getColliPts(VectorXd::Zero(3+dof_num));
+        colli_self_radii_.clear();
+        colli_self_radii_.reserve(cpts.size());
+        for (const Eigen::Vector4d& colli_pt : cpts)
+        {
+            colli_self_radii_.push_back(colli_pt[3]);
+        }
         colli_link_map.resize(cpts.size());
         colli_link_map << 0, 0, 1, 2, 2, 3, 4, 4, 5, 6, 6, 7;
         collision_matrix.resize(cpts.size(), cpts.size());
@@ -197,6 +228,13 @@ struct MomaParam
     Eigen::VectorXd getFKPoseCr10(const Eigen::VectorXd& moma_pos) const;
     Eigen::VectorXd getEEGradsCr10(const Eigen::VectorXd& moma_pos,
                                    const Eigen::VectorXd& ee_grad) const;
+    void buildCollisionProxies();
+    void buildCollisionIgnoreMatrix();
+    std::vector<Eigen::Vector4d> getColliPtsCr10(const Eigen::VectorXd& moma_pos) const;
+    Eigen::VectorXd getColliGradsCr10(const Eigen::VectorXd& moma_pos,
+                                      const std::vector<Eigen::Vector3d>& pos_grads) const;
+    double getColliSelfRadius(size_t idx) const;
+    bool isChassisArmCollisionIgnored(int link_id) const;
 
     void setColliRs(const Eigen::VectorXd &colli_rs)
     {
@@ -220,17 +258,27 @@ struct MomaParam
         return;
     }
 
-    bool isSelfCollision(const Eigen::VectorXd& moma_pos, Eigen::VectorXi& collision_link)
+    bool isSelfCollision(const Eigen::VectorXd& moma_pos, Eigen::VectorXi& collision_link) const
     {
         collision_link.resize(2+dof_num);
         collision_link.setZero();
+        if (colli_link_map.size() > 0)
+        {
+            const int max_link = colli_link_map.maxCoeff();
+            collision_link.resize(std::max(static_cast<int>(2 + dof_num), max_link + 2));
+            collision_link.setZero();
+        }
 
         bool is_collision = false;
         std::vector<Eigen::Vector4d> cpts = getColliPts(moma_pos);
         for (size_t i=0; i<cpts.size(); i++)
         {
-            if (i!=0 && cpts[i](2) < chassis_height + cpts[i](3) + relative_t(2)
-                // && (cpts[i].head(2) - moma_pos.head(2)).norm() < chassis_colli_radius + cpts[i](3)
+            const double self_radius_i = getColliSelfRadius(i);
+            const bool check_chassis = (kinematics == KinematicsType::Cr10)
+                ? !isChassisArmCollisionIgnored(colli_link_map(i))
+                : (i != 0);
+            if (check_chassis
+                && cpts[i](2) < chassis_height + self_radius_i + relative_t(2)
                 )
             {
                 collision_link(colli_link_map(i)+1) = 1;
@@ -243,7 +291,8 @@ struct MomaParam
                 if (i == j)
                     continue;
                 double dist = (cpts[i].head(3) - cpts[j].head(3)).norm();
-                if (dist < cpts[i][3] + cpts[j][3] - 1e-2 && collision_matrix(i, j) == -1)
+                const double self_sum = getColliSelfRadius(i) + getColliSelfRadius(j);
+                if (dist < self_sum - 1e-2 && collision_matrix(i, j) == -1)
                 {
                     collision_link(colli_link_map(i)+1) = 1;
                     collision_link(colli_link_map(j)+1) = 1;
@@ -257,6 +306,14 @@ struct MomaParam
 
     std::vector<Eigen::Vector4d> getColliPts(const Eigen::VectorXd& moma_pos) const
     {
+        // ################################
+        // C++: Dispatch collision points to the loaded kinematics backend
+        // ################################
+        if (kinematics == KinematicsType::Cr10)
+        {
+            return getColliPtsCr10(moma_pos);
+        }
+
         std::vector<Eigen::Vector4d> colli_pts;
         Eigen::Vector3d now_p(moma_pos[0], moma_pos[1], chassis_height);
         Eigen::Matrix3d now_R;
@@ -302,8 +359,16 @@ struct MomaParam
     }
 
     Eigen::VectorXd getColliGrads(const Eigen::VectorXd& moma_pos,
-                                  const std::vector<Eigen::Vector3d>& pos_grads)
+                                  const std::vector<Eigen::Vector3d>& pos_grads) const
     {
+        // ################################
+        // C++: Dispatch collision gradients to the loaded kinematics backend
+        // ################################
+        if (kinematics == KinematicsType::Cr10)
+        {
+            return getColliGradsCr10(moma_pos, pos_grads);
+        }
+
         int gidx = 0;
         Eigen::VectorXd colli_grads = Eigen::VectorXd::Zero(3+dof_num);
         Eigen::MatrixXd grad_p_list = Eigen::MatrixXd::Zero(3, dof_num+1);
