@@ -59,3 +59,9 @@ remani_planner/.catkin_tools/
 # OS
 .DS_Store
 Thumbs.db
+
+# ################################
+# Git worktrees / SDD scratch
+# ################################
+.worktrees/
+.superpowers/
