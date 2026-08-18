@@ -4,11 +4,6 @@ using namespace std;
  
 void OMPC::init(ros::NodeHandle &nh)
 {
-    // ################################
-    // C++: Load the shared global /moma robot profile
-    // ################################
-    ros::NodeHandle root_nh;
-    moma_param = MomaParam::fromRos(root_nh);
     nh.param("ompc/du_threshold", du_th, -1.0);
     nh.param("ompc/dt", dt, -1.0);
     nh.param("ompc/ctrl_freq", ctrl_freq, -1.0);

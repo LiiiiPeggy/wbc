@@ -103,6 +103,16 @@ namespace nmoma_planner
             }
 
             inline void init(ros::NodeHandle& nh);
+            // ################################
+            // C++: Inject shared finalized /moma profile
+            // ################################
+            inline void setMomaParam(const std::shared_ptr<const MomaParam>& profile)
+            {
+                if (profile)
+                {
+                    moma_param = *profile;
+                }
+            }
             inline void reset(const std::vector<Eigen::Vector4d>& path);
 
             bool plan(const Eigen::VectorXd& start, const Eigen::VectorXd &end,

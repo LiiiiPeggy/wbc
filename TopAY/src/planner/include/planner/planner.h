@@ -7,6 +7,7 @@
 // #include <c10/cuda/CUDAStream.h>
 // #include <ATen/cuda/CUDAContext.h>
 #include <mutex>
+#include <memory>
 #include <stdlib.h>
 
 #include <string.h>
@@ -100,6 +101,7 @@ namespace nmoma_planner
             OMPC::Ptr mpc;
             // MPC::Ptr mpc;
             MomaParam moma_param;
+            std::shared_ptr<const MomaParam> moma_param_shared_;
             MomaTrajOpt::Ptr traj_opter;
             std::vector<Eigen::MatrixXd> primitives;
 

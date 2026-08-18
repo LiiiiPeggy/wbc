@@ -59,6 +59,16 @@ namespace nmoma_planner
 
     public:
         double ctrl_freq = 100.0;
+        // ################################
+        // C++: Inject shared finalized /moma profile
+        // ################################
+        inline void setMomaParam(const std::shared_ptr<const MomaParam>& profile)
+        {
+            if (profile)
+            {
+                moma_param = *profile;
+            }
+        }
         inline void init(ros::NodeHandle &nh);
         inline void smoothAngle(const Eigen::VectorXd& source, Eigen::VectorXd& target);
         inline MX dynamicFunc(MX state, MX control);

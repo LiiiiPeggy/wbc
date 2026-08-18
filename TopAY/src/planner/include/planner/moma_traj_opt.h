@@ -675,6 +675,16 @@ namespace nmoma_planner
             DebugManager debug_manager;
 
             MomaTrajOpt(GridMap::Ptr grid_map_) : grid_map(grid_map_) {}
+            // ################################
+            // C++: Inject shared finalized /moma profile
+            // ################################
+            inline void setMomaParam(const std::shared_ptr<const MomaParam>& profile)
+            {
+                if (profile)
+                {
+                    moma_param = *profile;
+                }
+            }
             inline void init(ros::NodeHandle& nh);
             inline MomaTraj getTraj() const;
             inline bool checkFeasible(MomaTraj traj);
@@ -870,11 +880,6 @@ namespace nmoma_planner
 
     inline void MomaTrajOpt::init(ros::NodeHandle& nh)
     {
-        // ################################
-        // C++: Load the shared global /moma robot profile
-        // ################################
-        ros::NodeHandle root_nh;
-        moma_param = MomaParam::fromRos(root_nh);
         nh.getParam("moma_traj_opt/int_K", opt_param.int_K);
         nh.getParam("moma_traj_opt/min_piece_num", opt_param.min_piece_num);
         nh.getParam("moma_traj_opt/relu_mu", opt_param.relu_mu);

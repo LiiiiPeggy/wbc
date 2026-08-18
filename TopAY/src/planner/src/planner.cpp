@@ -7,7 +7,12 @@ namespace nmoma_planner
     // ################################
     void Planner::init(ros::NodeHandle& nh, const ros::NodeHandle& root_nh)
     {
-        moma_param = MomaParam::fromRos(root_nh);
+        // ################################
+        // C++: inject shared MomaParam into parallel workers
+        // ################################
+        moma_param_shared_ = std::make_shared<const MomaParam>(MomaParam::fromRos(root_nh));
+        ROS_ASSERT(moma_param_shared_);
+        moma_param = *moma_param_shared_;
         ROS_INFO_STREAM("[planner] robot_name=" << moma_param.robot_name
                         << " dof_num=" << moma_param.dof_num
                         << " kinematics=" << MomaParam::kinematicsName(moma_param.kinematics)
@@ -47,22 +52,28 @@ namespace nmoma_planner
         }
 
         grid_map.reset(new GridMap);
+        grid_map->setMomaParam(moma_param_shared_);
         grid_map->init(nh);
         
         graph_search = std::make_shared<JPS::GraphSearch>(grid_map, moma_param.chassis_colli_radius);
         birrts = std::make_shared<BiRRTs>(grid_map);
+        birrts->setMomaParam(moma_param_shared_);
         birrts->init(nh);
         topo_prm.reset(new TopologyPRM);
         topo_prm->setEnv(grid_map);
         topo_prm->init(nh);
         mcrrts = std::make_shared<MCRRTs>(grid_map);
+        mcrrts->setMomaParam(moma_param_shared_);
         mcrrts->init(nh);
         ompl_planner = std::make_shared<OMPLPlanner>(grid_map);
+        ompl_planner->setMomaParam(moma_param_shared_);
         ompl_planner->init(nh);
         traj_opter = std::make_shared<MomaTrajOpt>(grid_map);
+        traj_opter->setMomaParam(moma_param_shared_);
         traj_opter->init(nh);
         mpc.reset(new OMPC);
         // mpc.reset(new MPC);
+        mpc->setMomaParam(moma_param_shared_);
         mpc->init(nh);
 
         traj_opters.resize(8);
@@ -70,8 +81,10 @@ namespace nmoma_planner
         for (int i = 0; i < 8; i++)
         {
             traj_opters[i] = std::make_unique<MomaTrajOpt>(grid_map);
+            traj_opters[i]->setMomaParam(moma_param_shared_);
             traj_opters[i]->init(nh);
             mc_rrtsers[i].reset(new MCRRTs(grid_map));
+            mc_rrtsers[i]->setMomaParam(moma_param_shared_);
             mc_rrtsers[i]->init(nh);
             opt_traj_pub_list.push_back(
                 nh.advertise<visualization_msgs::MarkerArray>("/opt_traj_" + std::to_string(i + 1), 1)
@@ -150,6 +163,8 @@ namespace nmoma_planner
         now_state.resize(3+moma_param.dof_num);
         now_state.setZero();
         now_dstate = now_state;
+        ROS_ASSERT(static_cast<int>(moma_param_shared_->dof_num) + 3
+                   == static_cast<int>(now_state.size()));
         begin_time = ros::Time::now();
 
         car_pts_pub =  nh.advertise<visualization_msgs::MarkerArray>("car_pts", 1);

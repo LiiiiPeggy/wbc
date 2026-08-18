@@ -438,6 +438,17 @@ namespace nmoma_planner
 
             ~OMPLPlanner() {};
 
+            // ################################
+            // C++: Inject shared finalized /moma profile
+            // ################################
+            inline void setMomaParam(const std::shared_ptr<const MomaParam>& profile)
+            {
+                if (profile)
+                {
+                    moma_param = *profile;
+                }
+            }
+
             inline void init(ros::NodeHandle& nh)
             {
                 space = ob::StateSpacePtr(new MomaStateSpace(grid_map, moma_param));

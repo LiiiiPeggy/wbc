@@ -107,6 +107,16 @@ namespace nmoma_planner
             }
 
             inline void init(ros::NodeHandle& nh);
+            // ################################
+            // C++: Inject shared finalized /moma profile
+            // ################################
+            inline void setMomaParam(const std::shared_ptr<const MomaParam>& profile)
+            {
+                if (profile)
+                {
+                    moma_param = *profile;
+                }
+            }
             inline void reset(const vector<Eigen::VectorXd>& start_states, const vector<Eigen::VectorXd>& end_states);
             inline void reset(const Eigen::VectorXd& start_state, const Eigen::VectorXd& end_state);
 
