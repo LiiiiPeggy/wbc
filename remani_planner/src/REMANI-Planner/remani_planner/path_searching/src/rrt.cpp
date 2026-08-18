@@ -20,15 +20,31 @@ namespace remani_planner{
     }
     
     init(start_pt_list, end_pt_list);
+    // ################################
+    // C++: RRT wall-clock timing begin
+    // ################################
+    ros::WallTime t_rrt_all = ros::WallTime::now();
+    ros::WallTime t_search = ros::WallTime::now();
     bool status = search(start_pt_list, start_yaw_list, end_pt_list, end_yaw_list, start_g_score_list, start_layer_list, end_g_score_list, end_layer_list, start_singul_list, end_singul_list);
+    double search_ms = (ros::WallTime::now() - t_search).toSec() * 1000.0;
 
     if (status == false){
+      std::cout << "[RRT TIME] search = " << search_ms << " ms\n"
+                << "[RRT TIME] reconstruction = 0.00 ms\n"
+                << "[RRT TIME] total = " << search_ms << " ms" << std::endl;
       return status;
-      // cout << "[RRT replan]: RRT search fail!" << endl;
-    }else{
-      // cout << "[RRT replan]: RRT search success." << endl;
     }
+
+    ros::WallTime t_recon = ros::WallTime::now();
     getTraj(path_full, yaw_list_full, t_list_full);
+    double recon_ms = (ros::WallTime::now() - t_recon).toSec() * 1000.0;
+    double total_ms = (ros::WallTime::now() - t_rrt_all).toSec() * 1000.0;
+    std::cout << "[RRT TIME] search = " << search_ms << " ms\n"
+              << "[RRT TIME] reconstruction = " << recon_ms << " ms\n"
+              << "[RRT TIME] total = " << total_ms << " ms" << std::endl;
+    // ################################
+    // C++: RRT wall-clock timing end
+    // ################################
 
     path.clear();
     t_list.clear();
@@ -56,8 +72,37 @@ namespace remani_planner{
                           const std::vector<Eigen::VectorXd>& end_pt_list, const std::vector<double>& end_yaw_list,
                           const std::vector<double>& start_g_score_list, const std::vector<int>& start_layer_list, const std::vector<double>& end_g_score_list, const std::vector<int>& end_layer_list,
                           const std::vector<int>& start_singul_list, const std::vector<int>& end_singul_list){
+    // ################################
+    // C++: RRT input list size guard begin
+    // ################################
+    const size_t n_start = start_pt_list.size();
+    const size_t n_end = end_pt_list.size();
+    if(n_start < 1 || n_end < 1){
+      ROS_ERROR("[RRT]: empty start/end list");
+      return false;
+    }
+    if(start_yaw_list.size() != n_start || start_g_score_list.size() != n_start ||
+       start_layer_list.size() != n_start || start_singul_list.size() != n_start){
+      ROS_ERROR("[RRT]: inconsistent start list sizes (state=%zu yaw=%zu g=%zu layer=%zu singul=%zu)",
+                n_start, start_yaw_list.size(), start_g_score_list.size(),
+                start_layer_list.size(), start_singul_list.size());
+      return false;
+    }
+    if(end_yaw_list.size() != n_end || end_g_score_list.size() != n_end ||
+       end_layer_list.size() != n_end || end_singul_list.size() != n_end){
+      ROS_ERROR("[RRT]: inconsistent end list sizes (state=%zu yaw=%zu g=%zu layer=%zu singul=%zu)",
+                n_end, end_yaw_list.size(), end_g_score_list.size(),
+                end_layer_list.size(), end_singul_list.size());
+      return false;
+    }
+    // ################################
+    // C++: RRT input list size guard end
+    // ################################
+
     // std::cout << "[sample mani]: Search begin. start: " << start_state.transpose() << " end: " << end_state.transpose() << std::endl;
-    ros::Time time_1 = ros::Time::now();
+    search_timed_out_ = false;
+    search_deadline_ = ros::WallTime::now() + ros::WallDuration(max_sample_time_);
+    ros::WallTime time_1 = ros::WallTime::now();
     PathNodeRRTPtr start_node, end_node;
     PathNodeRRTPtr path_node_1 = nullptr, path_node_2 = nullptr;
 
@@ -116,7 +161,8 @@ namespace remani_planner{
     while(true){
       // std::cout << loop << std::endl;
       // std::cout << loop << std::endl;
-      if( (have_path_ && (ros::Time::now() - time_1).toSec() > 0.01) || (ros::Time::now() - time_1).toSec() > max_sample_time_){
+      if((have_path_ && (ros::WallTime::now() - time_1).toSec() > 0.01) || searchTimeout()){
+        if(searchTimeout()) search_timed_out_ = true;
         break;
       }
       if(tree_count_ > anti_tree_count_){
@@ -126,6 +172,10 @@ namespace remani_planner{
         dir = true;
       }
       ++loop;
+      if((loop % 64) == 0 && searchTimeout()){
+        search_timed_out_ = true;
+        break;
+      }
       // if(random_dis_(random_gen_) < goal_rate_){
       //   rand_s = end_state;
       //   rand_yaw = end_yaw;
@@ -232,7 +282,8 @@ namespace remani_planner{
             // ################################
             // C++: enforce max_sample_time inside tree-connect loop begin
             // ################################
-            if((ros::Time::now() - time_1).toSec() > max_sample_time_){
+            if(searchTimeout()){
+              search_timed_out_ = true;
               break;
             }
             // ################################
@@ -290,7 +341,7 @@ namespace remani_planner{
           // ################################
           // C++: exit outer RRT loop once timed out begin
           // ################################
-          if((ros::Time::now() - time_1).toSec() > max_sample_time_){
+          if(search_timed_out_){
             break;
           }
           // ################################
@@ -516,10 +567,10 @@ namespace remani_planner{
   }
 
   void RrtPlanning::rewire(PathNodeRRTPtr q_new, double near_time){
+    if(searchTimeout()) return;
     std::vector<PathNodeRRTPtr> neighbour;
     PathNodeRRTPtr temp;
     bool flag;
-    int num = node_pool_.size();
     for(auto it = node_pool_.begin(); it != node_pool_.end(); ++it){
       temp = it->second;
       flag = false;
@@ -542,13 +593,13 @@ namespace remani_planner{
       neighbour.push_back(temp);
     }
 
-    num = neighbour.size();
-    if(num < 1)
+    int n_neighbour = neighbour.size();
+    if(n_neighbour < 1)
       return;
 
     temp = nullptr;
     double min = q_new->g_score;
-    for(int i = 0; i < num; ++i){
+    for(int i = 0; i < n_neighbour; ++i){
       if(neighbour[i]->g_score + estimateHeuristic(neighbour[i], q_new) < min && !checkcollision(neighbour[i], q_new)){
         min = neighbour[i]->g_score + estimateHeuristic(neighbour[i], q_new);
         temp = neighbour[i];
@@ -561,7 +612,7 @@ namespace remani_planner{
       linkNode(temp, q_new);
     }
 
-    for(int i = 0; i < num; ++i){
+    for(int i = 0; i < n_neighbour; ++i){
       if(q_new->g_score + estimateHeuristic(q_new, neighbour[i]) < neighbour[i]->g_score && !checkcollision(neighbour[i], q_new)){
         // std::cout << "rewire!!" << std::endl;
         linkNode(q_new, neighbour[i]);
@@ -840,6 +891,10 @@ namespace remani_planner{
     int piece_num_temp = std::max(check_num_car, check_num_theta);
     piece_num_temp = std::max(piece_num_temp, 10);
     for(int i = 0; i < piece_num_temp; ++i){
+      if((i % 32) == 0 && searchTimeout()){
+        search_timed_out_ = true;
+        return true;
+      }
       double temp_i = (double)i / (double)piece_num_temp;
       dubins_curve_->interpolate(from(), to(), temp_i, s());// 获得对应长度的中间点
       reals = s.reals();
@@ -987,11 +1042,18 @@ namespace remani_planner{
     t_list.clear();
     if(!have_path_) return false;
     PathNodeRRTPtr node = end_node_;
-    node = end_node_;
-    while(node != nullptr){
-      smooth(node);
-      node = node->parent;
+    // ################################
+    // C++: skip expensive smooth after search timeout begin
+    // ################################
+    if(!search_timed_out_){
+      while(node != nullptr){
+        smooth(node);
+        node = node->parent;
+      }
     }
+    // ################################
+    // C++: skip expensive smooth after search timeout end
+    // ################################
 
     node = end_node_;
     Eigen::VectorXd temp_state(traj_dim_);
@@ -1068,6 +1130,7 @@ namespace remani_planner{
   void RrtPlanning::reset(){
     this->max_index_ = 0;
     this->have_path_ = false;
+    this->search_timed_out_ = false;
     this->tree_count_ = 0;
     this->anti_tree_count_ = 0;
     this->end_node_ = nullptr;

@@ -70,6 +70,7 @@ optimization:
   
 fsm:
   target_type  : 2            # 1: manual set 2D goal; 2: preset targets, pass through waypoint in order
+  max_continuous_plan_failures: 20  # abort new-task planning after N consecutive failures
   time_for_gripper: 0.05      # Time for the gripper to grip things between path points
 
   thresh_replan_time: 2.5     # Threshold for replanning time

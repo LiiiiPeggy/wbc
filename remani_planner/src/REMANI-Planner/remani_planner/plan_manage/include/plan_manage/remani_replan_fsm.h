@@ -86,6 +86,7 @@ namespace remani_planner
     int replan_fail_time_;
     double time_for_gripper_;
     bool global_plan_;
+    int max_continuous_plan_failures_;
 
     int mobile_base_dim_, manipulator_dim_, traj_dim_;
     double mobile_base_non_singul_vel_;

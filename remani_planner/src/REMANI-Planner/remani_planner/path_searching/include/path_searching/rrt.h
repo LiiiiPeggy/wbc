@@ -94,6 +94,12 @@ namespace remani_planner{
     std::normal_distribution<double> norm_dis_;
     ompl::base::StateSpacePtr dubins_curve_;
     double time_resolution_;
+    ros::WallTime search_deadline_;
+    bool search_timed_out_ = false;
+
+    inline bool searchTimeout() const {
+      return ros::WallTime::now() >= search_deadline_;
+    }
 
     bool checkcollision(PathNodeRRTPtr& cur_state, PathNodeRRTPtr& next_state);
     bool checkcollision(PathNodeRRTPtr& cur_state, const Eigen::VectorXd& next_state, const double next_yaw);

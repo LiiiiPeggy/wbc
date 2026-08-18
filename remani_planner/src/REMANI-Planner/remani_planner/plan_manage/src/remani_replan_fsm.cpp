@@ -25,6 +25,8 @@ namespace remani_planner
     nh.param("fsm/replan_trajectory_time", replan_trajectory_time_, 0.0);
     nh.param("fsm/time_for_gripper", time_for_gripper_, -1.0);
     nh.param("fsm/global_plan", global_plan_, false);
+    nh.param("fsm/max_continuous_plan_failures", max_continuous_plan_failures_, 20);
+    if(max_continuous_plan_failures_ < 1) max_continuous_plan_failures_ = 1;
     if(global_plan_) planning_horizen_ = 1.0e3;
 
     nh.param("mm/mobile_base_dof", mobile_base_dim_, -1);
@@ -153,7 +155,27 @@ namespace remani_planner
         // ROS_ERROR("Failed to generate new trajectory!!!");
         // have_target_ = false;
         // changeFSMExecState(WAIT_TARGET, "FSM");
-        changeFSMExecState(GEN_NEW_TRAJ, "FSM");
+        // ################################
+        // C++: abort unreachable / invalid new-task goal begin
+        // ################################
+        const int kino_st = planner_manager_->getLastKinoStatus();
+        const bool invalid_terminal =
+            (kino_st == KinoAstar::GOAL_COLLISION || kino_st == KinoAstar::START_COLLISION);
+        if(invalid_terminal){
+          ROS_ERROR("[FSM] abort current goal: terminal/start state invalid (kino status=%d)", kino_st);
+          have_target_ = false;
+          have_trigger_ = false;
+          changeFSMExecState(WAIT_TARGET, "FSM");
+        }else if(planner_manager_->getFailureCount() >= max_continuous_plan_failures_){
+          ROS_ERROR("[FSM] abort current goal after %d consecutive planning failures",
+                    planner_manager_->getFailureCount());
+          have_target_ = false;
+          have_trigger_ = false;
+          changeFSMExecState(WAIT_TARGET, "FSM");
+        }else{
+          changeFSMExecState(GEN_NEW_TRAJ, "FSM");
+        }
+        // ################################
       }
       break;
     }

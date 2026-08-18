@@ -6,6 +6,7 @@
 #include <Eigen/Eigen>
 #include <Eigen/Dense>
 #include <ros/ros.h>
+#include <string>
 #include <fstream>
 #include <sys/time.h>
 #include <ctime>
@@ -174,6 +175,22 @@ namespace remani_planner
         return !collision &&
                (wheel_omega_violation || wheel_alpha_violation ||
                 joint_vel_violation || joint_acc_violation);
+      }
+      std::string failureReason() const {
+        if(collision){
+          switch(collision_type){
+            case 0: return "collision";
+            case 1: return "mani collision";
+            case 2: return "car-mani collision";
+            case 3: return "mani-mani collision";
+            default: return "collision";
+          }
+        }
+        if(wheel_omega_violation) return "wheel_omega";
+        if(wheel_alpha_violation) return "wheel_alpha";
+        if(joint_vel_violation) return "joint_vel";
+        if(joint_acc_violation) return "joint_acc";
+        return "unknown";
       }
     };
     // ################################

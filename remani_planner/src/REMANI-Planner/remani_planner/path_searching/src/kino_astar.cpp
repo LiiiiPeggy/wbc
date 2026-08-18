@@ -180,11 +180,14 @@ KinoAstar::~KinoAstar(){
     // ################################
     last_frontend_timing_.hybrid_ran = true;
     ros::Time t_hyb = ros::Time::now();
-    search(start_state, end_state, init_ctrl);
+    int search_ret = search(start_state, end_state, init_ctrl);
     last_frontend_timing_.hybrid_astar_ms = (ros::Time::now() - t_hyb).toSec() * 1000.0;
     // ################################
     // C++: time Hybrid A* search end
     // ################################
+    if(search_ret == GOAL_COLLISION || search_ret == START_COLLISION){
+      return search_ret;
+    }
   }else{
     // ROS_WARN("FAILED TOO MANY TIMES, use rrt!");
     has_path_ = false;
@@ -271,6 +274,17 @@ KinoAstar::~KinoAstar(){
     // C++: collect mani / RRT timing from SampleMani end
     // ################################
   }else{
+    // ################################
+    // C++: reject invalid terminal goal before RRT fallback begin
+    // ################################
+    int terminal_coll = -1;
+    if(mm_config_->checkcollision(end_state.head(3), end_state.tail(manipulator_dof_), false, terminal_coll)){
+      ROS_ERROR("KinoAstar: terminal goal not free (coll=%d); reject planning (no RRT)", terminal_coll);
+      return GOAL_COLLISION;
+    }
+    // ################################
+    // C++: reject invalid terminal goal before RRT fallback end
+    // ################################
     // ################################
     // C++: refuse unsafe fallback after Hybrid A* fail begin
     // ################################

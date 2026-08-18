@@ -2,6 +2,48 @@
 
 namespace remani_planner
 {
+  // ################################
+  // C++: strict wheel hard limit begin
+  // ################################
+  namespace {
+    constexpr double kFeasEps = 1e-6;
+
+    const char *collisionTypeStr(int coll_type){
+      switch(coll_type){
+        case 0: return "car";
+        case 1: return "mani";
+        case 2: return "car-mani";
+        case 3: return "mani-mani";
+        default: return "unknown";
+      }
+    }
+
+    void logBackendCollision(const SingulTrajData &traj, const PolyTrajOptimizer::TrajSafetyResult &res, int manipulator_dof){
+      if(!res.collision) return;
+      Eigen::VectorXd pos = traj.getPos(res.violation_time);
+      std::cout << "[BACKEND COLLISION]\n"
+                << "[BACKEND COLLISION] type = " << collisionTypeStr(res.collision_type) << "\n"
+                << "[BACKEND COLLISION] time = " << res.violation_time << "\n"
+                << "[BACKEND COLLISION] traj duration = " << traj.duration << " s\n"
+                << "[BACKEND COLLISION] position base = " << pos(0) << " " << pos(1) << "\n"
+                << "[BACKEND COLLISION] arm q = " << pos.tail(manipulator_dof).transpose() << std::endl;
+    }
+
+    void logDynamicsViolation(const PolyTrajOptimizer::TrajSafetyResult &res,
+                              double hard_omega, double target_omega,
+                              double hard_alpha, double target_alpha){
+      std::cout << "[TIME SCALE] dynamics-only violation detected\n"
+                << "[TIME SCALE] peak wheel omega = " << res.max_abs_wheel_omega << " rad/s\n"
+                << "[TIME SCALE] wheel omega hard limit = " << hard_omega << " rad/s\n"
+                << "[TIME SCALE] wheel omega target = " << target_omega << " rad/s\n"
+                << "[TIME SCALE] peak wheel alpha = " << res.max_abs_wheel_alpha << " rad/s^2\n"
+                << "[TIME SCALE] wheel alpha hard limit = " << hard_alpha << " rad/s^2\n"
+                << "[TIME SCALE] wheel alpha target = " << target_alpha << " rad/s^2\n"
+                << "[TIME SCALE] peak joint vel = " << res.max_abs_joint_vel << "\n"
+                << "[TIME SCALE] peak joint acc = " << res.max_abs_joint_acc << std::endl;
+    }
+  }
+
   void PolyTrajOptimizer::setParam(ros::NodeHandle &nh, const std::shared_ptr<GridMap> &map, const std::shared_ptr<MMConfig> &mm_config){
     grid_map_ = map;
     map_resolution_ = grid_map_->getResolution();
@@ -285,7 +327,12 @@ namespace remani_planner
     last_safety_check_ms_ = (ros::Time::now() - t_safe).toSec() * 1000.0;
 
     bool good_traj = safety.safe;
+    if(!good_traj && safety.collision){
+      logBackendCollision(singul_traj_data, safety, manipulator_dof_);
+    }
     if(!good_traj && enable_dynamic_time_scaling_ && safety.dynamicsOnly()){
+      logDynamicsViolation(safety, max_wheel_omega_, max_wheel_omega_ * wheel_limit_ratio_,
+                           max_wheel_alpha_, max_wheel_alpha_ * wheel_limit_ratio_);
       good_traj = tryDynamicTimeScaling(singul_container, singul_traj_data, safety);
     }
     // ################################
@@ -422,7 +469,6 @@ namespace remani_planner
   // C++: sample wheel/joint feasibility into TrajSafetyResult begin
   // ################################
   bool PolyTrajOptimizer::sampleFeasibility(const SingulTrajData &traj_data, double t, TrajSafetyResult &res){
-    const double feas_tol_percent_ = 0.05;
     Eigen::VectorXd vel = traj_data.getVel(t).head(2);
     Eigen::VectorXd acc = traj_data.getAcc(t).head(2);
     Eigen::VectorXd jer = traj_data.getJer(t).head(2);
@@ -434,13 +480,13 @@ namespace remani_planner
       Eigen::VectorXd ja = traj_data.getAcc(t).tail(manipulator_dof_);
       res.max_abs_joint_vel = std::max(res.max_abs_joint_vel, jv.lpNorm<Eigen::Infinity>());
       res.max_abs_joint_acc = std::max(res.max_abs_joint_acc, ja.lpNorm<Eigen::Infinity>());
-      if(jv.lpNorm<Eigen::Infinity>() - max_joint_vel_ * (1.0 + feas_tol_percent_) > 0){
+      if(jv.lpNorm<Eigen::Infinity>() > max_joint_vel_ + kFeasEps){
         if(!res.joint_vel_violation) res.violation_time = t;
         res.joint_vel_violation = true;
         res.safe = false;
         return true;
       }
-      if(ja.lpNorm<Eigen::Infinity>() - max_joint_acc_ * (1.0 + feas_tol_percent_) > 0){
+      if(ja.lpNorm<Eigen::Infinity>() > max_joint_acc_ + kFeasEps){
         if(!res.joint_acc_violation) res.violation_time = t;
         res.joint_acc_violation = true;
         res.safe = false;
@@ -462,9 +508,8 @@ namespace remani_planner
     res.max_abs_wheel_omega = std::max(res.max_abs_wheel_omega,
         std::max(std::fabs(wheel_omega_left), std::fabs(wheel_omega_right)));
 
-    double omega_lim = max_wheel_omega_ * (1.0 + feas_tol_percent_);
-    if(wheel_omega_left * wheel_omega_left - omega_lim * omega_lim > 0.0 ||
-       wheel_omega_right * wheel_omega_right - omega_lim * omega_lim > 0.0){
+    if(std::fabs(wheel_omega_left) > max_wheel_omega_ + kFeasEps ||
+       std::fabs(wheel_omega_right) > max_wheel_omega_ + kFeasEps){
       if(!res.wheel_omega_violation){
         res.violation_time = t;
         ROS_WARN("%f max left wheel omega is not feasible at relative time %f! opt failed",
@@ -480,9 +525,8 @@ namespace remani_planner
     res.max_abs_wheel_alpha = std::max(res.max_abs_wheel_alpha,
         std::max(std::fabs(wheel_alpha_left), std::fabs(wheel_alpha_right)));
 
-    double alpha_lim = max_wheel_alpha_ * (1.0 + feas_tol_percent_);
-    if(wheel_alpha_left * wheel_alpha_left - alpha_lim * alpha_lim > 0.0 ||
-       wheel_alpha_right * wheel_alpha_right - alpha_lim * alpha_lim > 0.0){
+    if(std::fabs(wheel_alpha_left) > max_wheel_alpha_ + kFeasEps ||
+       std::fabs(wheel_alpha_right) > max_wheel_alpha_ + kFeasEps){
       if(!res.wheel_alpha_violation){
         res.violation_time = t;
         ROS_WARN("%f max left wheel alpha is not feasible at relative time %f! opt failed",
@@ -496,7 +540,7 @@ namespace remani_planner
     Eigen::VectorXd ja = traj_data.getAcc(t).tail(manipulator_dof_);
     res.max_abs_joint_vel = std::max(res.max_abs_joint_vel, jv.lpNorm<Eigen::Infinity>());
     res.max_abs_joint_acc = std::max(res.max_abs_joint_acc, ja.lpNorm<Eigen::Infinity>());
-    if(jv.lpNorm<Eigen::Infinity>() - max_joint_vel_ * (1.0 + feas_tol_percent_) > 0){
+    if(jv.lpNorm<Eigen::Infinity>() > max_joint_vel_ + kFeasEps){
       if(!res.joint_vel_violation){
         res.violation_time = t;
         ROS_WARN("mani vel %f is not feasible at relative time %f! opt failed",
@@ -505,7 +549,7 @@ namespace remani_planner
       res.joint_vel_violation = true;
       res.safe = false;
     }
-    if(ja.lpNorm<Eigen::Infinity>() - max_joint_acc_ * (1.0 + feas_tol_percent_) > 0){
+    if(ja.lpNorm<Eigen::Infinity>() > max_joint_acc_ + kFeasEps){
       if(!res.joint_acc_violation){
         res.violation_time = t;
         ROS_WARN("mani acc %f is not feasible at relative time %f! opt failed",
@@ -647,50 +691,46 @@ namespace remani_planner
     const double target_jvel = max_joint_vel_ * wheel_limit_ratio_;
     const double target_jacc = max_joint_acc_ * wheel_limit_ratio_;
 
-    double scale_omega = 1.0;
-    double scale_alpha = 1.0;
-    double scale_jvel = 1.0;
-    double scale_jacc = 1.0;
-    if(res.max_abs_wheel_omega > 1e-9 && target_omega > 1e-9)
-      scale_omega = res.max_abs_wheel_omega / target_omega;
-    if(res.max_abs_wheel_alpha > 1e-9 && target_alpha > 1e-9)
-      scale_alpha = std::sqrt(res.max_abs_wheel_alpha / target_alpha);
-    if(res.max_abs_joint_vel > 1e-9 && target_jvel > 1e-9)
-      scale_jvel = res.max_abs_joint_vel / target_jvel;
-    if(res.max_abs_joint_acc > 1e-9 && target_jacc > 1e-9)
-      scale_jacc = std::sqrt(res.max_abs_joint_acc / target_jacc);
+    auto computeNeedScale = [&](const TrajSafetyResult &r){
+      double scale_omega = 1.0, scale_alpha = 1.0, scale_jvel = 1.0, scale_jacc = 1.0;
+      if(r.max_abs_wheel_omega > max_wheel_omega_ + kFeasEps && target_omega > 1e-9)
+        scale_omega = r.max_abs_wheel_omega / target_omega;
+      if(r.max_abs_wheel_alpha > max_wheel_alpha_ + kFeasEps && target_alpha > 1e-9)
+        scale_alpha = std::sqrt(r.max_abs_wheel_alpha / target_alpha);
+      if(r.max_abs_joint_vel > max_joint_vel_ + kFeasEps && target_jvel > 1e-9)
+        scale_jvel = r.max_abs_joint_vel / target_jvel;
+      if(r.max_abs_joint_acc > max_joint_acc_ + kFeasEps && target_jacc > 1e-9)
+        scale_jacc = std::sqrt(r.max_abs_joint_acc / target_jacc);
+      double need = std::max(1.0, std::max(std::max(scale_omega, scale_alpha),
+                                           std::max(scale_jvel, scale_jacc)));
+      return need * 1.02;
+    };
 
-    double time_scale = std::max(1.0, std::max(std::max(scale_omega, scale_alpha),
-                                               std::max(scale_jvel, scale_jacc)));
-    time_scale *= 1.02;
+    double cumulative_scale = computeNeedScale(res);
+    const double dur0 = singul_traj_data.duration;
 
-    std::cout << "[TIME SCALE] wheel dynamics violation detected\n"
-              << "[TIME SCALE] peak omega = " << res.max_abs_wheel_omega << " rad/s\n"
-              << "[TIME SCALE] omega limit = " << max_wheel_omega_ << " rad/s\n"
-              << "[TIME SCALE] target omega = " << target_omega << " rad/s\n"
-              << "[TIME SCALE] peak alpha = " << res.max_abs_wheel_alpha << " rad/s^2\n"
-              << "[TIME SCALE] alpha limit = " << max_wheel_alpha_ << " rad/s^2\n"
-              << "[TIME SCALE] scale_omega = " << scale_omega << "\n"
-              << "[TIME SCALE] scale_alpha = " << scale_alpha << "\n"
-              << "[TIME SCALE] selected scale = " << time_scale << std::endl;
-
-    if(time_scale > max_time_scale_ + 1e-9){
-      std::cout << "[TIME SCALE] required scale " << time_scale
+    std::cout << "[TIME SCALE] selected scale = " << cumulative_scale << std::endl;
+    if(cumulative_scale > max_time_scale_ + 1e-9){
+      std::cout << "[TIME SCALE] required cumulative scale " << cumulative_scale
                 << " exceeds max_time_scale " << max_time_scale_ << "; reject" << std::endl;
       last_time_scale_ms_ = (ros::Time::now() - t0).toSec() * 1000.0;
       return false;
     }
 
-    const double dur0 = singul_traj_data.duration;
+    double relative_scale = cumulative_scale;
     for(int attempt = 0; attempt < max_time_scaling_attempts_; ++attempt){
+      std::cout << "[TIME SCALE] attempt = " << (attempt + 1) << "/" << max_time_scaling_attempts_
+                << "\n[TIME SCALE] cumulative scale = " << cumulative_scale << std::endl;
+
       for(int i = 0; i < traj_num_; ++i){
-        if(!rebuildSnapOptScaled(i, singul_container[i], time_scale)){
+        if(!rebuildSnapOptScaled(i, singul_container[i], relative_scale)){
           last_time_scale_ms_ = (ros::Time::now() - t0).toSec() * 1000.0;
           return false;
         }
       }
       singul_traj_data = buildSingulTrajFromSnapOpt(singul_container);
-      std::cout << "[TIME SCALE] duration: " << dur0 << " -> " << singul_traj_data.duration << " s" << std::endl;
+      std::cout << "[TIME SCALE] duration old = " << dur0 << " s\n"
+                << "[TIME SCALE] duration new = " << singul_traj_data.duration << " s" << std::endl;
       last_time_scale_ms_ = (ros::Time::now() - t0).toSec() * 1000.0;
 
       last_safety_recheck_ran_ = true;
@@ -702,31 +742,36 @@ namespace remani_planner
         std::cout << "[TIME SCALE] safety recheck passed\n"
                   << "[TIME SCALE] peak wheel omega after scaling = "
                   << res.max_abs_wheel_omega << " rad/s\n"
-                  << "[TIME SCALE] trajectory accepted" << std::endl;
+                  << "[TIME SCALE] peak wheel alpha after scaling = "
+                  << res.max_abs_wheel_alpha << " rad/s^2\n"
+                  << "[TIME SCALE] accepted" << std::endl;
         return true;
       }
       if(res.collision){
-        std::cout << "[TIME SCALE] safety recheck failed: collision type="
-                  << res.collision_type << std::endl;
+        std::cout << "[TIME SCALE] safety recheck failed\n"
+                  << "[TIME SCALE] reason = " << res.failureReason() << "\n"
+                  << "[TIME SCALE] rejected" << std::endl;
         return false;
       }
-      // still dynamics: grow scale once more if room
-      double need = 1.0;
-      if(res.max_abs_wheel_omega > target_omega)
-        need = std::max(need, res.max_abs_wheel_omega / target_omega);
-      if(res.max_abs_wheel_alpha > target_alpha)
-        need = std::max(need, std::sqrt(res.max_abs_wheel_alpha / target_alpha));
-      need *= 1.02;
-      if(need <= 1.0 + 1e-6 || time_scale * need > max_time_scale_ + 1e-9){
-        std::cout << "[TIME SCALE] safety recheck failed: wheel omega still exceeds limit"
-                  << " (peak=" << res.max_abs_wheel_omega << ")" << std::endl;
+
+      relative_scale = computeNeedScale(res);
+      if(relative_scale <= 1.0 + 1e-6){
+        std::cout << "[TIME SCALE] safety recheck failed\n"
+                  << "[TIME SCALE] reason = " << res.failureReason()
+                  << " (peak omega=" << res.max_abs_wheel_omega << ")\n"
+                  << "[TIME SCALE] rejected" << std::endl;
         return false;
       }
-      // Note: SnapOpt already scaled; further scale relative to current.
-      time_scale = need;
-      std::cout << "[TIME SCALE] retry with additional scale = " << time_scale << std::endl;
+      cumulative_scale *= relative_scale;
+      if(cumulative_scale > max_time_scale_ + 1e-9){
+        std::cout << "[TIME SCALE] required cumulative scale " << cumulative_scale
+                  << " exceeds max_time_scale " << max_time_scale_ << "; reject" << std::endl;
+        return false;
+      }
+      std::cout << "[TIME SCALE] retry with cumulative scale = " << cumulative_scale << std::endl;
     }
-    std::cout << "[TIME SCALE] safety recheck failed after attempts" << std::endl;
+    std::cout << "[TIME SCALE] safety recheck failed after attempts\n"
+              << "[TIME SCALE] rejected" << std::endl;
     return false;
   }
 

@@ -77,13 +77,15 @@ namespace remani_planner
     PlanningVisualization::Ptr visualization_;
 
     int continous_failures_count_{0};
+    int last_kino_status_{0};
 
   public:
     // ################################
     // C++: reset failure count on new manual goal begin
     // ################################
-    void resetFailureCount() { continous_failures_count_ = 0; }
+    void resetFailureCount() { continous_failures_count_ = 0; last_kino_status_ = 0; }
     int getFailureCount() const { return continous_failures_count_; }
+    int getLastKinoStatus() const { return last_kino_status_; }
     // ################################
     // C++: reset failure count on new manual goal end
     // ################################

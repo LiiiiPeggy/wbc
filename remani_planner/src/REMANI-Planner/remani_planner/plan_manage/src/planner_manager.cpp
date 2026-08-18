@@ -183,6 +183,7 @@ namespace remani_planner
                                                     continous_failures_count,
                                                     simple_path_container, yaw_list_container, 
                                                     initMJO_container, singul_container);
+      last_kino_status_ = status;
       // std::cout << "computeInit 4\n";
       if(status == KinoAstar::NO_PATH || status == KinoAstar::START_COLLISION || status == KinoAstar::GOAL_COLLISION){
         return false;

@@ -225,6 +225,44 @@ namespace mani_sample{
 
     // std::cout << "test 3" << std::endl; 
     // rrt搜
+    // ################################
+    // C++: whole-body RRT input guard + endpoint fallback begin
+    // ################################
+    if(start_list.empty() || end_list.empty()){
+      if(car_state_list.size() >= 2){
+        state_full.head(mobile_base_dof_) = car_state_list.front().head(mobile_base_dof_);
+        state_full.tail(manipulator_dof_) = start_state;
+        start_list.push_back(state_full);
+        start_yaw_list.push_back(car_state_list.front()(2));
+        start_g_score_list.push_back(0.0);
+        start_layer_list.push_back(0);
+        start_singul_list.push_back(start_singul);
+
+        state_full.head(mobile_base_dof_) = car_state_list.back().head(mobile_base_dof_);
+        state_full.tail(manipulator_dof_) = end_state;
+        end_list.push_back(state_full);
+        end_yaw_list.push_back(car_state_list.back()(2));
+        end_g_score_list.push_back(0.0);
+        end_layer_list.push_back((int)car_state_list.size() - 1);
+        end_singul_list.push_back(0);
+        ROS_WARN("[Sample Mani RRT]: empty tree lists; seed RRT from endpoints");
+      }else{
+        ROS_ERROR("[Sample Mani RRT]: empty start/end lists for RRT; abort");
+        return false;
+      }
+    }
+    const size_t n_s = start_list.size();
+    const size_t n_e = end_list.size();
+    if(start_yaw_list.size() != n_s || start_g_score_list.size() != n_s ||
+       start_layer_list.size() != n_s || start_singul_list.size() != n_s ||
+       end_yaw_list.size() != n_e || end_g_score_list.size() != n_e ||
+       end_layer_list.size() != n_e || end_singul_list.size() != n_e){
+      ROS_ERROR("[Sample Mani RRT]: inconsistent RRT list sizes; abort");
+      return false;
+    }
+    // ################################
+    // C++: whole-body RRT input guard + endpoint fallback end
+    // ################################
     std::vector<Eigen::VectorXd> path_fill;
     std::vector<double> yaw_list_fill, t_list_fill;
     // ################################
