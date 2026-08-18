@@ -376,6 +376,20 @@ void MomaParam::buildCollisionIgnoreMatrix()
         }
     }
 
+    auto hasSampledLinkBetween = [&](int link_a, int link_b) -> bool
+    {
+        const int lo = std::min(link_a, link_b);
+        const int hi = std::max(link_a, link_b);
+        for (const CollisionSphere& proxy : collision_proxies_)
+        {
+            if (proxy.link_id > lo && proxy.link_id < hi)
+            {
+                return true;
+            }
+        }
+        return false;
+    };
+
     for (size_t i = 0; i < sphere_count; ++i)
     {
         for (size_t j = i; j < sphere_count; ++j)
@@ -391,7 +405,7 @@ void MomaParam::buildCollisionIgnoreMatrix()
             const int link_j = collision_proxies_[j].link_id;
             const bool ignore =
                 (link_i == link_j)
-                || (std::abs(link_i - link_j) == 1)
+                || !hasSampledLinkBetween(link_i, link_j)
                 || ((link_i == last_arm_link_id && link_j == ag95_link_id)
                     || (link_j == last_arm_link_id && link_i == ag95_link_id));
 

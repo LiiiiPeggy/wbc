@@ -113,6 +113,26 @@ bool checkLongLinkCoverage(const MomaParam& profile, double max_gap)
     return found_long_link;
 }
 
+bool gridMapStyleSelfCollision(const MomaParam& profile, const Eigen::VectorXd& state)
+{
+    const std::vector<Eigen::Vector4d> colli_pts = profile.getColliPts(state);
+    for (size_t i = 0; i < colli_pts.size(); ++i)
+    {
+        const double self_radius_i = profile.getColliSelfRadius(i);
+        for (size_t j = i + 1; j < colli_pts.size(); ++j)
+        {
+            const double dist = (colli_pts[i].head(3) - colli_pts[j].head(3)).norm();
+            const double self_sum = self_radius_i + profile.getColliSelfRadius(j);
+            if (dist < self_sum && profile.collision_matrix(static_cast<Eigen::Index>(i),
+                                                             static_cast<Eigen::Index>(j)) == -1)
+            {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
 double scalarFk(const MomaParam& profile, const Eigen::VectorXd& state,
                 const Eigen::VectorXd& ee_grad)
 {
@@ -246,20 +266,19 @@ int main()
                                                  Eigen::Vector3d::Zero());
         pos_grads[sphere_idx] = direction;
         const Eigen::VectorXd analytic_grad = profile.getColliGrads(state, pos_grads);
-
-        for (int joint = 0; joint < 6; ++joint)
+        for (int dof = 0; dof < 9; ++dof)
         {
             Eigen::VectorXd plus = state;
             Eigen::VectorXd minus = state;
-            plus(3 + joint) += fd_eps;
-            minus(3 + joint) -= fd_eps;
+            plus(dof) += fd_eps;
+            minus(dof) -= fd_eps;
             const double fd_grad = (scalarSphere(profile, plus, sphere_idx, direction)
                                     - scalarSphere(profile, minus, sphere_idx, direction))
                                    / (2.0 * fd_eps);
             const double denom = std::max(std::abs(fd_grad), 1e-12);
             max_colli_grad_err = std::max(
                 max_colli_grad_err,
-                std::abs(analytic_grad(3 + joint) - fd_grad) / denom);
+                std::abs(analytic_grad(dof) - fd_grad) / denom);
         }
     }
 
@@ -274,15 +293,17 @@ int main()
 
     Eigen::VectorXi collision_link;
     const Eigen::VectorXd home_state = Eigen::VectorXd::Zero(9);
-    if (profile.isSelfCollision(home_state, collision_link))
+    if (profile.isSelfCollision(home_state, collision_link)
+        || gridMapStyleSelfCollision(profile, home_state))
     {
         std::cerr << "CR10 home pose self-collision regression FAILED" << std::endl;
         return 1;
     }
 
     Eigen::VectorXd folded_state = Eigen::VectorXd::Zero(9);
-    folded_state << 0.0, 0.0, 0.0, 0.0, 1.2, -2.0, 1.5, -2.0, 1.5;
-    if (!profile.isSelfCollision(folded_state, collision_link))
+    folded_state << 0.0, 0.0, 0.0, 0.0, -1.5, -2.8, -3.0, 0.0, 0.0;
+    if (!profile.isSelfCollision(folded_state, collision_link)
+        || !gridMapStyleSelfCollision(profile, folded_state))
     {
         std::cerr << "CR10 folded unsafe pose regression FAILED" << std::endl;
         return 1;
