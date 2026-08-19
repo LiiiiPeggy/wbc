@@ -54,6 +54,10 @@ double lidar_x = 0.0;
 double lidar_y = 0.0;
 double lidar_z = 0.0;
 Eigen::Vector3d lidar_vec;
+// ################################
+// C++: Resolve AG95 marker by mesh role, not list order
+// ################################
+int ag95_marker_index = -1;
 
 // ################################
 // C++: Pose profile meshes from typed links and YAML visual offsets
@@ -152,6 +156,8 @@ void initParams(ros::NodeHandle& nh)
 		marker.color.r = marker.color.g = marker.color.b = 0.5;
 		marker.scale.x = marker.scale.y = marker.scale.z = 1.0;
 		marker.mesh_resource = moma_param.mesh_parts[index].file;
+		if (moma_param.mesh_parts[index].role == MeshRole::Ag95)
+			ag95_marker_index = static_cast<int>(index);
 		moma_marker.markers.push_back(marker);
 	}
 	for (size_t i = 0; i < moma_param.dof_num; ++i)
@@ -274,14 +280,17 @@ void simCallBack(const ros::TimerEvent& event)
 	const KinematicResult links = moma_param.getLinkTransforms(moma_pos);
 	for (size_t i = 0; i < moma_param.dof_num; ++i)
 		moma_state.arm_odom[i].pose.pose = poseFromTransform(links.arm_link_T[i]);
-	if (moma_cmd.gripper_state)
+	if (ag95_marker_index >= 0)
 	{
-		moma_marker.markers.back().color.r = moma_marker.markers.back().color.g
-			= moma_marker.markers.back().color.b = 0.0;
-	}
-	else
-	{
-		moma_marker.markers.back().color.g = 1.0;
+		visualization_msgs::Marker& ag95_marker = moma_marker.markers[ag95_marker_index];
+		if (moma_cmd.gripper_state)
+		{
+			ag95_marker.color.r = ag95_marker.color.g = ag95_marker.color.b = 0.0;
+		}
+		else
+		{
+			ag95_marker.color.g = 1.0;
+		}
 	}
 
 	// collision detection
