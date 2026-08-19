@@ -55,7 +55,10 @@ namespace nmoma_planner
             double steer_time;
             double max_time;
             double check_colli_res;
-            MomaParam moma_param;
+            // ################################
+            // C++: Retain the injected finalized /moma profile
+            // ################################
+            std::shared_ptr<const MomaParam> moma_param;
             Eigen::VectorXd sample_min;
             Eigen::VectorXd sample_max;
             
@@ -112,10 +115,8 @@ namespace nmoma_planner
             // ################################
             inline void setMomaParam(const std::shared_ptr<const MomaParam>& profile)
             {
-                if (profile)
-                {
-                    moma_param = *profile;
-                }
+                ROS_ASSERT(profile);
+                moma_param = profile;
             }
             inline void reset(const vector<Eigen::VectorXd>& start_states, const vector<Eigen::VectorXd>& end_states);
             inline void reset(const Eigen::VectorXd& start_state, const Eigen::VectorXd& end_state);
@@ -137,15 +138,15 @@ namespace nmoma_planner
         nh.getParam("birrts/max_time", max_time);
         nh.getParam("birrts/check_colli_res", check_colli_res);
 
-        state_dim = 3 + moma_param.dof_num;
+        state_dim = 3 + moma_param->dof_num;
         sample_min.resize(state_dim);
         sample_max.resize(state_dim);
         sample_min.head(2) = grid_map->getMinBound();
         sample_max.head(2) = grid_map->getMaxBound();
         sample_min(2) = -M_PI;
         sample_max(2) = M_PI;
-        sample_min.tail(moma_param.dof_num) = moma_param.joint_pos_limit_min;
-        sample_max.tail(moma_param.dof_num) = moma_param.joint_pos_limit_max;
+        sample_min.tail(moma_param->dof_num) = moma_param->joint_pos_limit_min;
+        sample_max.tail(moma_param->dof_num) = moma_param->joint_pos_limit_max;
         se2_geop =std::make_shared<ompl::base::DubinsStateSpace>(1.0e-2);
         // se2_geop =std::make_shared<ompl::base::ReedsSheppStateSpace>(1.0e-2);
 
@@ -230,11 +231,11 @@ namespace nmoma_planner
         ompl::base::ScopedState<> from(se2_geop), to(se2_geop), s(se2_geop);
         from[0] = state1[0]; from[1] = state1[1]; from[2] = state1[2];
         to[0] = state2[0]; to[1] = state2[1]; to[2] = state2[2];
-        double time = se2_geop->distance(from(), to()) / moma_param.max_v;
+        double time = se2_geop->distance(from(), to()) / moma_param->max_v;
         
-        Eigen::VectorXd delta_theta = state2.tail(moma_param.dof_num) - state1.tail(moma_param.dof_num);
-        for (size_t i = 0; i < moma_param.dof_num; ++i)
-            time = max(time, fabs(delta_theta(i)) / moma_param.joint_vel_limit(i));
+        Eigen::VectorXd delta_theta = state2.tail(moma_param->dof_num) - state1.tail(moma_param->dof_num);
+        for (size_t i = 0; i < moma_param->dof_num; ++i)
+            time = max(time, fabs(delta_theta(i)) / moma_param->joint_vel_limit(i));
 
         return time;
     }
@@ -246,11 +247,11 @@ namespace nmoma_planner
 
     inline double BiRRTs::estHeuristic(const Eigen::VectorXd &state1, const Eigen::VectorXd &state2)
     {
-        Eigen::VectorXd diff(moma_param.dof_num+3);
+        Eigen::VectorXd diff(moma_param->dof_num+3);
         double dist2 = (state1.head(2) - state2.head(2)).squaredNorm();
         double dtheta = fabs(state1(2) - state2(2));
         dtheta = dtheta > M_PI ? 2.0 * M_PI - dtheta : dtheta;
-        double dq2 = (state1.tail(moma_param.dof_num) - state2.tail(moma_param.dof_num)).squaredNorm();
+        double dq2 = (state1.tail(moma_param->dof_num) - state2.tail(moma_param->dof_num)).squaredNorm();
 
         return sqrt(dist2 + dq2 + 10.0 * (dtheta*dtheta));
     }
@@ -399,7 +400,7 @@ namespace nmoma_planner
         int check_num_car = ceil(se2_geop->distance(from(), to()) / check_colli_res);
         
         // linear interpolation get manipulator check num
-        Eigen::VectorXd delta_theta = next_state.tail(moma_param.dof_num) - cur_state.tail(moma_param.dof_num);
+        Eigen::VectorXd delta_theta = next_state.tail(moma_param->dof_num) - cur_state.tail(moma_param->dof_num);
         int check_num_theta = ceil(delta_theta.lpNorm<Eigen::Infinity>() / check_colli_res);
 
         // check collision
@@ -413,7 +414,7 @@ namespace nmoma_planner
             temp_state[0] = reals[0];
             temp_state[1] = reals[1];
             temp_state[2] = reals[2];
-            temp_state.tail(moma_param.dof_num) = cur_state.tail(moma_param.dof_num) + delta_theta * temp_i;
+            temp_state.tail(moma_param->dof_num) = cur_state.tail(moma_param->dof_num) + delta_theta * temp_i;
             if (grid_map->isWholeBodyCollision(temp_state))
                 return true;
         }

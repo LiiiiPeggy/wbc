@@ -88,9 +88,9 @@ private:
     Eigen::Vector3d direct_pos;
     ros::Time begin_time;
     // ################################
-    // C++: Store the profile DOF for arm command serialization
-    // ################################
-    MomaParam moma_param;
+    // C++: Retain the injected finalized /moma profile
+            // ################################
+    std::shared_ptr<const MomaParam> moma_param;
     MomaTraj traj;
 
     OMPCState now_state;
@@ -114,10 +114,8 @@ public:
     // ################################
     void setMomaParam(const std::shared_ptr<const MomaParam>& profile)
     {
-        if (profile)
-        {
-            moma_param = *profile;
-        }
+        ROS_ASSERT(profile);
+        moma_param = profile;
     }
 
     bool hasTraj() { return has_traj; }

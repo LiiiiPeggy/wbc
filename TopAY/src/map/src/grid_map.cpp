@@ -8,10 +8,8 @@ namespace nmoma_planner
     // ################################
     void GridMap::setMomaParam(const std::shared_ptr<const MomaParam>& profile)
     {
-        if (profile)
-        {
-            moma_param = *profile;
-        }
+        ROS_ASSERT(profile);
+        moma_param = profile;
     }
 
     void GridMap:: init(ros::NodeHandle& nh)
@@ -296,7 +294,7 @@ namespace nmoma_planner
             fillESDF(
                 [&](int y)
                 {
-                    return esdf_buffer_2d_critical[toAddress2d(x, y)] < moma_param.chassis_colli_radius ?
+                    return esdf_buffer_2d_critical[toAddress2d(x, y)] < moma_param->chassis_colli_radius ?
                         0 :
                         std::numeric_limits<double>::max();
                 },
@@ -318,10 +316,10 @@ namespace nmoma_planner
         for (int x = min_idx(0); x <= max_idx(0); ++x)
             for (int y = min_idx(1); y <= max_idx(1); ++y)
             {
-                if (esdf_buffer_2d_critical[toAddress2d(x, y)] >= moma_param.chassis_colli_radius)
+                if (esdf_buffer_2d_critical[toAddress2d(x, y)] >= moma_param->chassis_colli_radius)
                 {
                     neg_map(x, y) = 1;
-                } else if (esdf_buffer_2d_critical[toAddress2d(x, y)] < moma_param.chassis_colli_radius)
+                } else if (esdf_buffer_2d_critical[toAddress2d(x, y)] < moma_param->chassis_colli_radius)
                 {
                     neg_map(x, y) = 0;
                 } else 
@@ -368,7 +366,7 @@ namespace nmoma_planner
             fillESDF(
                 [&](int y)
                 {
-                    return esdf_buffer_2d[toAddress2d(x, y)] < moma_param.chassis_colli_radius ?
+                    return esdf_buffer_2d[toAddress2d(x, y)] < moma_param->chassis_colli_radius ?
                         0 :
                         std::numeric_limits<double>::max();
                 },
@@ -390,10 +388,10 @@ namespace nmoma_planner
         for (int x = min_idx(0); x <= max_idx(0); ++x)
             for (int y = min_idx(1); y <= max_idx(1); ++y)
             {
-                if (esdf_buffer_2d[toAddress2d(x, y)] >= moma_param.chassis_colli_radius)
+                if (esdf_buffer_2d[toAddress2d(x, y)] >= moma_param->chassis_colli_radius)
                 {
                     neg_map(x, y) = 1;
-                } else if (esdf_buffer_2d[toAddress2d(x, y)] < moma_param.chassis_colli_radius)
+                } else if (esdf_buffer_2d[toAddress2d(x, y)] < moma_param->chassis_colli_radius)
                 {
                     neg_map(x, y) = 0;
                 } else 
@@ -569,7 +567,7 @@ namespace nmoma_planner
             if (isInMap2d(id))
             {
                 occ_buffer_2d_critical[toAddress2d(id)] = 1;
-                if (pc.points[i].z < moma_param.chassis_height)
+                if (pc.points[i].z < moma_param->chassis_height)
                     occ_buffer_2d[toAddress2d(id)] = 1;
             }
             Eigen::Vector3i id3;
@@ -657,7 +655,7 @@ namespace nmoma_planner
                 double esdf = esdf_buffer_2d[toAddress2d(id)];
                 esdf = esdf_buffer_2d_inflate[toAddress2d(id)];
                 if (esdf < 0.0)
-                // if (esdf < moma_param.chassis_colli_radius)
+                // if (esdf < moma_param->chassis_colli_radius)
                 {
                     pcl::PointXYZI p;
                     p.x = pos(0);
@@ -748,7 +746,7 @@ namespace nmoma_planner
             if (isInMap2d(id))
             {
                 occ_buffer_2d_critical[toAddress2d(id)] = 1;
-                if (pc.points[i].z < moma_param.chassis_height)
+                if (pc.points[i].z < moma_param->chassis_height)
                     occ_buffer_2d[toAddress2d(id)] = 1;
             }
             Eigen::Vector3i id3;
@@ -793,7 +791,7 @@ namespace nmoma_planner
             if (isInMap2d(id))
             {
                 occ_buffer_2d_critical[toAddress2d(id)] = 1;
-                if (pc.points[i].z < moma_param.chassis_height)
+                if (pc.points[i].z < moma_param->chassis_height)
                     occ_buffer_2d[toAddress2d(id)] = 1;
             }
             Eigen::Vector3i id3;

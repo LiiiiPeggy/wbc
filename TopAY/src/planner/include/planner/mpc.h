@@ -34,7 +34,10 @@ namespace nmoma_planner
         int predict_N = 30;
         int delay_num_chassis = 2;
         double dt = 0.1;
-        MomaParam moma_param;
+        // ################################
+        // C++: Retain the injected finalized /moma profile
+        // ################################
+        std::shared_ptr<const MomaParam> moma_param;
 
         Function solver;
 
@@ -64,10 +67,8 @@ namespace nmoma_planner
         // ################################
         inline void setMomaParam(const std::shared_ptr<const MomaParam>& profile)
         {
-            if (profile)
-            {
-                moma_param = *profile;
-            }
+            ROS_ASSERT(profile);
+            moma_param = profile;
         }
         inline void init(ros::NodeHandle &nh);
         inline void smoothAngle(const Eigen::VectorXd& source, Eigen::VectorXd& target);
@@ -103,8 +104,8 @@ namespace nmoma_planner
         MX R = diag(DM({R_[0], R_[1], R_[2], R_[3], R_[4], R_[5], R_[6], R_[7], R_[8]}));
         MX Rd = diag(DM({Rd_[0], Rd_[1], Rd_[2], Rd_[3], Rd_[4], Rd_[5], Rd_[6], Rd_[7], Rd_[8]}));
 
-        state_dim = 3+moma_param.dof_num;
-        control_dim = 2+moma_param.dof_num;
+        state_dim = 3+moma_param->dof_num;
+        control_dim = 2+moma_param->dof_num;
         U0 = DM::zeros(control_dim, predict_N);
         X0 = DM::zeros(state_dim, predict_N+1);
         last_cmd.resize(control_dim); last_cmd.setZero();
@@ -114,9 +115,9 @@ namespace nmoma_planner
         // define cost function
         Slice all;
         Slice chas_slice(0, 3);
-        Slice mani_slice(3, (int)(3+moma_param.dof_num));
+        Slice mani_slice(3, (int)(3+moma_param->dof_num));
         Slice vw_slice(0, 2);
-        Slice mani_vel_slice(2, (int)(2+moma_param.dof_num));
+        Slice mani_vel_slice(2, (int)(2+moma_param->dof_num));
         MX X = MX::sym("X", state_dim, predict_N+1);
         MX U = MX::sym("U", control_dim, predict_N);
         MX g = X(all, 0) - P_state(all, 0);
@@ -155,28 +156,28 @@ namespace nmoma_planner
                 lbx(state_dim*i+j, 0) = -inf;
                 ubx(state_dim*i+j, 0) = inf;
             }
-            for (size_t j=0; j<moma_param.dof_num; j++)
+            for (size_t j=0; j<moma_param->dof_num; j++)
             {
-                lbx(state_dim*i+j+3, 0) = moma_param.joint_pos_limit_min(j);
-                ubx(state_dim*i+j+3, 0) = moma_param.joint_pos_limit_max(j);
+                lbx(state_dim*i+j+3, 0) = moma_param->joint_pos_limit_min(j);
+                ubx(state_dim*i+j+3, 0) = moma_param->joint_pos_limit_max(j);
             }
             if (i < predict_N)
             {
-                lbx(state_dim*(predict_N+1)+control_dim*i, 0) = -moma_param.max_v;
-                ubx(state_dim*(predict_N+1)+control_dim*i, 0) = moma_param.max_v;
-                lbx(state_dim*(predict_N+1)+control_dim*i+1, 0) = -moma_param.max_w;
-                ubx(state_dim*(predict_N+1)+control_dim*i+1, 0) = moma_param.max_w;
-                for (size_t j=0; j<moma_param.dof_num; j++)
+                lbx(state_dim*(predict_N+1)+control_dim*i, 0) = -moma_param->max_v;
+                ubx(state_dim*(predict_N+1)+control_dim*i, 0) = moma_param->max_v;
+                lbx(state_dim*(predict_N+1)+control_dim*i+1, 0) = -moma_param->max_w;
+                ubx(state_dim*(predict_N+1)+control_dim*i+1, 0) = moma_param->max_w;
+                for (size_t j=0; j<moma_param->dof_num; j++)
                 {
-                    lbx(state_dim*(predict_N+1)+control_dim*i+2+j, 0) = -moma_param.joint_vel_limit(j);
-                    ubx(state_dim*(predict_N+1)+control_dim*i+2+j, 0) = moma_param.joint_vel_limit(j);
-                    lbg(state_dim*(predict_N+1)+control_dim*i+2+j, 0) = -moma_param.joint_acc_limit(j) * dt;
-                    ubg(state_dim*(predict_N+1)+control_dim*i+2+j, 0) = moma_param.joint_acc_limit(j) * dt;
+                    lbx(state_dim*(predict_N+1)+control_dim*i+2+j, 0) = -moma_param->joint_vel_limit(j);
+                    ubx(state_dim*(predict_N+1)+control_dim*i+2+j, 0) = moma_param->joint_vel_limit(j);
+                    lbg(state_dim*(predict_N+1)+control_dim*i+2+j, 0) = -moma_param->joint_acc_limit(j) * dt;
+                    ubg(state_dim*(predict_N+1)+control_dim*i+2+j, 0) = moma_param->joint_acc_limit(j) * dt;
                 }
-                lbg(state_dim*(predict_N+1)+control_dim*i, 0) = -moma_param.max_a * dt;
-                ubg(state_dim*(predict_N+1)+control_dim*i, 0) = moma_param.max_a * dt;
-                lbg(state_dim*(predict_N+1)+control_dim*i+1, 0) = -moma_param.max_dw * dt;
-                ubg(state_dim*(predict_N+1)+control_dim*i+1, 0) = moma_param.max_dw * dt;
+                lbg(state_dim*(predict_N+1)+control_dim*i, 0) = -moma_param->max_a * dt;
+                ubg(state_dim*(predict_N+1)+control_dim*i, 0) = moma_param->max_a * dt;
+                lbg(state_dim*(predict_N+1)+control_dim*i+1, 0) = -moma_param->max_dw * dt;
+                ubg(state_dim*(predict_N+1)+control_dim*i+1, 0) = moma_param->max_dw * dt;
             }
         }
         arg["lbx"] = lbx;
@@ -221,7 +222,7 @@ namespace nmoma_planner
     {
         MX Dstate = vertcat(control(0) * cos(state(2)),
                             control(0) * sin(state(2)));
-        for (size_t i = 0; i < moma_param.dof_num+1; i++)
+        for (size_t i = 0; i < moma_param->dof_num+1; i++)
             Dstate = vertcat(Dstate, control(i+1));
         return Dstate;
     }
@@ -249,7 +250,7 @@ namespace nmoma_planner
 
     inline void MPC::smoothAngle(const Eigen::VectorXd& source, Eigen::VectorXd& target)
     {
-        for (size_t i = 0; i < moma_param.dof_num+1; i++)
+        for (size_t i = 0; i < moma_param->dof_num+1; i++)
         {
             double dyaw = target(2+i) - source(2+i);
             while (dyaw >= M_PI / 2)
@@ -343,7 +344,7 @@ namespace nmoma_planner
             fake_moma::MomaCmd cmd_msg;
             cmd_msg.speed = 0.0;
             cmd_msg.angular_velocity = 0.0;
-            for (size_t i = 0; i < moma_param.dof_num; i++)
+            for (size_t i = 0; i < moma_param->dof_num; i++)
             {
                 cmd_msg.dq.data.push_back(0.0);
                 cmd_msg.q.data.push_back(now_state(3+i));
@@ -360,7 +361,7 @@ namespace nmoma_planner
             fake_moma::MomaCmd cmd_msg;
             cmd_msg.speed = 0.0;
             cmd_msg.angular_velocity = 0.0;
-            for (size_t i = 0; i < moma_param.dof_num; i++)
+            for (size_t i = 0; i < moma_param->dof_num; i++)
             {
                 cmd_msg.dq.data.push_back(0.0);
                 cmd_msg.q.data.push_back(now_state(3+i));
@@ -401,7 +402,7 @@ namespace nmoma_planner
         DM control = U0(Slice(), 0);
         cmd_msg.speed = last_cmd(0) = (double)control(0, 0);
         cmd_msg.angular_velocity = last_cmd(1) = (double)control(1, 0);
-        for (size_t i = 0; i < moma_param.dof_num; i++)
+        for (size_t i = 0; i < moma_param->dof_num; i++)
         {
             last_cmd(2+i) = (double)control(2+i, 0);
             cmd_msg.dq.data.push_back(last_cmd(2+i));

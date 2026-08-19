@@ -103,7 +103,10 @@ namespace nmoma_planner
             vector<double> esdf_buffer_2d_critical;
             sensor_msgs::PointCloud2 esdf_cloud_3d;
             sensor_msgs::PointCloud2 esdf_cloud_2d;
-            MomaParam moma_param;
+            // ################################
+            // C++: Retain the injected finalized /moma profile
+            // ################################
+            std::shared_ptr<const MomaParam> moma_param;
             RandomPCGenerator map_gener;
             std::vector<Box::array_repr> boxes;
 
@@ -371,7 +374,7 @@ namespace nmoma_planner
     {
         if (use_rog)
         {
-            double inflation = inflate ? moma_param.chassis_colli_radius : 0.0;
+            double inflation = inflate ? moma_param->chassis_colli_radius : 0.0;
             Eigen::Vector3d pos3d(pos(0), pos(1), 0.0);
             // if (!rog_map->insideLocalMap(pos3d))
             if (false)
@@ -618,15 +621,15 @@ namespace nmoma_planner
     inline bool GridMap::isWholeBodyCollision(const Eigen::VectorXd& state)
     {
         // joint position limit
-        for (size_t i = 0; i < moma_param.dof_num; i++)
-            if (state(i+3) > moma_param.joint_pos_limit_max[i] || state(i+3) < moma_param.joint_pos_limit_min[i])
+        for (size_t i = 0; i < moma_param->dof_num; i++)
+            if (state(i+3) > moma_param->joint_pos_limit_max[i] || state(i+3) < moma_param->joint_pos_limit_min[i])
                 return true;
 
         // chassis with obstacles
-        if (isCollision2d(state.head(2), moma_param.chassis_colli_radius))
+        if (isCollision2d(state.head(2), moma_param->chassis_colli_radius))
             return true;
 
-        std::vector<Eigen::Vector4d> colli_pts = moma_param.getColliPts(state);
+        std::vector<Eigen::Vector4d> colli_pts = moma_param->getColliPts(state);
         for (size_t i = 0; i < colli_pts.size(); i++)
         {
             // manipulators with obstacles
@@ -635,23 +638,23 @@ namespace nmoma_planner
                 return true;
             }
 
-            const double self_radius_i = moma_param.getColliSelfRadius(i);
-            const bool check_chassis = (moma_param.kinematics == KinematicsType::Cr10)
-                ? !moma_param.isChassisArmCollisionIgnored(moma_param.colli_link_map(i))
+            const double self_radius_i = moma_param->getColliSelfRadius(i);
+            const bool check_chassis = (moma_param->kinematics == KinematicsType::Cr10)
+                ? !moma_param->isChassisArmCollisionIgnored(moma_param->colli_link_map(i))
                 : (i > 2);
 
             // self collision: chassis with manipulators
             if (check_chassis
-                && colli_pts[i](2) < moma_param.chassis_height + self_radius_i &&
-                (colli_pts[i].head(2) - state.head(2)).norm() < moma_param.chassis_colli_radius + self_radius_i)
+                && colli_pts[i](2) < moma_param->chassis_height + self_radius_i &&
+                (colli_pts[i].head(2) - state.head(2)).norm() < moma_param->chassis_colli_radius + self_radius_i)
                 return true;
 
             // self collision: link with link
             for (size_t j=i+1; j<colli_pts.size(); j++)
             {
                 double dist = (colli_pts[i].head(3) - colli_pts[j].head(3)).norm();
-                const double self_sum = self_radius_i + moma_param.getColliSelfRadius(j);
-                if (dist < self_sum && moma_param.collision_matrix(i, j) == -1.0)
+                const double self_sum = self_radius_i + moma_param->getColliSelfRadius(j);
+                if (dist < self_sum && moma_param->collision_matrix(i, j) == -1.0)
                     return true;
             }
         }
@@ -661,19 +664,19 @@ namespace nmoma_planner
 
     inline bool GridMap::isWholeBodyCollision(const Eigen::VectorXd& state, int& coll_type) {
         // joint position limit
-        for (size_t i = 0; i < moma_param.dof_num; i++)
-            if (state(i+3) > moma_param.joint_pos_limit_max[i] || state(i+3) < moma_param.joint_pos_limit_min[i]) {
+        for (size_t i = 0; i < moma_param->dof_num; i++)
+            if (state(i+3) > moma_param->joint_pos_limit_max[i] || state(i+3) < moma_param->joint_pos_limit_min[i]) {
                 coll_type = 4;
                 return true;
             }
 
         // chassis with obstacles
-        if (isCollision2d(state.head(2), moma_param.chassis_colli_radius)) {
+        if (isCollision2d(state.head(2), moma_param->chassis_colli_radius)) {
             coll_type = 0;
             return true;
         }
 
-        std::vector<Eigen::Vector4d> colli_pts = moma_param.getColliPts(state);
+        std::vector<Eigen::Vector4d> colli_pts = moma_param->getColliPts(state);
         for (size_t i = 0; i < colli_pts.size(); i++)
         {
             // manipulators with obstacles
@@ -683,15 +686,15 @@ namespace nmoma_planner
                 return true;
             }
 
-            const double self_radius_i = moma_param.getColliSelfRadius(i);
-            const bool check_chassis = (moma_param.kinematics == KinematicsType::Cr10)
-                ? !moma_param.isChassisArmCollisionIgnored(moma_param.colli_link_map(i))
+            const double self_radius_i = moma_param->getColliSelfRadius(i);
+            const bool check_chassis = (moma_param->kinematics == KinematicsType::Cr10)
+                ? !moma_param->isChassisArmCollisionIgnored(moma_param->colli_link_map(i))
                 : (i > 2);
 
             // self collision: chassis with manipulators
             if (check_chassis
-                && colli_pts[i](2) < moma_param.chassis_height + self_radius_i &&
-                (colli_pts[i].head(2) - state.head(2)).norm() < moma_param.chassis_colli_radius + self_radius_i) {
+                && colli_pts[i](2) < moma_param->chassis_height + self_radius_i &&
+                (colli_pts[i].head(2) - state.head(2)).norm() < moma_param->chassis_colli_radius + self_radius_i) {
                     coll_type = 2;
                     return true;
                 }
@@ -700,8 +703,8 @@ namespace nmoma_planner
             for (size_t j=i+1; j<colli_pts.size(); j++)
             {
                 double dist = (colli_pts[i].head(3) - colli_pts[j].head(3)).norm();
-                const double self_sum = self_radius_i + moma_param.getColliSelfRadius(j);
-                if (dist < self_sum && moma_param.collision_matrix(i, j) == -1.0) {
+                const double self_sum = self_radius_i + moma_param->getColliSelfRadius(j);
+                if (dist < self_sum && moma_param->collision_matrix(i, j) == -1.0) {
                     coll_type = 3;
                     return true;
                 }
@@ -907,12 +910,12 @@ namespace nmoma_planner
             double distance;
             if (critical) {
                 rog_map->esdf_map_->getCriticalValueGrad(pos3d, distance, grad);
-                distance -= moma_param.chassis_colli_radius;
+                distance -= moma_param->chassis_colli_radius;
                 return distance;
             }
             else {
                 rog_map->esdf_map_->getValueGrad2d(pos3d, distance, grad);
-                distance -= moma_param.chassis_colli_radius;
+                distance -= moma_param->chassis_colli_radius;
                 return distance;
             }
         }
@@ -936,11 +939,11 @@ namespace nmoma_planner
             rog_map->esdf_map_->globalIndexToPos(id3, pos3d);
             if (critical) {
                 rog_map->esdf_map_->getCriticalValueGrad(pos3d, distance, grad);
-                distance -= moma_param.chassis_colli_radius;
+                distance -= moma_param->chassis_colli_radius;
                 return distance;
             } else {
                 rog_map->esdf_map_->getValueGrad2d(pos3d, distance, grad);
-                distance -= moma_param.chassis_colli_radius;
+                distance -= moma_param->chassis_colli_radius;
                 return distance;
             }
         }

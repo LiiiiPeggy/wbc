@@ -54,7 +54,10 @@ namespace nmoma_planner
             double goal_sample_rate;
             double max_time;
             double check_colli_res;
-            MomaParam moma_param;
+            // ################################
+            // C++: Retain the injected finalized /moma profile
+            // ################################
+            std::shared_ptr<const MomaParam> moma_param;
             Eigen::VectorXd sample_min;
             Eigen::VectorXd sample_max;
             
@@ -108,10 +111,8 @@ namespace nmoma_planner
             // ################################
             inline void setMomaParam(const std::shared_ptr<const MomaParam>& profile)
             {
-                if (profile)
-                {
-                    moma_param = *profile;
-                }
+                ROS_ASSERT(profile);
+                moma_param = profile;
             }
             inline void reset(const std::vector<Eigen::Vector4d>& path);
 
@@ -133,9 +134,9 @@ namespace nmoma_planner
         nh.getParam("mcrrts/goal_sample_rate", goal_sample_rate);
         nh.getParam("mcrrts/check_colli_res", check_colli_res);
 
-        state_dim = moma_param.dof_num;
-        sample_min = moma_param.joint_pos_limit_min;
-        sample_max = moma_param.joint_pos_limit_max;
+        state_dim = moma_param->dof_num;
+        sample_min = moma_param->joint_pos_limit_min;
+        sample_max = moma_param->joint_pos_limit_max;
         reeds_shepp =std::make_shared<ompl::base::ReedsSheppStateSpace>(1.0e-2);
 
         return;
@@ -315,7 +316,7 @@ namespace nmoma_planner
                 dif(i) = 2.0 * M_PI - fabs(dif(i));
         Eigen::VectorXd vel = dif.cwiseAbs() / time;
 
-        if ((moma_param.joint_vel_limit-vel).minCoeff() < 0.0)
+        if ((moma_param->joint_vel_limit-vel).minCoeff() < 0.0)
             return false;
         return true;
     }
@@ -338,7 +339,7 @@ namespace nmoma_planner
         int check_num_car = ceil(reeds_shepp->distance(from(), to()) / check_colli_res);
         
         // linear interpolation get manipulator check num
-        Eigen::VectorXd delta_theta = next_state.tail(moma_param.dof_num) - cur_state.tail(moma_param.dof_num);
+        Eigen::VectorXd delta_theta = next_state.tail(moma_param->dof_num) - cur_state.tail(moma_param->dof_num);
         int check_num_theta = ceil(delta_theta.lpNorm<Eigen::Infinity>() / check_colli_res);
 
         // check collision
@@ -352,7 +353,7 @@ namespace nmoma_planner
             temp_state[0] = reals[0];
             temp_state[1] = reals[1];
             temp_state[2] = reals[2];
-            temp_state.tail(moma_param.dof_num) = cur_state.tail(moma_param.dof_num) + delta_theta * temp_i;
+            temp_state.tail(moma_param->dof_num) = cur_state.tail(moma_param->dof_num) + delta_theta * temp_i;
             if (grid_map->isWholeBodyCollision(temp_state))
                 return true;
         }
