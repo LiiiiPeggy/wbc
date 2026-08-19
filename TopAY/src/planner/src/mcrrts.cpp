@@ -9,10 +9,10 @@ namespace nmoma_planner
         MCRRTNodePtr start_node, end_node;
         MCRRTNodePtr path_node_1 = nullptr, path_node_2 = nullptr;
 
-        start_node = genNodeFromState(std::make_pair(0, start.tail(moma_param.dof_num)));
+        start_node = genNodeFromState(std::make_pair(0, start.tail(moma_param->dof_num)));
         start_node->node_state = MCRRTNode::IN_TREE;
         start_node->cost = 0.0;
-        end_node = genNodeFromState(std::make_pair(path.size()-1, end.tail(moma_param.dof_num)));
+        end_node = genNodeFromState(std::make_pair(path.size()-1, end.tail(moma_param->dof_num)));
         end_node->node_state = MCRRTNode::IN_ANTI_TREE;
         end_node->cost = 0.0;
 
@@ -348,7 +348,7 @@ namespace nmoma_planner
         Eigen::VectorXd vel = diff / time;
         for (int i = 0; i < state_dim; ++i)
         {
-            double v_limit = moma_param.joint_vel_limit(i);
+            double v_limit = moma_param->joint_vel_limit(i);
             vel(i) = max(min(vel(i), v_limit), -v_limit);
         }
 

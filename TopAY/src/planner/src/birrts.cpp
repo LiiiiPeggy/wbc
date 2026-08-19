@@ -230,9 +230,9 @@ namespace nmoma_planner
                         double temp_time = (double)i / res;
                         se2_geop->interpolate(from(), to(), temp_time, s());
                         temp_state[0] = s[0]; temp_state[1] = s[1]; temp_state[2] = s[2];
-                        temp_state.tail(moma_param.dof_num) = node->robo_state.tail(moma_param.dof_num) + 
-                                                              (temp->robo_state.tail(moma_param.dof_num) 
-                                                               - node->robo_state.tail(moma_param.dof_num)) * temp_time;
+                        temp_state.tail(moma_param->dof_num) = node->robo_state.tail(moma_param->dof_num) + 
+                                                              (temp->robo_state.tail(moma_param->dof_num) 
+                                                               - node->robo_state.tail(moma_param->dof_num)) * temp_time;
                         path.push_back(temp_state);
                         time_list.push_back(estTime(temp_state, node->robo_state));
                     }
@@ -478,9 +478,9 @@ namespace nmoma_planner
                         double temp_time = (double)i / res;
                         se2_geop->interpolate(from(), to(), temp_time, s());
                         temp_state[0] = s[0]; temp_state[1] = s[1]; temp_state[2] = s[2];
-                        temp_state.tail(moma_param.dof_num) = node->robo_state.tail(moma_param.dof_num) + 
-                                                              (temp->robo_state.tail(moma_param.dof_num) 
-                                                               - node->robo_state.tail(moma_param.dof_num)) * temp_time;
+                        temp_state.tail(moma_param->dof_num) = node->robo_state.tail(moma_param->dof_num) + 
+                                                              (temp->robo_state.tail(moma_param->dof_num) 
+                                                               - node->robo_state.tail(moma_param->dof_num)) * temp_time;
                         path.push_back(temp_state);
                         time_list.push_back(estTime(temp_state, node->robo_state));
                     }
@@ -508,9 +508,9 @@ namespace nmoma_planner
         from[0] = node->robo_state[0]; from[1] = node->robo_state[1]; from[2] = node->robo_state[2];
         to[0] = target_state[0]; from[1] = target_state[1]; from[2] = target_state[2];
         double len = se2_geop->distance(from(), to());
-        if(len > moma_param.max_v * steer_time)
+        if(len > moma_param->max_v * steer_time)
         {
-            se2_geop->interpolate(from(), to(), moma_param.max_v * steer_time / len, s());
+            se2_geop->interpolate(from(), to(), moma_param->max_v * steer_time / len, s());
             auto reals = s.reals();
             state_new(0) = reals[0]; 
             state_new(1) = reals[1];
@@ -521,12 +521,12 @@ namespace nmoma_planner
             state_new.head(3) = target_state.head(3);
         }
 
-        if(diff.tail(moma_param.dof_num).norm() > 1.0e-2)
-            state_new.tail(moma_param.dof_num) = node->robo_state.tail(moma_param.dof_num) 
-                                                + diff.tail(moma_param.dof_num).normalized()
-                                                .cwiseProduct(moma_param.joint_vel_limit) * steer_time * 0.5;
+        if(diff.tail(moma_param->dof_num).norm() > 1.0e-2)
+            state_new.tail(moma_param->dof_num) = node->robo_state.tail(moma_param->dof_num) 
+                                                + diff.tail(moma_param->dof_num).normalized()
+                                                .cwiseProduct(moma_param->joint_vel_limit) * steer_time * 0.5;
         else
-            state_new.tail(moma_param.dof_num) = node->robo_state.tail(moma_param.dof_num);
+            state_new.tail(moma_param->dof_num) = node->robo_state.tail(moma_param->dof_num);
 
         for(int i = 3; i < state_dim; ++i)
         {
@@ -556,11 +556,11 @@ namespace nmoma_planner
             if(temp == q_new)
                 continue;
             if((temp->robo_state.head(2) - q_new->robo_state.head(2)).norm() >
-                moma_param.max_v * rewire_time_range)
+                moma_param->max_v * rewire_time_range)
                 continue;
-            for(size_t j = 0; j < moma_param.dof_num; ++j)
+            for(size_t j = 0; j < moma_param->dof_num; ++j)
             {
-                if (fabs(temp->robo_state(3+j)-q_new->robo_state(3+j)) > moma_param.joint_vel_limit[j] * rewire_time_range)
+                if (fabs(temp->robo_state(3+j)-q_new->robo_state(3+j)) > moma_param->joint_vel_limit[j] * rewire_time_range)
                 {
                     near = false;
                     break;
