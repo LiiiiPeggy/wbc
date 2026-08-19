@@ -55,18 +55,49 @@ double lidar_y = 0.0;
 double lidar_z = 0.0;
 Eigen::Vector3d lidar_vec;
 
-Eigen::Quaterniond euler2rotation(double r, double p, double y)
+// ################################
+// C++: Pose profile meshes from typed links and YAML visual offsets
+// ################################
+Eigen::Matrix4d meshLinkTransform(const KinematicResult& links, const MeshPart& part)
 {
-	return Eigen::AngleAxisd(r, Eigen::Vector3d::UnitX()) 
-			* Eigen::AngleAxisd(p, Eigen::Vector3d::UnitY()) 
-			* Eigen::AngleAxisd(y, Eigen::Vector3d::UnitZ());
+	switch (part.role)
+	{
+		case MeshRole::Base:
+			return links.base_T;
+		case MeshRole::ArmBase:
+			return links.arm_base_T;
+		case MeshRole::ArmLink:
+			return links.arm_link_T.at(part.index);
+		case MeshRole::Ag95:
+			return links.ee_T;
+	}
+	throw std::runtime_error("Unknown profile mesh role");
 }
 
-Eigen::Quaterniond euler2rotation(Eigen::Vector3d rpy)
+geometry_msgs::Pose poseFromTransform(const Eigen::Matrix4d& transform)
 {
-	return Eigen::AngleAxisd(rpy(0), Eigen::Vector3d::UnitX()) 
-			* Eigen::AngleAxisd(rpy(1), Eigen::Vector3d::UnitY()) 
-			* Eigen::AngleAxisd(rpy(2), Eigen::Vector3d::UnitZ());
+	geometry_msgs::Pose pose;
+	const Eigen::Quaterniond orientation(transform.block<3, 3>(0, 0));
+	pose.position.x = transform(0, 3);
+	pose.position.y = transform(1, 3);
+	pose.position.z = transform(2, 3);
+	pose.orientation.w = orientation.w();
+	pose.orientation.x = orientation.x();
+	pose.orientation.y = orientation.y();
+	pose.orientation.z = orientation.z();
+	return pose;
+}
+
+void updateMeshMarkers(const Eigen::VectorXd& state)
+{
+	const KinematicResult links = moma_param.getLinkTransforms(state);
+	for (size_t index = 0; index < moma_param.mesh_parts.size(); ++index)
+	{
+		const MeshPart& part = moma_param.mesh_parts[index];
+		moma_marker.markers[index].header.stamp = ros::Time::now();
+		moma_marker.markers[index].pose =
+			poseFromTransform(meshLinkTransform(links, part) * part.link_T_visual);
+	}
 }
 
 void initParams(ros::NodeHandle& nh)
@@ -107,109 +138,27 @@ void initParams(ros::NodeHandle& nh)
 	lidar_odom.pose.pose.position.z = lidar_pos(2);
 
 	// ################################
-	// C++: Define profile-independent simulator marker roles
+	// C++: Create marker instances exclusively from profile mesh parts
 	// ################################
-	const size_t kBase = 0;
-	const size_t kArmBase = 1;
-	const size_t kJoint0 = 2;
-	const size_t kGripper = 2 + moma_param.dof_num;
-	//diff_marker
-	visualization_msgs::Marker diff_marker;
-	diff_marker.header.frame_id = "world";
-	diff_marker.id = kBase;
-	diff_marker.type = visualization_msgs::Marker::MESH_RESOURCE;
-	diff_marker.action = visualization_msgs::Marker::ADD;
-	diff_marker.pose = moma_state.chassis_odom.pose.pose;
-	Eigen::Quaterniond q = euler2rotation(M_PI_2, 0.0, 0.0);
-	diff_marker.pose.orientation.w = q.w();
-	diff_marker.pose.orientation.x = q.x();
-	diff_marker.pose.orientation.y = q.y();
-	diff_marker.pose.orientation.z = q.z();
-	diff_marker.color.a = 1.0;
-	diff_marker.color.r = 0.5;
-	diff_marker.color.g = 0.5;
-	diff_marker.color.b = 0.5;
-	diff_marker.scale.x = 1.0;
-	diff_marker.scale.y = 1.0;
-	diff_marker.scale.z = 1.0;
-	diff_marker.mesh_resource = "package://fake_moma/meshes/tracer.dae";
-	moma_marker.markers.push_back(diff_marker);
-
-	Eigen::Vector3d ap(diff_marker.pose.position.x, diff_marker.pose.position.y, diff_marker.pose.position.z);
-	Eigen::Quaterniond aq(1.0, 0.0, 0.0, 0.0);
-	ap += aq.matrix() * moma_param.relative_t;
-	aq = aq.matrix() * moma_param.relative_R;
-
-	//link0
-	visualization_msgs::Marker link_marker;
-	link_marker.header.frame_id = "world";
-	link_marker.id = kArmBase;
-	link_marker.type = visualization_msgs::Marker::MESH_RESOURCE;
-	link_marker.action = visualization_msgs::Marker::ADD;
-	link_marker.pose.position.x = ap.x();
-	link_marker.pose.position.y = ap.y();
-	link_marker.pose.position.z = ap.z();
-	link_marker.pose.orientation.w = aq.w();
-	link_marker.pose.orientation.x = aq.x();
-	link_marker.pose.orientation.y = aq.y();
-	link_marker.pose.orientation.z = aq.z();
-	link_marker.color.a = 1.0;
-	link_marker.color.r = 0.5;
-	link_marker.color.g = 0.5;
-	link_marker.color.b = 0.5;
-	link_marker.scale.x = 1.0;
-	link_marker.scale.y = 1.0;
-	link_marker.scale.z = 1.0;
-	link_marker.mesh_resource = "package://fake_moma/meshes/link0.STL";
-	moma_marker.markers.push_back(link_marker);
-
-	// arm links from the profile DOF
-	for (size_t i = 0; i < moma_param.dof_num; i++)
+	now_q.assign(moma_param.dof_num, 0.0);
+	for (size_t index = 0; index < moma_param.mesh_parts.size(); ++index)
 	{
-		now_q.push_back(0.0);
-		visualization_msgs::Marker link_marker;
-		link_marker.header.frame_id = "world";
-		link_marker.id = kJoint0 + i;
-		link_marker.type = visualization_msgs::Marker::MESH_RESOURCE;
-		link_marker.action = visualization_msgs::Marker::ADD;
-		ap += aq.matrix() * Eigen::Vector3d(0.0, 0.0, moma_param.link_length[i]);
-		link_marker.pose.position.x = ap.x();
-		link_marker.pose.position.y = ap.y();
-		link_marker.pose.position.z = ap.z();
-		aq = aq.matrix() * euler2rotation(moma_param.joint_offset.row(i));
-		link_marker.pose.orientation.w = aq.w();
-		link_marker.pose.orientation.x = aq.x();
-		link_marker.pose.orientation.y = aq.y();
-		link_marker.pose.orientation.z = aq.z();
-		link_marker.color.a = 1.0;
-		link_marker.color.r = 0.5;
-		link_marker.color.g = 0.5;
-		link_marker.color.b = 0.5;
-		link_marker.scale.x = 1.0;
-		link_marker.scale.y = 1.0;
-		link_marker.scale.z = 1.0;
-		link_marker.mesh_resource = "package://fake_moma/meshes/link"+std::to_string(i+1)+".STL";
-		moma_marker.markers.push_back(link_marker);
-		moma_state.arm_odom.push_back(moma_state.chassis_odom);
-		moma_state.arm_odom[i].pose.pose = link_marker.pose;
+		visualization_msgs::Marker marker;
+		marker.header.frame_id = "world";
+		marker.id = static_cast<int>(index);
+		marker.type = visualization_msgs::Marker::MESH_RESOURCE;
+		marker.action = visualization_msgs::Marker::ADD;
+		marker.color.a = 1.0;
+		marker.color.r = marker.color.g = marker.color.b = 0.5;
+		marker.scale.x = marker.scale.y = marker.scale.z = 1.0;
+		marker.mesh_resource = moma_param.mesh_parts[index].file;
+		moma_marker.markers.push_back(marker);
 	}
-
-	//gripper
-	visualization_msgs::Marker gripper_marker;
-	gripper_marker.header.frame_id = "world";
-	gripper_marker.id = kGripper;
-	gripper_marker.type = visualization_msgs::Marker::MESH_RESOURCE;
-	gripper_marker.action = visualization_msgs::Marker::ADD;
-	gripper_marker.pose = moma_marker.markers.back().pose;
-	gripper_marker.color.a = 1.0;
-	gripper_marker.color.r = 0.5;
-	gripper_marker.color.g = 0.5;
-	gripper_marker.color.b = 0.5;
-	gripper_marker.scale.x = 1.0;
-	gripper_marker.scale.y = 1.0;
-	gripper_marker.scale.z = 1.0;
-	gripper_marker.mesh_resource = "package://fake_moma/meshes/gripper.dae";
-	moma_marker.markers.push_back(gripper_marker);
+	for (size_t i = 0; i < moma_param.dof_num; ++i)
+		moma_state.arm_odom.push_back(moma_state.chassis_odom);
+	Eigen::VectorXd state = Eigen::VectorXd::Zero(3 + moma_param.dof_num);
+	state.head(3) = now_se2;
+	updateMeshMarkers(state);
 }
 
 void rcvVelCmdCallBack(const fake_moma::MomaCmd& cmd)
@@ -289,26 +238,10 @@ void simCallBack(const ros::TimerEvent& event)
 	moma_state.chassis_odom.header.stamp = ros::Time::now();
 	moma_state.chassis_odom.pose.pose.position.x  = now_se2.x();
 	moma_state.chassis_odom.pose.pose.position.y  = now_se2.y();
-	Eigen::Quaterniond q = euler2rotation(M_PI_2, now_se2(2), 0.0);
 	moma_state.chassis_odom.pose.pose.orientation.w  = cos(now_se2(2)/2);
 	moma_state.chassis_odom.pose.pose.orientation.z  = sin(now_se2(2)/2);
 	moma_state.chassis_odom.twist.twist.linear.x  = vx;
 	moma_state.chassis_odom.twist.twist.angular.z = wz;
-	// ################################
-	// C++: Update simulator markers through profile-based roles
-	// ################################
-	const size_t kBase = 0;
-	const size_t kArmBase = 1;
-	const size_t kJoint0 = 2;
-	const size_t kGripper = 2 + moma_param.dof_num;
-	moma_marker.markers[kBase].header.stamp = ros::Time::now();
-	moma_marker.markers[kBase].pose = moma_state.chassis_odom.pose.pose;
-	moma_marker.markers[kBase].pose.position.z = moma_param.chassis_height;
-	moma_marker.markers[kBase].pose.orientation.w = q.w();
-	moma_marker.markers[kBase].pose.orientation.x = q.x();
-	moma_marker.markers[kBase].pose.orientation.y = q.y();
-	moma_marker.markers[kBase].pose.orientation.z = q.z();
-
 	// lidar
 	Eigen::Quaterniond chasq(cos(now_se2(2)/2), 0.0, 0.0, sin(now_se2(2)/2));
 	Eigen::Vector3d chasv(now_se2.x(), now_se2.y(), moma_param.chassis_height);
@@ -324,48 +257,27 @@ void simCallBack(const ros::TimerEvent& event)
 		now_q[i] = moma_cmd.q.data[i];
 		// now_q[i] += moma_cmd.dq.data[i]*time_resolution;
 	
-	moma_marker.markers[kArmBase].pose = moma_marker.markers[kBase].pose;
-	Eigen::Vector3d ap(moma_marker.markers[kBase].pose.position.x,
-					   moma_marker.markers[kBase].pose.position.y,
-					   moma_marker.markers[kBase].pose.position.z);
-	Eigen::Quaterniond aq(cos(now_se2(2)/2.0), 0.0, 0.0, sin(now_se2(2)/2.0));
-	ap += aq.matrix() * moma_param.relative_t;
-	aq = aq.matrix() * moma_param.relative_R;
-
-	moma_marker.markers[kArmBase].pose.position.x = ap.x();
-	moma_marker.markers[kArmBase].pose.position.y = ap.y();
-	moma_marker.markers[kArmBase].pose.position.z = ap.z();
-	moma_marker.markers[kArmBase].pose.orientation.w = aq.w();
-	moma_marker.markers[kArmBase].pose.orientation.x = aq.x();
-	moma_marker.markers[kArmBase].pose.orientation.y = aq.y();
-	moma_marker.markers[kArmBase].pose.orientation.z = aq.z();
-
+	// ################################
+	// C++: Update all meshes from the shared typed transform result
+	// ################################
+	Eigen::VectorXd moma_pos(3 + moma_param.dof_num);
+	moma_pos.head(3) = now_se2;
 	for (size_t i=0; i<moma_param.dof_num; i++)
 	{
 		now_q[i] = std::max( moma_param.joint_pos_limit_min[i], 
 				   std::min( moma_param.joint_pos_limit_max[i], (double) (now_q[i]) ) );
-		ap += aq.matrix() * Eigen::Vector3d(0.0, 0.0, moma_param.link_length[i]);
-		aq = aq.matrix() * euler2rotation(moma_param.joint_offset.row(i))
-						* euler2rotation(moma_param.joint_dof_axis.row(i)*now_q[i]);
-		moma_marker.markers[kJoint0 + i].pose.position.x = ap.x();
-		moma_marker.markers[kJoint0 + i].pose.position.y = ap.y();
-		moma_marker.markers[kJoint0 + i].pose.position.z = ap.z();
-		moma_marker.markers[kJoint0 + i].pose.orientation.w = aq.w();
-		moma_marker.markers[kJoint0 + i].pose.orientation.x = aq.x();
-		moma_marker.markers[kJoint0 + i].pose.orientation.y = aq.y();
-		moma_marker.markers[kJoint0 + i].pose.orientation.z = aq.z();
-		moma_state.arm_odom[i].pose.pose = moma_marker.markers[kJoint0 + i].pose;
+		moma_pos[3 + i] = now_q[i];
 		moma_state.arm_odom[i].twist.twist.linear.x = now_q[i];
 		moma_state.arm_odom[i].twist.twist.angular.z = moma_cmd.dq.data[i];
 	}
-
-	// gripper
-	moma_marker.markers[kGripper].pose = moma_marker.markers[kJoint0 + moma_param.dof_num - 1].pose;
+	updateMeshMarkers(moma_pos);
+	const KinematicResult links = moma_param.getLinkTransforms(moma_pos);
+	for (size_t i = 0; i < moma_param.dof_num; ++i)
+		moma_state.arm_odom[i].pose.pose = poseFromTransform(links.arm_link_T[i]);
 	if (moma_cmd.gripper_state)
 	{
-		moma_marker.markers.back().color.r = 0.0;
-		moma_marker.markers.back().color.g = 0.0;
-		moma_marker.markers.back().color.b = 0.0;
+		moma_marker.markers.back().color.r = moma_marker.markers.back().color.g
+			= moma_marker.markers.back().color.b = 0.0;
 	}
 	else
 	{
@@ -373,11 +285,6 @@ void simCallBack(const ros::TimerEvent& event)
 	}
 
 	// collision detection
-	Eigen::VectorXd moma_pos(3+moma_param.dof_num);
-	moma_pos.head(3) = now_se2;
-	for (size_t i=0; i<moma_param.dof_num; i++)
-		moma_pos[3+i] = now_q[i];
-	
 	Eigen::VectorXi collision_link;
 	moma_param.isSelfCollision(moma_pos, collision_link);
 
@@ -415,9 +322,6 @@ void simCallBack(const ros::TimerEvent& event)
 			}
 		}
 
-		moma_marker.markers[i].color.r = 0.5;
-		moma_marker.markers[i].color.g = 0.5;
-		moma_marker.markers[i].color.b = 0.5;
 		// if (!collision && collision_link[i] == 0)
 		// {
 		// 	moma_marker.markers[i].color.r = 0.5;

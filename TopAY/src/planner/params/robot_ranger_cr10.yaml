@@ -45,4 +45,16 @@ moma:
     - {xyz: [0.04, 0.03, 0.10], obstacle_radius: 0.03, self_radius: 0.025}
     - {xyz: [0.04, -0.03, 0.10], obstacle_radius: 0.03, self_radius: 0.025}
 
-  mesh_prefix: "package://fake_moma/meshes/ranger_cr10/"
+  # ################################
+  # YAML: Ranger CR10 meshes attach directly to typed URDF link transforms
+  # ################################
+  mesh_parts:
+    - {role: base, file: "package://fake_moma/meshes/ranger_cr10/ranger_meshes/ranger_base_link.STL", xyz: [0.0, 0.0, 0.0], rpy: [0.0, 0.0, 0.0]}
+    - {role: arm_base, file: "package://fake_moma/meshes/ranger_cr10/cr10_meshes/cr10_base_link.STL", xyz: [0.0, 0.0, 0.0], rpy: [0.0, 0.0, 0.0]}
+    - {role: arm_link, index: 0, file: "package://fake_moma/meshes/ranger_cr10/cr10_meshes/Link1.STL", xyz: [0.0, 0.0, 0.0], rpy: [0.0, 0.0, 0.0]}
+    - {role: arm_link, index: 1, file: "package://fake_moma/meshes/ranger_cr10/cr10_meshes/Link2.STL", xyz: [0.0, 0.0, 0.0], rpy: [0.0, 0.0, 0.0]}
+    - {role: arm_link, index: 2, file: "package://fake_moma/meshes/ranger_cr10/cr10_meshes/Link3.STL", xyz: [0.0, 0.0, 0.0], rpy: [0.0, 0.0, 0.0]}
+    - {role: arm_link, index: 3, file: "package://fake_moma/meshes/ranger_cr10/cr10_meshes/Link4.STL", xyz: [0.0, 0.0, 0.0], rpy: [0.0, 0.0, 0.0]}
+    - {role: arm_link, index: 4, file: "package://fake_moma/meshes/ranger_cr10/cr10_meshes/Link5.STL", xyz: [0.0, 0.0, 0.0], rpy: [0.0, 0.0, 0.0]}
+    - {role: arm_link, index: 5, file: "package://fake_moma/meshes/ranger_cr10/cr10_meshes/Link6.STL", xyz: [0.0, 0.0, 0.0], rpy: [0.0, 0.0, 0.0]}
+    - {role: ag95, file: "package://fake_moma/meshes/ranger_cr10/ag95_meshes/ag95_base_link.STL", xyz: [0.0, 0.0, 0.0], rpy: [0.0, 0.0, 0.0]}

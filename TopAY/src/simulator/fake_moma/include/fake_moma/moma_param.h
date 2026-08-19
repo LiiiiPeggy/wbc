@@ -53,6 +53,25 @@ struct KinematicResult
 };
 
 // ################################
+// C++: Profile-defined mesh attachment and visual-offset contract
+// ################################
+enum class MeshRole
+{
+    Base,
+    ArmBase,
+    ArmLink,
+    Ag95
+};
+
+struct MeshPart
+{
+    MeshRole role = MeshRole::Base;
+    size_t index = 0;
+    std::string file;
+    Eigen::Matrix4d link_T_visual = Eigen::Matrix4d::Identity();
+};
+
+// ################################
 // C++: CR10 collision proxy with dual env/self radii
 // ################################
 struct CollisionSphere
@@ -123,6 +142,11 @@ struct MomaParam
     std::vector<CollisionSphere> ag95_spheres;
     std::vector<CollisionSphere> collision_proxies_;
     std::vector<double> colli_self_radii_;
+
+    // ################################
+    // C++: Ordered profile visual meshes mapped to typed link transforms
+    // ################################
+    std::vector<MeshPart> mesh_parts;
 
     MomaParam()
     {

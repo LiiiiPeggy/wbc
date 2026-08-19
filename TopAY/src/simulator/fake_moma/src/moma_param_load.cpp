@@ -101,6 +101,106 @@ void loadAg95Spheres(const ros::NodeHandle& root_nh, std::vector<CollisionSphere
         spheres.push_back(sphere);
     }
 }
+
+// ################################
+// C++: Parse profile mesh parts and their link-relative visual transforms
+// ################################
+double xmlNumber(const XmlRpc::XmlRpcValue& value, const std::string& name)
+{
+    if (value.getType() == XmlRpc::XmlRpcValue::TypeInt)
+    {
+        return static_cast<int>(value);
+    }
+    if (value.getType() == XmlRpc::XmlRpcValue::TypeDouble)
+    {
+        return static_cast<double>(value);
+    }
+    throw std::runtime_error(name + " must contain numeric values");
+}
+
+Eigen::Vector3d xmlVector3(const XmlRpc::XmlRpcValue& value, const std::string& name)
+{
+    if (value.getType() != XmlRpc::XmlRpcValue::TypeArray || value.size() != 3)
+    {
+        throw std::runtime_error(name + " must contain exactly three numeric values");
+    }
+    return Eigen::Vector3d(xmlNumber(value[0], name), xmlNumber(value[1], name),
+                           xmlNumber(value[2], name));
+}
+
+Eigen::Matrix3d rpyToRotation(const Eigen::Vector3d& rpy)
+{
+    return (Eigen::AngleAxisd(rpy.z(), Eigen::Vector3d::UnitZ())
+            * Eigen::AngleAxisd(rpy.y(), Eigen::Vector3d::UnitY())
+            * Eigen::AngleAxisd(rpy.x(), Eigen::Vector3d::UnitX())).toRotationMatrix();
+}
+
+MeshRole parseMeshRole(const XmlRpc::XmlRpcValue& value, const std::string& name)
+{
+    if (value.getType() != XmlRpc::XmlRpcValue::TypeString)
+    {
+        throw std::runtime_error(name + " must be a string");
+    }
+    const std::string role = static_cast<std::string>(value);
+    if (role == "base")
+        return MeshRole::Base;
+    if (role == "arm_base")
+        return MeshRole::ArmBase;
+    if (role == "arm_link")
+        return MeshRole::ArmLink;
+    if (role == "ag95")
+        return MeshRole::Ag95;
+    throw std::runtime_error(name + " has unsupported role: " + role);
+}
+
+void loadMeshParts(const ros::NodeHandle& root_nh, std::vector<MeshPart>& mesh_parts)
+{
+    XmlRpc::XmlRpcValue entries;
+    getRequired(root_nh, "mesh_parts", entries);
+    if (entries.getType() != XmlRpc::XmlRpcValue::TypeArray || entries.size() == 0)
+    {
+        throw std::runtime_error("Global parameter /moma/mesh_parts must be a non-empty array");
+    }
+
+    mesh_parts.clear();
+    mesh_parts.reserve(entries.size());
+    for (int entry_idx = 0; entry_idx < entries.size(); ++entry_idx)
+    {
+        const XmlRpc::XmlRpcValue& entry = entries[entry_idx];
+        const std::string name = "Global parameter /moma/mesh_parts[" + std::to_string(entry_idx) + "]";
+        if (entry.getType() != XmlRpc::XmlRpcValue::TypeStruct || !entry.hasMember("role")
+            || !entry.hasMember("file") || !entry.hasMember("xyz") || !entry.hasMember("rpy"))
+        {
+            throw std::runtime_error(name + " requires role, file, xyz, and rpy");
+        }
+        if (entry["file"].getType() != XmlRpc::XmlRpcValue::TypeString
+            || static_cast<std::string>(entry["file"]).empty())
+        {
+            throw std::runtime_error(name + ".file must be a non-empty string");
+        }
+
+        MeshPart part;
+        part.role = parseMeshRole(entry["role"], name + ".role");
+        part.file = static_cast<std::string>(entry["file"]);
+        if (part.role == MeshRole::ArmLink)
+        {
+            if (!entry.hasMember("index"))
+            {
+                throw std::runtime_error(name + " arm_link requires index");
+            }
+            const double index = xmlNumber(entry["index"], name + ".index");
+            if (index < 0.0 || std::floor(index) != index)
+            {
+                throw std::runtime_error(name + ".index must be a non-negative integer");
+            }
+            part.index = static_cast<size_t>(index);
+        }
+
+        part.link_T_visual.block<3, 3>(0, 0) = rpyToRotation(xmlVector3(entry["rpy"], name + ".rpy"));
+        part.link_T_visual.block<3, 1>(0, 3) = xmlVector3(entry["xyz"], name + ".xyz");
+        mesh_parts.push_back(part);
+    }
+}
 }  // namespace
 
 // ################################
@@ -177,6 +277,7 @@ MomaParam MomaParam::fromRos(const ros::NodeHandle& root_nh)
     profile.joint_offset = toMatrixX3(values, profile.dof_num, "arm/joint_offset");
     getRequired(root_nh, "arm/joint_dof_axis", values);
     profile.joint_dof_axis = toMatrixX3(values, profile.dof_num, "arm/joint_dof_axis");
+    loadMeshParts(root_nh, profile.mesh_parts);
 
     if (profile.kinematics == KinematicsType::Cr10)
     {
@@ -297,7 +398,7 @@ void MomaParam::finalizeCollision()
 }
 
 // ################################
-// C++: Reserve visualization finalization for later profiles
+// C++: Finalize profile visualization attachments after parsing
 // ################################
 void MomaParam::finalizeVisualization()
 {
@@ -377,10 +478,39 @@ void MomaParam::validateCollision() const
 }
 
 // ################################
-// C++: Validate visualization data when visualization profiles arrive
+// C++: Validate every mesh role against the active typed kinematics profile
 // ################################
 void MomaParam::validateVisualization() const
 {
+    bool has_base = false;
+    bool has_ag95 = false;
+    for (const MeshPart& part : mesh_parts)
+    {
+        if (part.file.empty())
+        {
+            throw std::runtime_error("Global /moma mesh part file must not be empty");
+        }
+        if (part.role == MeshRole::Base)
+        {
+            has_base = true;
+        }
+        if (part.role == MeshRole::ArmLink && part.index >= dof_num)
+        {
+            throw std::runtime_error("Global /moma arm_link mesh index exceeds dof_num");
+        }
+        if (part.role == MeshRole::Ag95)
+        {
+            has_ag95 = true;
+        }
+    }
+    if (!has_base)
+    {
+        throw std::runtime_error("Global /moma/mesh_parts requires a base mesh");
+    }
+    if (kinematics == KinematicsType::Cr10 && !has_ag95)
+    {
+        throw std::runtime_error("Global /moma/mesh_parts requires an AG95 mesh for CR10");
+    }
 }
 
 // ################################
