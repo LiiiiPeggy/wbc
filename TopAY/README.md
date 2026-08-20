@@ -145,6 +145,18 @@ source devel/setup.zsh
 # for planning with arbitrary target; use the '2d Nav Goal' to set a target for the planner
 roslaunch planner run_all.launch rviz:=true
 
+# Ranger + CR10 local-MPC smoke (Phase A)
+roslaunch planner run_ranger_cr10_smoke.launch rviz:=true
+
+# Use `world` (any non-`target` frame) to request a base SE(2) goal and
+# deterministic feasible terminal arm sample; this is not an EE 6D goal.
+rostopic pub -1 /move_base_simple/goal geometry_msgs/PoseStamped \
+"{header: {frame_id: 'world'}, pose: {position: {x: 3.0, y: 0.0, z: 0.0}, orientation: {w: 1.0}}}"
+
+# Accept only if optimization succeeds, MPC tracks, /moma_cmd streams, and
+# /moma_odom evolves to: position error < 0.10 m, yaw error < 5 deg, and
+# max terminal-arm joint error < 0.05 rad.
+
 # for benchmarking in tables
 roslaunch planner benchmark_tables.launch rviz:=false
 

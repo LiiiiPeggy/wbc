@@ -1,0 +1,12 @@
+# ################################
+# YAML: Ranger + CR10 smoke overlay — local MPC execution
+# ################################
+planner_node:
+  agent:
+    mode: "planner"
+    planner: "moma"
+    local_mode: true
+    random_ee: true
+    fixed_sequence: true
+    fixed_startgoal: false
+    scene: "smoke_open"

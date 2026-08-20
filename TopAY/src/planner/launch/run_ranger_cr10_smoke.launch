@@ -1,0 +1,49 @@
+<launch>
+    <arg name="map_topic" value="/global_map" />
+    <arg name="odom_topic" value="/moma_odom" />
+    <arg name="cmd_topic" value="/moma_cmd" />
+    <arg name="rviz" default="true" />
+
+    <!-- ################################ -->
+    <!-- XML: Load shared global /moma Ranger + CR10 profile and smoke overlays -->
+    <!-- ################################ -->
+    <rosparam command="load" file="$(find planner)/params/robot_ranger_cr10.yaml" />
+    <rosparam command="load" file="$(find planner)/params/agent.yaml" />
+    <rosparam command="load" file="$(find planner)/params/agent_ranger_cr10_smoke.yaml" />
+    <rosparam command="load" file="$(find planner)/params/grid_map.yaml" />
+    <rosparam command="load" file="$(find planner)/params/rog_map.yaml" />
+    <rosparam command="load" file="$(find planner)/params/birrts.yaml" />
+    <rosparam command="load" file="$(find planner)/params/topo_prm.yaml" />
+    <rosparam command="load" file="$(find planner)/params/mcrrts.yaml" />
+    <rosparam command="load" file="$(find planner)/params/optimizer.yaml" />
+    <rosparam command="load" file="$(find planner)/params/mpc.yaml" />
+    <rosparam command="load" file="$(find planner)/params/ik.yaml" />
+    <rosparam command="load" file="$(find planner)/params/map_ranger_cr10_smoke.yaml" />
+
+    <node name="fake_moma_node" pkg="fake_moma" type="fake_moma_node" output="screen">
+        <remap from="~global_map" to="$(arg map_topic)" />
+        <remap from="~state" to="$(arg odom_topic)" />
+        <remap from="~command" to="$(arg cmd_topic)" />
+        <param name="~sim/init_x" value="0.0" />
+        <param name="~sim/init_y" value="0.0" />
+        <param name="~sim/init_yaw" value="0.0" />
+    </node>
+
+    <node name="moma_vis_node" pkg="fake_moma" type="moma_vis_node" output="screen">
+        <remap from="~state" to="$(arg odom_topic)" />
+    </node>
+
+    <node pkg="random_map_generator" type="random_map" name="random_map" output="screen" required="true">
+        <remap from="~global_cloud" to="$(arg map_topic)" />
+        <remap from="~global_boxes" to="/global_boxes" />
+    </node>
+
+    <node pkg="planner" type="planner_node" name="planner_node" output="screen" required="true">
+        <remap from="~state" to="$(arg odom_topic)" />
+        <remap from="~cmd" to="$(arg cmd_topic)" />
+        <remap from="~global_cloud" to="$(arg map_topic)" />
+    </node>
+
+    <node if="$(arg rviz)" name="rviz" pkg="rviz" type="rviz"
+          args="-d $(find fake_moma)/launch/default.rviz" required="true" />
+</launch>
