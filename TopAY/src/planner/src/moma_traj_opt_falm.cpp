@@ -190,7 +190,10 @@ namespace nmoma_planner
         minco_opt.generate(minco_start_state, minco_end_state, inner_pts, times);
 
         // init optimization variables
-        int variable_num = 10 * piece_num;
+        // ################################
+        // C++: Size opt vars from Tau/Theta/Arc + dof_num joints
+        // ################################
+        int variable_num = (3 + static_cast<int>(moma_param->dof_num)) * piece_num;
         Eigen::VectorXd x;
         x.resize(variable_num);
         int opt_var_idx = 0;
@@ -1018,17 +1021,21 @@ namespace nmoma_planner
                         // grad_to_pos.setZero();
                         pos_grads.push_back(grad_to_pos);
                     }
+                    // ################################
+                    // C++: Dual-radius self collision; keep FALM constraint count
+                    // ################################
                     // moma self collision
                     for (size_t cidx=0; cidx<colli_pts.size(); cidx++)
                     {
+                        const double self_radius_i = moma_param->getColliSelfRadius(cidx);
                         // with chassis * 11
                         if (cidx > 0)
                         {
                             double collision_cost;
                             double aug_grad;
                             double colli_mu = mu[non_equal_idx];
-                            gx[non_equal_idx] = (moma_param->chassis_height + moma_param->relative_t(2) + 
-                                                 colli_pts[cidx](3) - colli_pts[cidx](2)) * scale_cx(constrain_idx);
+                            gx[non_equal_idx] = (moma_param->chassis_height + self_radius_i
+                                                 - colli_pts[cidx](2)) * scale_cx(constrain_idx);
                             if (rho * gx[non_equal_idx] + colli_mu > 0)
                             {
                                 collision_cost = getAugmentedCost(rho, gx[non_equal_idx], colli_mu) * opt_param.second_stage.mani_colli_weight;
@@ -1051,8 +1058,8 @@ namespace nmoma_planner
                                 continue;
 
                             Eigen::Vector3d diff = colli_pts[cidx].head(3) - colli_pts[cj].head(3);
-                            double dist = (colli_pts[cidx](3) + colli_pts[cj](3)) * 
-                                         (colli_pts[cidx](3) + colli_pts[cj](3)) - diff.squaredNorm();
+                            const double self_sum = self_radius_i + moma_param->getColliSelfRadius(cj);
+                            double dist = self_sum * self_sum - diff.squaredNorm();
 
                             double collision_cost;
                             double aug_grad;

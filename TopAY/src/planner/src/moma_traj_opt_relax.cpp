@@ -190,7 +190,10 @@ namespace nmoma_planner
         minco_opt.generate(minco_start_state, minco_end_state, inner_pts, times);
 
         // init optimization variables
-        int variable_num = 10 * piece_num;
+        // ################################
+        // C++: Size opt vars from Tau/Theta/Arc + dof_num joints
+        // ################################
+        int variable_num = (3 + static_cast<int>(moma_param->dof_num)) * piece_num;
         Eigen::VectorXd x;
         x.resize(variable_num);
         int opt_var_idx = 0;
@@ -1006,14 +1009,20 @@ namespace nmoma_planner
                         // grad_to_pos.setZero();
                         pos_grads.push_back(grad_to_pos);
                     }
+                    // ################################
+                    // C++: Dual-radius self collision aligned with GridMap
+                    // ################################
                     // moma self collision
                     for (size_t cidx=0; cidx<colli_pts.size(); cidx++)
                     {
+                        const double self_radius_i = moma_param->getColliSelfRadius(cidx);
+                        const bool check_chassis = (moma_param->kinematics == KinematicsType::Cr10)
+                            ? !moma_param->isChassisArmCollisionIgnored(moma_param->colli_link_map(cidx))
+                            : (cidx > 2);
                         // with chassis
-                        if (cidx > 2)
+                        if (check_chassis)
                         {
-                            double height = moma_param->chassis_height + moma_param->relative_t(2) + 
-                                            colli_pts[cidx](3) - colli_pts[cidx](2);
+                            double height = moma_param->chassis_height + self_radius_i - colli_pts[cidx](2);
                             if (height > 0)
                             {
                                 double violaSelfPena;
@@ -1035,8 +1044,8 @@ namespace nmoma_planner
                                 continue;
 
                             Eigen::Vector3d diff = colli_pts[cidx].head(3) - colli_pts[cj].head(3);
-                            double dist = (colli_pts[cidx](3) + colli_pts[cj](3)) * 
-                                         (colli_pts[cidx](3) + colli_pts[cj](3)) - diff.squaredNorm();
+                            const double self_sum = self_radius_i + moma_param->getColliSelfRadius(cj);
+                            double dist = self_sum * self_sum - diff.squaredNorm();
                             if (dist > 0)
                             {
                                 double violaSelfPena;
