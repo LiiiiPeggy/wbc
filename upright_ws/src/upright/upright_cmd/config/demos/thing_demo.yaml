@@ -17,10 +17,17 @@ include:
 
 logging:
   timestep: 0.010
-  log_dir: /media/adam/Data/PhD/Data/upright/bounded
+  ################################
+  # 本机仿真日志目录（原作者路径不可用）
+  # log_dir: /media/adam/Data/PhD/Data/upright/bounded
+  log_dir: /tmp/upright_logs
+  ################################
 
 simulation:
+  # ################################
+  # 可视化默认时长（冒烟可改回 3.0）
   duration: 10.0
+  # ################################
   arrangement: pink_bottle
 
 controller:

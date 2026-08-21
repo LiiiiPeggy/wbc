@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 """Closed-loop upright simulation using Pybullet."""
 import datetime
+# ################################
+import os
+# ################################
 
 import numpy as np
 import pybullet as pyb
@@ -40,10 +43,19 @@ def main():
 
     # start the simulation
     timestamp = datetime.datetime.now()
+    # ################################
+    # UPRIGHT_HEADLESS=1/true 关 GUI；0/false/未设置则开 GUI
+    # 注意：bool("0") 为 True，不能直接用 bool(os.environ.get(...))
+    # ################################
+    _headless = os.environ.get("UPRIGHT_HEADLESS", "").strip().lower()
+    gui = _headless not in ("1", "true", "yes")
+    print(f"PyBullet GUI={'ON' if gui else 'OFF (DIRECT)'}")
+    # ################################
     env = sim.simulation.UprightSimulation(
         config=sim_config,
         timestamp=timestamp,
         video_name=cli_args.video,
+        gui=gui,
         extra_gui=sim_config.get("extra_gui", False),
     )
 
@@ -64,6 +76,31 @@ def main():
 
     # controller
     integrator = ctrl.trajectory.DoubleIntegrator(v.shape[0])
+
+    # ################################
+    # 临时诊断：ControllerManager 创建前，打印本进程已 mmap 的相关 native 库
+    # ################################
+    print("===== NATIVE LIBRARY MAP BEGIN =====")
+    print("PID =", os.getpid())
+    with open(f"/proc/{os.getpid()}/maps") as f:
+        lines = sorted(set(
+            line.strip()
+            for line in f
+            if any(
+                key in line.lower()
+                for key in [
+                    "pinocchio",
+                    "hpp-fcl",
+                    "hppfcl",
+                    "eigenpy",
+                    "boost_python",
+                ]
+            )
+        ))
+    for line in lines:
+        print(line)
+    print("===== NATIVE LIBRARY MAP END =====")
+    # ################################
 
     ctrl_manager = ctrl.manager.ControllerManager.from_config(ctrl_config, x0=x)
     model = ctrl_manager.model
@@ -108,7 +145,12 @@ def main():
     )
 
     print("Ready to start.")
-    IPython.embed()
+    # ################################
+    # 非交互跑通：UPRIGHT_NO_IPYTHON=1 时跳过 embed
+    # ################################
+    if not os.environ.get("UPRIGHT_NO_IPYTHON"):
+        IPython.embed()
+    # ################################
 
     # simulation loop
     while t <= env.duration:
@@ -137,12 +179,18 @@ def main():
         except RuntimeError as e:
             print(e)
             print("Exit the interpreter to proceed to plots.")
-            IPython.embed()
+            # ################################
+            if not os.environ.get("UPRIGHT_NO_IPYTHON"):
+                IPython.embed()
+            # ################################
             break
 
         if np.isnan(u).any():
             print("NaN value in input!")
-            IPython.embed()
+            # ################################
+            if not os.environ.get("UPRIGHT_NO_IPYTHON"):
+                IPython.embed()
+            # ################################
             break
 
         u_cmd = Kx @ (xd - x)[: dims.robot.x] + u_robot
@@ -327,7 +375,17 @@ def main():
     plt.legend()
     plt.grid()
 
-    plt.show()
+    # ################################
+    if os.environ.get("UPRIGHT_NO_IPYTHON"):
+        out = "/tmp/upright_logs/mpc_sim_plots.png"
+        os.makedirs("/tmp/upright_logs", exist_ok=True)
+        plt.savefig(out)
+        print(f"Saved plots to {out}")
+        if gui:
+            input("Simulation finished. Press Enter to close PyBullet...")
+    else:
+        plt.show()
+    # ################################
 
 
 if __name__ == "__main__":

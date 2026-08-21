@@ -23,10 +23,13 @@
   <exec_depend>rosgraph_msgs</exec_depend>
   <exec_depend>tf</exec_depend>
   <exec_depend>diagnostic_msgs</exec_depend>
-  <exec_depend>vicon_bridge</exec_depend>
-  <exec_depend>ur_robot_driver</exec_depend>
-  <exec_depend>robotiq_3f_gripper_control</exec_depend>
-  <exec_depend>robotiq_3f_gripper_articulated_msgs</exec_depend>
+  ################################
+  <!-- 仿真编通：真机依赖本机未装，改为可选注释 -->
+  <!-- <exec_depend>vicon_bridge</exec_depend> -->
+  <!-- <exec_depend>ur_robot_driver</exec_depend> -->
+  <!-- <exec_depend>robotiq_3f_gripper_control</exec_depend> -->
+  <!-- <exec_depend>robotiq_3f_gripper_articulated_msgs</exec_depend> -->
+  ################################
 
   <export></export>
 </package>

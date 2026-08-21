@@ -5,13 +5,20 @@ include:
 
 gravity: [0, 0, -9.81]
 recompile_libraries: true
-debug: true
+# ################################
+# 冒烟时关闭刷屏；调试可改回 true
+debug: false
+# debug: true
+# ################################
 solver_method: SQP  # only SQP is supported now
 
 # model predictive controller
 mpc:
   time_horizon: 2.0
-  debug_print: true
+  # ################################
+  debug_print: false
+  # debug_print: true
+  # ################################
   cold_start: false
 
 # trajectory rollout
@@ -59,9 +66,14 @@ sqp:
   cost_tol: 1e-4
   use_feedback_policy: true
   project_state_input_equality_constraints: false
-  print_solver_status: true
-  print_solver_statistics: true
-  print_line_search: true
+  # ################################
+  print_solver_status: false
+  print_solver_statistics: false
+  print_line_search: false
+  # print_solver_status: true
+  # print_solver_statistics: true
+  # print_line_search: true
+  # ################################
   hpipm:
     iter_max: 30
     warm_start: 1  # 0 = no warm start, 1 = primal warm start, 2 = primal and dual warm start
