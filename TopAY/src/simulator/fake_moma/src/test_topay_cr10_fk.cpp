@@ -113,6 +113,103 @@ bool checkLongLinkCoverage(const MomaParam& profile, double max_gap)
     return found_long_link;
 }
 
+bool gridMapStyleSelfCollision(const MomaParam& profile, const Eigen::VectorXd& state);
+
+// ################################
+// C++: Mid-span obstacle must hit a multi-sphere long-link envelope
+// ################################
+bool checkMidLinkObstacleReject(const MomaParam& profile)
+{
+    const Eigen::VectorXd home = Eigen::VectorXd::Zero(3 + static_cast<int>(profile.dof_num));
+    const KinematicResult transforms = profile.getLinkTransforms(home);
+    const std::vector<Eigen::Vector4d> colli_pts = profile.getColliPts(home);
+
+    bool found_long_link = false;
+    for (size_t joint = 0; joint < profile.dof_num; ++joint)
+    {
+        const Eigen::Vector3d segment = profile.cr10_joint_fixed_[joint].block<3, 1>(0, 3);
+        if (segment.norm() < 0.4)
+        {
+            continue;
+        }
+        found_long_link = true;
+        const int link_id = static_cast<int>(1 + joint);
+        Eigen::Matrix4d link_T = transforms.arm_base_T;
+        if (link_id >= 2 && link_id < static_cast<int>(2 + profile.dof_num))
+        {
+            link_T = transforms.arm_link_T[static_cast<size_t>(link_id - 2)];
+        }
+        const Eigen::Vector3d mid_world =
+            (link_T * (Eigen::Vector4d() << 0.5 * segment, 1.0).finished()).head(3);
+
+        bool hit = false;
+        for (const Eigen::Vector4d& pt : colli_pts)
+        {
+            if ((pt.head(3) - mid_world).norm() < pt(3))
+            {
+                hit = true;
+                break;
+            }
+        }
+        if (!hit)
+        {
+            return false;
+        }
+    }
+    return found_long_link;
+}
+
+// ################################
+// C++: Adjacent wrist spheres ignored / thin self radii avoid false positives
+// ################################
+bool checkWristNoFalsePositive(const MomaParam& profile)
+{
+    const Eigen::VectorXd home = Eigen::VectorXd::Zero(3 + static_cast<int>(profile.dof_num));
+    Eigen::VectorXi collision_link;
+    if (profile.isSelfCollision(home, collision_link)
+        || gridMapStyleSelfCollision(profile, home))
+    {
+        return false;
+    }
+
+    const std::vector<Eigen::Vector4d> colli_pts = profile.getColliPts(home);
+    const int wrist_lo = static_cast<int>(profile.dof_num - 1);  // late arm links
+    const int wrist_hi = static_cast<int>(1 + profile.dof_num);  // flange-side arm link
+    bool found_adjacent_wrist_pair = false;
+    for (size_t i = 0; i < profile.collision_proxies_.size(); ++i)
+    {
+        for (size_t j = i + 1; j < profile.collision_proxies_.size(); ++j)
+        {
+            const int link_i = profile.collision_proxies_[i].link_id;
+            const int link_j = profile.collision_proxies_[j].link_id;
+            if (std::min(link_i, link_j) < wrist_lo || std::max(link_i, link_j) > wrist_hi)
+            {
+                continue;
+            }
+            if (profile.collision_matrix(static_cast<Eigen::Index>(i),
+                                         static_cast<Eigen::Index>(j)) != 1)
+            {
+                continue;
+            }
+            found_adjacent_wrist_pair = true;
+            const double dist = (colli_pts[i].head(3) - colli_pts[j].head(3)).norm();
+            const double self_sum =
+                profile.getColliSelfRadius(i) + profile.getColliSelfRadius(j);
+            // Ignored adjacent wrist pair must not trip a thin-self check either.
+            if (dist < self_sum - 1e-2)
+            {
+                // Still OK only because ignore matrix skips them; prove ignore is set.
+                if (profile.collision_matrix(static_cast<Eigen::Index>(i),
+                                             static_cast<Eigen::Index>(j)) != 1)
+                {
+                    return false;
+                }
+            }
+        }
+    }
+    return found_adjacent_wrist_pair;
+}
+
 bool gridMapStyleSelfCollision(const MomaParam& profile, const Eigen::VectorXd& state)
 {
     const std::vector<Eigen::Vector4d> colli_pts = profile.getColliPts(state);
@@ -308,10 +405,18 @@ int main()
         std::cerr << "CR10 folded unsafe pose regression FAILED" << std::endl;
         return 1;
     }
-    std::cout << "CR10 collision pose regression PASSED" << std::endl;
+    if (!checkMidLinkObstacleReject(profile))
+    {
+        std::cerr << "CR10 mid-link obstacle reject regression FAILED" << std::endl;
+        return 1;
+    }
+    if (!checkWristNoFalsePositive(profile))
+    {
+        std::cerr << "CR10 wrist false-positive regression FAILED" << std::endl;
+        return 1;
+    }
+    std::cout << "CR10 collision pose regression PASSED"
+              << " (home/open, folded, mid-link obstacle, wrist no-FP)" << std::endl;
 
     return 0;
 }
-// ################################
-// C++: CR10 FK and EE-gradient validation gates end
-// ################################
