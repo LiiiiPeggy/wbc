@@ -186,3 +186,13 @@ Accept only when **all** of the following hold (plan success alone is insufficie
    - base position error &lt; 0.10 m
    - base yaw error &lt; 5 deg
    - arm joint max |error| &lt; 0.05 rad **vs planned terminal arm q**
+
+<!-- ################################ -->
+<!-- Markdown: Phase A regression status (Task 8) -->
+<!-- ################################ -->
+### Phase A regression status
+
+- Default stack: `roslaunch planner run_all.launch` → `robot:=ranger_cr10`.
+- Tracer regression path: `roslaunch planner run_all.launch robot:=tracer7`.
+- Standalone CR10 FK / EE-grad / collision-grad / home–folded pose gate (`test_topay_cr10_fk`) PASS on host without catkin.
+- Full `roslaunch` / `catkin_make` / richer Ranger corridor scenes are blocked on hosts missing `ackermann_msgs` (and related ROS package deps). Chassis collision remains a conservative disk — narrow corridors may false-positive; treat richer-scene failures as non-blocking for Phase A.
