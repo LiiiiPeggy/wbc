@@ -119,6 +119,24 @@ namespace remani_planner
         // ################################
         // C++: manipulator type API end
         // ################################
+
+        // ################################
+        // C++: EE TCP + joint-limit getters begin
+        // ################################
+        const Eigen::VectorXd& getManipulatorMinPos() const {
+            return manipulator_min_pos_;
+        }
+
+        const Eigen::VectorXd& getManipulatorMaxPos() const {
+            return manipulator_max_pos_;
+        }
+
+        Eigen::Matrix4d getTcpTransform() const {
+            return T_tcp_;
+        }
+        // ################################
+        // C++: EE TCP + joint-limit getters end
+        // ################################
         
     private:
         std::vector<Eigen::Vector3d> color_set_;
@@ -166,6 +184,13 @@ namespace remani_planner
 
         Eigen::Matrix2d B_h_;
         Eigen::Matrix4d T_q_0_;
+        // ################################
+        // C++: flange-to-TCP fixed transform begin
+        // ################################
+        Eigen::Matrix4d T_tcp_;
+        // ################################
+        // C++: flange-to-TCP fixed transform end
+        // ################################
         int vis_idx_size_;
 
         Eigen::VectorXd manipulator_min_pos_, manipulator_max_pos_;

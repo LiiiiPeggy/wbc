@@ -107,6 +107,23 @@ void MMConfig::setParam(ros::NodeHandle &nh){
     T_q_0_(2, 3) = base_mani_fixed_joint_xyz_ypr[2];
 
     // ################################
+    // C++: load EE TCP offset mm/ee_tcp_xyz_rpy begin
+    // ################################
+    std::vector<double> ee_tcp_xyz_rpy{0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
+    nh.param<std::vector<double>>("mm/ee_tcp_xyz_rpy", ee_tcp_xyz_rpy,
+                                  std::vector<double>{0.0, 0.0, 0.0, 0.0, 0.0, 0.0});
+    T_tcp_ = Eigen::Matrix4d::Identity();
+    if(ee_tcp_xyz_rpy.size() >= 6){
+        T_tcp_.block(0, 0, 3, 3) = urdfRpyToRotation(ee_tcp_xyz_rpy[3], ee_tcp_xyz_rpy[4], ee_tcp_xyz_rpy[5]);
+        T_tcp_(0, 3) = ee_tcp_xyz_rpy[0];
+        T_tcp_(1, 3) = ee_tcp_xyz_rpy[1];
+        T_tcp_(2, 3) = ee_tcp_xyz_rpy[2];
+    }
+    // ################################
+    // C++: load EE TCP offset mm/ee_tcp_xyz_rpy end
+    // ################################
+
+    // ################################
     // C++: manipulator_type (cr10/fast_armer/ur5) begin
     // ################################
     std::string manipulator_type_str = "fast_armer";
