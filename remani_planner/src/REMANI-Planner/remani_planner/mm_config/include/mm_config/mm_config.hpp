@@ -52,6 +52,15 @@ namespace remani_planner
 
         void getAJointTran(int joint_num, double theta, Eigen::Matrix4d &T, Eigen::Matrix4d &T_grad);
 
+        // ################################
+        // C++: full mobile-manipulator EE pose API begin
+        // ################################
+        Eigen::Matrix4d getEePose(const Eigen::Vector3d &car_state,
+                                  const Eigen::VectorXd &q);
+        // ################################
+        // C++: full mobile-manipulator EE pose API end
+        // ################################
+
         void getJointTrans(const Eigen::VectorXd &theta, std::vector<Eigen::Matrix4d> &T_joint, std::vector<Eigen::Matrix4d> &T_joint_grad){
             T_joint.clear();
             T_joint_grad.clear();

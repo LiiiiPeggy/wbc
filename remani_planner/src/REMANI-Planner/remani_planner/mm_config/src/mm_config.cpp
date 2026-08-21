@@ -773,6 +773,28 @@ void MMConfig::CarState2T(const Eigen::Vector3d &car_state, Eigen::Matrix4d &T_c
     T_car.block(0, 0, 3, 3) = R;
 }
 
+// ################################
+// C++: full mobile-manipulator EE pose chain begin
+// ################################
+Eigen::Matrix4d MMConfig::getEePose(const Eigen::Vector3d &car_state,
+                                    const Eigen::VectorXd &q){
+    Eigen::Matrix4d T_car;
+    CarState2T(car_state, T_car);
+
+    Eigen::Matrix4d T = T_car * T_q_0_;
+    for(int i = 0; i < manipulator_dof_; ++i){
+        Eigen::Matrix4d T_i, T_grad_unused;
+        getAJointTran(i, q(i), T_i, T_grad_unused);
+        T = T * T_i;
+    }
+
+    T = T * T_tcp_;
+    return T;
+}
+// ################################
+// C++: full mobile-manipulator EE pose chain end
+// ################################
+
 void MMConfig::getJointTMat(const Eigen::VectorXd &theta, std::vector<Eigen::Matrix4d> &T_joint){
     T_joint.clear();
     Eigen::Matrix4d T_temp, T_temp_grad_nouse;
