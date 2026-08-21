@@ -1,4 +1,5 @@
 #include "mm_config/mm_config.hpp"
+#include "mm_config/ee_kinematics_utils.hpp"
 #include <stdexcept>
 #include <algorithm>
 
@@ -793,6 +794,59 @@ Eigen::Matrix4d MMConfig::getEePose(const Eigen::Vector3d &car_state,
 }
 // ################################
 // C++: full mobile-manipulator EE pose chain end
+// ################################
+
+// ################################
+// C++: full mobile-manipulator EE Jacobian begin
+// ################################
+void MMConfig::getEeJacobian(const Eigen::Vector3d &car_state,
+                             const Eigen::VectorXd &q,
+                             Eigen::Matrix<double, 6, 9> &J){
+    J.setZero();
+
+    Eigen::Matrix4d T_car;
+    CarState2T(car_state, T_car);
+
+    Eigen::Matrix4d T_joint[6];
+    Eigen::Matrix4d dT_joint[6];
+    Eigen::Matrix4d prefix[7];
+    Eigen::Matrix4d suffix[7];
+
+    prefix[0] = T_car * T_q_0_;
+    for(int i = 0; i < 6; ++i){
+        getAJointTran(i, q(i), T_joint[i], dT_joint[i]);
+        prefix[i + 1] = prefix[i] * T_joint[i];
+    }
+
+    suffix[6] = T_tcp_;
+    for(int i = 5; i >= 0; --i){
+        suffix[i] = T_joint[i] * suffix[i + 1];
+    }
+
+    const Eigen::Matrix4d T_ee = getEePose(car_state, q);
+    const Eigen::Matrix3d R_ee = T_ee.block<3, 3>(0, 0);
+
+    J.block<3, 1>(0, 0) = Eigen::Vector3d::UnitX();
+    J.block<3, 1>(0, 1) = Eigen::Vector3d::UnitY();
+
+    const Eigen::Vector3d z_world = Eigen::Vector3d::UnitZ();
+    const Eigen::Vector3d p_ee = T_ee.block<3, 1>(0, 3);
+    const Eigen::Vector3d p_base_origin(car_state.x(), car_state.y(), 0.0);
+    J.block<3, 1>(0, 2) = z_world.cross(p_ee - p_base_origin);
+    J.block<3, 1>(3, 2) = z_world;
+
+    for(int i = 0; i < 6; ++i){
+        const Eigen::Matrix4d dT_ee = prefix[i] * dT_joint[i] * suffix[i + 1];
+        J.block<3, 1>(0, i + 3) = dT_ee.block<3, 1>(0, 3);
+
+        const Eigen::Matrix3d Rdot = dT_ee.block<3, 3>(0, 0);
+        Eigen::Matrix3d Omega = Rdot * R_ee.transpose();
+        Omega = 0.5 * (Omega - Omega.transpose());
+        J.block<3, 1>(3, i + 3) = vee(Omega);
+    }
+}
+// ################################
+// C++: full mobile-manipulator EE Jacobian end
 // ################################
 
 void MMConfig::getJointTMat(const Eigen::VectorXd &theta, std::vector<Eigen::Matrix4d> &T_joint){

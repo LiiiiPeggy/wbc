@@ -61,6 +61,16 @@ namespace remani_planner
         // C++: full mobile-manipulator EE pose API end
         // ################################
 
+        // ################################
+        // C++: full mobile-manipulator EE Jacobian API begin
+        // ################################
+        void getEeJacobian(const Eigen::Vector3d &car_state,
+                           const Eigen::VectorXd &q,
+                           Eigen::Matrix<double, 6, 9> &J);
+        // ################################
+        // C++: full mobile-manipulator EE Jacobian API end
+        // ################################
+
         void getJointTrans(const Eigen::VectorXd &theta, std::vector<Eigen::Matrix4d> &T_joint, std::vector<Eigen::Matrix4d> &T_joint_grad){
             T_joint.clear();
             T_joint_grad.clear();

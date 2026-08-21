@@ -52,3 +52,12 @@ target_link_libraries(test_cr10_fk mm_config ${catkin_LIBRARIES})
 # CMake: CR10 FK validation node end
 # ################################
 
+# ################################
+# CMake: EE kinematics API compile check begin
+# ################################
+add_executable(test_ee_kinematics_compile src/test_ee_kinematics_compile.cpp)
+target_link_libraries(test_ee_kinematics_compile mm_config ${catkin_LIBRARIES})
+# ################################
+# CMake: EE kinematics API compile check end
+# ################################
+
