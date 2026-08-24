@@ -61,3 +61,12 @@ target_link_libraries(test_ee_kinematics_compile mm_config ${catkin_LIBRARIES})
 # CMake: EE kinematics API compile check end
 # ################################
 
+# ################################
+# CMake: EE pose and Jacobian Milestone A tests begin
+# ################################
+add_executable(test_ee_pose_ik src/test_ee_pose_ik.cpp)
+target_link_libraries(test_ee_pose_ik mm_config ${catkin_LIBRARIES})
+# ################################
+# CMake: EE pose and Jacobian Milestone A tests end
+# ################################
+
