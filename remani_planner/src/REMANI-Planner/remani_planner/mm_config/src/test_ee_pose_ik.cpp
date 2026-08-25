@@ -15,10 +15,12 @@
 #include <string>
 #include <vector>
 
-using remani_planner::MMConfig;
+using remani_planner::CandidateSource;
 using remani_planner::FixedBaseArmIk;
 using remani_planner::FixedBaseArmIkParams;
 using remani_planner::FixedBaseArmIkResult;
+using remani_planner::MMConfig;
+using remani_planner::WholeBodyGoalCandidate;
 using remani_planner::WholeBodyIkParams;
 using remani_planner::WholeBodyIkSolver;
 using remani_planner::poseError;
@@ -62,6 +64,96 @@ void ensureCr10TestParams(ros::NodeHandle &nh)
     nh.setParam("optimization/ground_safe_dis", 0.1);
     nh.setParam("mm/ee_tcp_xyz_rpy", std::vector<double>{0, 0, 0, 0, 0, 0});
 }
+
+// ################################
+// C++: GridMap Stage B test fixture helpers begin
+// ################################
+void setGridMapFixtureParams(ros::NodeHandle &nh)
+{
+    nh.setParam("grid_map/resolution", 0.05);
+    nh.setParam("grid_map/map_size_x", 6.0);
+    nh.setParam("grid_map/map_size_y", 6.0);
+    nh.setParam("grid_map/map_size_z", 2.5);
+    nh.setParam("grid_map/local_update_range_x", 6.0);
+    nh.setParam("grid_map/local_update_range_y", 6.0);
+    nh.setParam("grid_map/local_update_range_z", 2.5);
+    nh.setParam("grid_map/obstacles_inflation", 0.08);
+    nh.setParam("grid_map/local_map_margin", 2);
+    nh.setParam("grid_map/ground_height", -0.01);
+    nh.setParam("grid_map/fx", 320.0);
+    nh.setParam("grid_map/fy", 320.0);
+    nh.setParam("grid_map/cx", 320.0);
+    nh.setParam("grid_map/cy", 240.0);
+    nh.setParam("grid_map/use_depth_filter", true);
+    nh.setParam("grid_map/depth_filter_tolerance", 0.15);
+    nh.setParam("grid_map/depth_filter_maxdist", 5.0);
+    nh.setParam("grid_map/depth_filter_mindist", 0.2);
+    nh.setParam("grid_map/depth_filter_margin", 2);
+    nh.setParam("grid_map/k_depth_scaling_factor", 1000.0);
+    nh.setParam("grid_map/skip_pixel", 2);
+    nh.setParam("grid_map/p_hit", 0.65);
+    nh.setParam("grid_map/p_miss", 0.35);
+    nh.setParam("grid_map/p_min", 0.12);
+    nh.setParam("grid_map/p_max", 0.90);
+    nh.setParam("grid_map/p_occ", 0.80);
+    nh.setParam("grid_map/min_ray_length", 0.1);
+    nh.setParam("grid_map/max_ray_length", 4.5);
+    nh.setParam("grid_map/visualization_truncate_height", 2.8);
+    nh.setParam("grid_map/virtual_ceil_height", 2.4);
+    nh.setParam("grid_map/virtual_ceil_yp", -0.1);
+    nh.setParam("grid_map/virtual_ceil_yn", -0.1);
+    nh.setParam("grid_map/show_occ_time", false);
+    nh.setParam("grid_map/pose_type", 1);
+    nh.setParam("grid_map/frame_id", std::string("world"));
+    nh.setParam("grid_map/odom_depth_timeout", 14.0);
+    nh.setParam("grid_map/esdf_slice_height", -0.1);
+    nh.setParam("grid_map/show_esdf_time", false);
+    nh.setParam("grid_map/local_bound_inflate", 0.0);
+    nh.setParam("grid_map/use_global_map", true);
+    nh.setParam("grid_map/use_load_map", false);
+}
+
+GridMap::Ptr makeInitializedGridMap(ros::NodeHandle &nh)
+{
+    setGridMapFixtureParams(nh);
+    GridMap::Ptr grid(new GridMap());
+    grid->initMap(nh);
+    grid->resetBuffer();
+    grid->updateESDF3d();
+    return grid;
+}
+
+void occupyCarFootprint(GridMap &grid, const Eigen::Vector3d &car)
+{
+    const double res = 0.05;
+    for(double x = car.x() - 0.70; x <= car.x() + 0.70 + 1e-9; x += res){
+        for(double y = car.y() - 0.55; y <= car.y() + 0.55 + 1e-9; y += res){
+            for(double z = 0.15; z <= 0.45 + 1e-9; z += res){
+                grid.setOccupied(Eigen::Vector3d(x, y, z));
+            }
+        }
+    }
+    grid.updateESDF3d();
+}
+
+void unpackXi(const Eigen::Matrix<double, 9, 1> &xi,
+              Eigen::Vector3d &car, Eigen::VectorXd &q)
+{
+    car = xi.template head<3>();
+    q = xi.template tail<6>();
+}
+
+Eigen::Matrix<double, 9, 1> packXi(const Eigen::Vector3d &car,
+                                   const Eigen::VectorXd &q)
+{
+    Eigen::Matrix<double, 9, 1> xi;
+    xi.template head<3>() = car;
+    xi.template tail<6>() = q;
+    return xi;
+}
+// ################################
+// C++: GridMap Stage B test fixture helpers end
+// ################################
 
 Eigen::Matrix3d urdfRpy(double roll, double pitch, double yaw)
 {
@@ -405,6 +497,85 @@ int main(int argc, char **argv)
                 all_pass);
     // ################################
     // C++: whole-body IK params and solver scaffold tests end
+    // ################################
+
+    // ################################
+    // C++: Stage B near-goal and collision tests begin
+    // ################################
+    GridMap::Ptr stage_b_grid = makeInitializedGridMap(nh);
+    MMConfig::Ptr cfg_stage_b(new MMConfig());
+    cfg_stage_b->setParam(nh, stage_b_grid);
+    WholeBodyIkParams stage_b_params = WholeBodyIkParams::loadFromRosParam(nh);
+    WholeBodyIkSolver stage_b_solver(cfg_stage_b, stage_b_grid, stage_b_params);
+
+    Eigen::Vector3d b_car(0.20, -0.10, 0.15);
+    Eigen::VectorXd b_q_start(6);
+    b_q_start << 0.35, -0.65, 0.95, -0.45, 0.55, -0.25;
+    Eigen::VectorXd b_q_goal = b_q_start;
+    b_q_goal << 0.41, -0.70, 0.99, -0.48, 0.59, -0.28;
+    const Eigen::Vector3d b_car_goal(0.25, -0.14, 0.23);
+    const Eigen::Matrix<double, 9, 1> xi_b_start = packXi(b_car, b_q_start);
+    const Eigen::Matrix4d T_b_goal = cfg_stage_b->getEePose(b_car_goal, b_q_goal);
+
+    int start_coll_type = -1;
+    int goal_coll_type = -1;
+    const bool start_free = !cfg_stage_b->checkcollision(b_car, b_q_start, true, start_coll_type);
+    const bool goal_free = !cfg_stage_b->checkcollision(b_car_goal, b_q_goal, true, goal_coll_type);
+
+    WholeBodyGoalCandidate near_cand;
+    const bool near_ok = stage_b_solver.runStageB(xi_b_start, T_b_goal, near_cand);
+    bool near_pose_gates = false;
+    if(near_cand.q.size() == 6){
+        Eigen::Matrix<double, 6, 1> near_pose_error;
+        poseError(cfg_stage_b->getEePose(near_cand.base_xyyaw, near_cand.q),
+                  T_b_goal, near_pose_error);
+        near_pose_gates = near_pose_error.head<3>().norm() <= stage_b_params.ik_pos_tol
+                       && near_pose_error.tail<3>().norm() <= stage_b_params.ik_rot_tol_rad;
+    }
+    const bool near_goal_pass = start_free && goal_free
+        && near_ok
+        && near_cand.source == CandidateSource::B
+        && near_cand.hard_valid
+        && near_cand.q.size() == 6
+        && near_cand.base_xy_disp <= stage_b_params.local_xy
+        && near_cand.yaw_disp <= stage_b_params.local_yaw_rad
+        && near_cand.pos_err <= stage_b_params.ik_pos_tol
+        && near_cand.rot_err_rad <= stage_b_params.ik_rot_tol_rad
+        && near_pose_gates;
+    printResult("Stage B reaches near-current forward-FK goal",
+                near_goal_pass, all_pass);
+    if(!near_goal_pass){
+        ROS_ERROR("Stage B near-goal: start_free=%d goal_free=%d ok=%d hard_valid=%d "
+                  "reason=%s pos=%.4e rot=%.4e xy_disp=%.4e coll_start=%d coll_goal=%d",
+                  static_cast<int>(start_free), static_cast<int>(goal_free),
+                  static_cast<int>(near_ok), static_cast<int>(near_cand.hard_valid),
+                  near_cand.fail_reason.c_str(), near_cand.pos_err, near_cand.rot_err_rad,
+                  near_cand.base_xy_disp, start_coll_type, goal_coll_type);
+    }
+
+    occupyCarFootprint(*stage_b_grid, b_car);
+    occupyCarFootprint(*stage_b_grid, b_car_goal);
+    if(near_cand.q.size() == 6){
+        occupyCarFootprint(*stage_b_grid, near_cand.base_xyyaw);
+    }
+    WholeBodyGoalCandidate coll_cand;
+    const bool coll_ok = stage_b_solver.runStageB(xi_b_start, T_b_goal, coll_cand);
+    const bool terminal_in_collision = (coll_cand.q.size() == 6)
+        && cfg_stage_b->checkcollision(coll_cand.base_xyyaw, coll_cand.q, true);
+    const bool collision_hard_invalid_pass = coll_ok
+        && coll_cand.source == CandidateSource::B
+        && !coll_cand.hard_valid
+        && terminal_in_collision;
+    printResult("Stage B occupied voxel sets hard_valid false",
+                collision_hard_invalid_pass, all_pass);
+    if(!collision_hard_invalid_pass){
+        ROS_ERROR("Stage B collision: ok=%d hard_valid=%d in_coll=%d reason=%s",
+                  static_cast<int>(coll_ok), static_cast<int>(coll_cand.hard_valid),
+                  static_cast<int>(terminal_in_collision),
+                  coll_cand.fail_reason.c_str());
+    }
+    // ################################
+    // C++: Stage B near-goal and collision tests end
     // ################################
 
     std::cout << (all_pass ? "ALL TESTS PASSED" : "TESTS FAILED") << std::endl;

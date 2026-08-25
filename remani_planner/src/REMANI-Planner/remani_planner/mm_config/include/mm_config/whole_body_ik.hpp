@@ -21,6 +21,16 @@ public:
     WholeBodyIkResult solve(const Eigen::Matrix<double, 9, 1> &xi_start,
                             const Eigen::Matrix4d &T_goal);
 
+    // ################################
+    // C++: Stage B public for Milestone C tests begin
+    // ################################
+    bool runStageB(const Eigen::Matrix<double, 9, 1> &xi0,
+                   const Eigen::Matrix4d &T_goal,
+                   WholeBodyGoalCandidate &out_cand);
+    // ################################
+    // C++: Stage B public for Milestone C tests end
+    // ################################
+
 private:
     MMConfig::Ptr cfg_;
     GridMap::Ptr map_;
@@ -28,10 +38,6 @@ private:
     FixedBaseArmIk arm_ik_;
 
     FixedBaseArmIkParams makeArmIkParams() const;
-
-    bool runStageB(const Eigen::Matrix<double, 9, 1> &xi0,
-                   const Eigen::Matrix4d &T_goal,
-                   WholeBodyGoalCandidate &out_cand);
 
     bool runStageC(const Eigen::Matrix<double, 9, 1> &xi0,
                    const Eigen::Matrix4d &T_goal,

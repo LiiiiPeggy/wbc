@@ -2,8 +2,11 @@
 // C++: whole-body IK solver implementation begin
 // ################################
 #include <mm_config/whole_body_ik.hpp>
+#include <mm_config/ee_kinematics_utils.hpp>
 
+#include <algorithm>
 #include <cmath>
+#include <limits>
 #include <sstream>
 #include <stdexcept>
 
@@ -184,6 +187,122 @@ bool validateWholeBodyIkParams(const WholeBodyIkParams &p, std::string &reason)
     return reason.empty();
 }
 
+// ################################
+// C++: Stage B weighted DLS helpers begin
+// ################################
+typedef Eigen::Matrix<double, 6, 1> Vector6d;
+typedef Eigen::Matrix<double, 9, 1> Vector9d;
+typedef Eigen::Matrix<double, 6, 6> Matrix6d;
+typedef Eigen::Matrix<double, 6, 9> Matrix69d;
+
+void clampJoints9(Vector9d &xi,
+                  const Eigen::VectorXd &q_min,
+                  const Eigen::VectorXd &q_max)
+{
+    for(int i = 0; i < 6; ++i){
+        xi(3 + i) = std::max(q_min(i), std::min(q_max(i), xi(3 + i)));
+    }
+}
+
+void projectTrustAndJoints(Vector9d &xi,
+                           const Vector9d &xi0,
+                           const WholeBodyIkParams &p,
+                           const Eigen::VectorXd &q_min,
+                           const Eigen::VectorXd &q_max)
+{
+    xi(0) = std::max(xi0(0) - p.local_xy, std::min(xi0(0) + p.local_xy, xi(0)));
+    xi(1) = std::max(xi0(1) - p.local_xy, std::min(xi0(1) + p.local_xy, xi(1)));
+    xi(2) = wrapToPi(xi(2));
+    double dyaw = wrapToPi(xi(2) - xi0(2));
+    dyaw = std::max(-p.local_yaw_rad, std::min(p.local_yaw_rad, dyaw));
+    xi(2) = wrapToPi(xi0(2) + dyaw);
+    clampJoints9(xi, q_min, q_max);
+}
+
+bool jointsWithinLimits(const Vector9d &xi,
+                        const Eigen::VectorXd &q_min,
+                        const Eigen::VectorXd &q_max)
+{
+    for(int i = 0; i < 6; ++i){
+        if(xi(3 + i) < q_min(i) || xi(3 + i) > q_max(i)){
+            return false;
+        }
+    }
+    return true;
+}
+
+double jointLimitMargin(const Vector9d &xi,
+                        const Eigen::VectorXd &q_min,
+                        const Eigen::VectorXd &q_max)
+{
+    double margin = std::numeric_limits<double>::infinity();
+    for(int i = 0; i < 6; ++i){
+        margin = std::min(margin, std::min(xi(3 + i) - q_min(i),
+                                           q_max(i) - xi(3 + i)));
+    }
+    return std::isfinite(margin) ? margin : 0.0;
+}
+
+bool computeStageBError(const MMConfig::Ptr &cfg,
+                        const Vector9d &xi,
+                        const Eigen::Matrix4d &T_goal,
+                        Vector6d &error,
+                        double &pos_err,
+                        double &rot_err)
+{
+    const Eigen::Vector3d car = xi.head<3>();
+    const Eigen::VectorXd q = xi.tail<6>();
+    const Eigen::Matrix4d T_now = cfg->getEePose(car, q);
+    if(!T_now.allFinite()){
+        return false;
+    }
+    poseError(T_now, T_goal, error);
+    pos_err = error.head<3>().norm();
+    rot_err = error.tail<3>().norm();
+    return error.allFinite() && std::isfinite(pos_err) && std::isfinite(rot_err);
+}
+
+double weightedErrorSquared(const Vector6d &error, double rot_weight)
+{
+    Vector6d weighted = error;
+    weighted.tail<3>() *= rot_weight;
+    return weighted.squaredNorm();
+}
+
+void fillStageBCandidate(WholeBodyGoalCandidate &out_cand,
+                         const Vector9d &xi,
+                         const Vector9d &xi0,
+                         double pos_err,
+                         double rot_err,
+                         const Eigen::VectorXd &q_min,
+                         const Eigen::VectorXd &q_max)
+{
+    out_cand.base_xyyaw = xi.head<3>();
+    out_cand.q = xi.tail<6>();
+    out_cand.pos_err = pos_err;
+    out_cand.rot_err_rad = rot_err;
+    out_cand.base_xy_disp = (xi.head<2>() - xi0.head<2>()).norm();
+    out_cand.yaw_disp = std::abs(wrapToPi(xi(2) - xi0(2)));
+    out_cand.q_disp_norm = (xi.tail<6>() - xi0.tail<6>()).norm();
+    out_cand.min_joint_margin = jointLimitMargin(xi, q_min, q_max);
+    out_cand.obstacle_clearance = 0.0;
+    out_cand.source = CandidateSource::B;
+    out_cand.cost = std::numeric_limits<double>::infinity();
+}
+
+Eigen::Matrix<double, 9, 1> stageBWeightInverseSquared(const WholeBodyIkParams &p)
+{
+    Vector9d m_diag;
+    const double m_xy = 1.0 / (p.b_weight_xy * p.b_weight_xy);
+    const double m_yaw = 1.0 / (p.b_weight_yaw * p.b_weight_yaw);
+    const double m_q = 1.0 / (p.b_weight_joint * p.b_weight_joint);
+    m_diag << m_xy, m_xy, m_yaw, m_q, m_q, m_q, m_q, m_q, m_q;
+    return m_diag;
+}
+// ################################
+// C++: Stage B weighted DLS helpers end
+// ################################
+
 } // namespace
 
 WholeBodyIkParams WholeBodyIkParams::loadFromRosParam(ros::NodeHandle &nh)
@@ -310,11 +429,180 @@ bool WholeBodyIkSolver::runStageB(const Eigen::Matrix<double, 9, 1> &xi0,
                                   const Eigen::Matrix4d &T_goal,
                                   WholeBodyGoalCandidate &out_cand)
 {
-    (void)xi0;
-    (void)T_goal;
+    // ################################
+    // C++: Stage B 9-DOF weighted DLS begin
+    // ################################
     out_cand = WholeBodyGoalCandidate{};
-    out_cand.fail_reason = "not implemented";
+    out_cand.source = CandidateSource::B;
+    out_cand.q = Eigen::VectorXd::Zero(6);
+
+    if(!cfg_ || xi0.size() != 9 || !xi0.allFinite() || !T_goal.allFinite()
+       || cfg_->getManiDof() != 6
+       || cfg_->getManipulatorMinPos().size() != 6
+       || cfg_->getManipulatorMaxPos().size() != 6){
+        out_cand.fail_reason = "invalid_input";
+        return false;
+    }
+
+    const Eigen::VectorXd &q_min = cfg_->getManipulatorMinPos();
+    const Eigen::VectorXd &q_max = cfg_->getManipulatorMaxPos();
+    if(!q_min.allFinite() || !q_max.allFinite()
+       || (q_min.array() > q_max.array()).any()){
+        out_cand.fail_reason = "invalid_joint_limits";
+        return false;
+    }
+
+    Vector9d xi = xi0;
+    xi(2) = wrapToPi(xi(2));
+    clampJoints9(xi, q_min, q_max);
+
+    Vector6d error;
+    double pos_err = std::numeric_limits<double>::infinity();
+    double rot_err = std::numeric_limits<double>::infinity();
+    if(!computeStageBError(cfg_, xi, T_goal, error, pos_err, rot_err)){
+        fillStageBCandidate(out_cand, xi, xi0, pos_err, rot_err, q_min, q_max);
+        out_cand.fail_reason = "non_finite_error";
+        return false;
+    }
+
+    const Vector9d m_diag = stageBWeightInverseSquared(params_);
+    double lambda = params_.lambda_init;
+    int stagnation_count = 0;
+    const ros::WallTime deadline =
+        ros::WallTime::now() + ros::WallDuration(params_.b_max_ms * 1e-3);
+    std::string fail_reason = "pose_not_reached";
+
+    for(int iter = 0; iter < params_.b_max_iters; ++iter){
+        if(pos_err <= params_.ik_pos_tol && rot_err <= params_.ik_rot_tol_rad){
+            fail_reason.clear();
+            break;
+        }
+        if(ros::WallTime::now() >= deadline){
+            fail_reason = "timeout";
+            break;
+        }
+
+        Matrix69d J;
+        cfg_->getEeJacobian(xi.head<3>(), xi.tail<6>(), J);
+        if(!J.allFinite()){
+            fillStageBCandidate(out_cand, xi, xi0, pos_err, rot_err, q_min, q_max);
+            out_cand.fail_reason = "non_finite_jacobian";
+            return false;
+        }
+
+        Matrix6d S = Matrix6d::Identity();
+        S.bottomRightCorner<3, 3>() *= params_.task_rot_weight;
+        const Matrix69d A = S * J;
+        const Vector6d b = S * error;
+        if(!A.allFinite() || !b.allFinite()){
+            fillStageBCandidate(out_cand, xi, xi0, pos_err, rot_err, q_min, q_max);
+            out_cand.fail_reason = "non_finite";
+            return false;
+        }
+        const double current_cost = b.squaredNorm();
+
+        bool accepted = false;
+        double accepted_step_norm = 0.0;
+        for(int retry = 0; retry < params_.lambda_retry_max; ++retry){
+            if(ros::WallTime::now() >= deadline){
+                fail_reason = "timeout";
+                break;
+            }
+
+            Matrix6d lhs = A * m_diag.asDiagonal() * A.transpose();
+            lhs.diagonal().array() += lambda * lambda;
+            const Eigen::LDLT<Matrix6d> ldlt(lhs);
+            if(ldlt.info() != Eigen::Success){
+                lambda = std::min(params_.lambda_max, lambda * 10.0);
+                continue;
+            }
+
+            const Vector6d y = ldlt.solve(b);
+            if(ldlt.info() != Eigen::Success || !y.allFinite()){
+                lambda = std::min(params_.lambda_max, lambda * 10.0);
+                continue;
+            }
+
+            const Vector9d delta = m_diag.asDiagonal() * A.transpose() * y;
+            if(!delta.allFinite()){
+                lambda = std::min(params_.lambda_max, lambda * 10.0);
+                continue;
+            }
+
+            Vector9d xi_trial = xi + delta;
+            projectTrustAndJoints(xi_trial, xi0, params_, q_min, q_max);
+            if(map_ && !map_->isInMap(Eigen::Vector2d(xi_trial(0), xi_trial(1)))){
+                lambda = std::min(params_.lambda_max, lambda * 10.0);
+                continue;
+            }
+
+            Vector6d trial_error;
+            double trial_pos = 0.0;
+            double trial_rot = 0.0;
+            if(!computeStageBError(cfg_, xi_trial, T_goal, trial_error,
+                                   trial_pos, trial_rot)){
+                lambda = std::min(params_.lambda_max, lambda * 10.0);
+                continue;
+            }
+
+            if(weightedErrorSquared(trial_error, params_.task_rot_weight)
+               < current_cost){
+                accepted_step_norm = (xi_trial - xi).norm();
+                xi = xi_trial;
+                error = trial_error;
+                pos_err = trial_pos;
+                rot_err = trial_rot;
+                lambda = std::max(params_.lambda_min, lambda / 3.0);
+                accepted = true;
+                break;
+            }
+            lambda = std::min(params_.lambda_max, lambda * 10.0);
+        }
+
+        if(fail_reason == "timeout"){
+            break;
+        }
+        if(!accepted || accepted_step_norm <= params_.step_tol){
+            ++stagnation_count;
+        }else{
+            stagnation_count = 0;
+        }
+        if(stagnation_count >= params_.stagnation_iters){
+            fail_reason = "stagnation";
+            break;
+        }
+    }
+
+    fillStageBCandidate(out_cand, xi, xi0, pos_err, rot_err, q_min, q_max);
+
+    const bool pose_ok = std::isfinite(pos_err) && std::isfinite(rot_err)
+        && pos_err <= params_.ik_pos_tol
+        && rot_err <= params_.ik_rot_tol_rad;
+    const bool joints_ok = jointsWithinLimits(xi, q_min, q_max);
+    const bool in_map = map_
+        && map_->isInMap(Eigen::Vector2d(xi(0), xi(1)));
+    const bool no_collision = cfg_
+        && !cfg_->checkcollision(xi.head<3>(), xi.tail<6>(), true);
+
+    out_cand.hard_valid = pose_ok && joints_ok && in_map && no_collision;
+    if(pose_ok){
+        if(!joints_ok){
+            out_cand.fail_reason = "joint_limits";
+        }else if(!in_map){
+            out_cand.fail_reason = "out_of_map";
+        }else if(!no_collision){
+            out_cand.fail_reason = "collision";
+        }else{
+            out_cand.fail_reason.clear();
+        }
+        return true;
+    }
+
+    out_cand.fail_reason = fail_reason.empty() ? "pose_not_reached" : fail_reason;
     return false;
+    // ################################
+    // C++: Stage B 9-DOF weighted DLS end
+    // ################################
 }
 
 bool WholeBodyIkSolver::runStageC(const Eigen::Matrix<double, 9, 1> &xi0,
