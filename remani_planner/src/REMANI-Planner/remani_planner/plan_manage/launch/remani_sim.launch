@@ -174,6 +174,15 @@
     <node name="rviz" pkg="rviz" type="rviz"
           args="-d $(find remani_planner)/launch/exp0.rviz"
           if="$(eval arg('robot_model') == 'fast_armer')"/>
+    <!-- ################################ -->
+    <!-- XML: EE goal marker for ranger+rviz begin -->
+    <!-- ################################ -->
+    <node pkg="remani_planner" type="ee_goal_marker_node" name="ee_goal_marker_node"
+          output="screen"
+          if="$(eval arg('robot_model') == 'ranger_cr10')"/>
+    <!-- ################################ -->
+    <!-- XML: EE goal marker for ranger+rviz end -->
+    <!-- ################################ -->
   </group>
 </launch>
 <!-- ################################ -->

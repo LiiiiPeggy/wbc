@@ -14,6 +14,8 @@ find_package(catkin REQUIRED COMPONENTS
   roslib
   std_msgs
   geometry_msgs
+  visualization_msgs
+  interactive_markers
   quadrotor_msgs
   plan_env
   path_searching
@@ -57,4 +59,16 @@ target_link_libraries(remani_planner_node
   vis_utils
   )
 
+# ################################
+# CMake: EE interactive marker node begin
+# ################################
+add_executable(ee_goal_marker_node
+  src/ee_goal_marker_node.cpp
+)
+target_link_libraries(ee_goal_marker_node
+  ${catkin_LIBRARIES}
+)
+# ################################
+# CMake: EE interactive marker node end
+# ################################
 

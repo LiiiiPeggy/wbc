@@ -68,6 +68,44 @@ Visualization Manager:
           Queue Size: 100
           Value: true
         # ################################
+        # YAML/RViz: EE interactive marker + current pose begin
+        # ################################
+        - Class: rviz/InteractiveMarkers
+          Enable Transparency: true
+          Enabled: true
+          Name: EE Goal Marker
+          Show Axes: false
+          Show Descriptions: true
+          Show Visual Aids: false
+          Update Topic: /ee_goal_marker/update
+          Value: true
+        - Class: rviz/Pose
+          Alpha: 1
+          Axes Length: 0.15
+          Axes Radius: 0.01
+          Color: 25; 255; 0
+          Enabled: true
+          Head Length: 0.05
+          Head Radius: 0.02
+          Name: EE Current Pose
+          Shaft Length: 0.12
+          Shaft Radius: 0.01
+          Shape: Axes
+          Topic: /ee_current_pose
+          Unreliable: false
+          Value: true
+        - Class: rviz/MarkerArray
+          Enabled: true
+          Marker Topic: /ee_ik_terminal_markers
+          Name: EE IK Terminal Ghost
+          Namespaces:
+            {}
+          Queue Size: 10
+          Value: true
+        # ################################
+        # YAML/RViz: EE interactive marker + current pose end
+        # ################################
+        # ################################
         # YAML/RViz: collision proxy balls (enable with visualization/enable_debug_vis) begin
         # ################################
         - Class: rviz/Marker
@@ -80,6 +118,44 @@ Visualization Manager:
           Value: false
         # ################################
         # YAML/RViz: collision proxy balls end
+        # ################################
+        # ################################
+        # YAML/RViz: EE goal InteractiveMarkers + current pose begin
+        # ################################
+        - Class: rviz/InteractiveMarkers
+          Enable Transparency: true
+          Enabled: true
+          Name: EE Goal Marker
+          Show Axes: false
+          Show Descriptions: true
+          Show Visual Aids: false
+          Update Topic: /ee_goal_marker/update
+          Value: true
+        - Class: rviz/Pose
+          Alpha: 1
+          Axes Length: 0.15
+          Axes Radius: 0.02
+          Color: 25; 255; 0
+          Enabled: true
+          Head Length: 0.05
+          Head Radius: 0.03
+          Name: EE Current Pose
+          Shaft Length: 0.12
+          Shaft Radius: 0.015
+          Shape: Axes
+          Topic: /ee_current_pose
+          Unreliable: false
+          Value: true
+        - Class: rviz/MarkerArray
+          Enabled: true
+          Marker Topic: /ee_ik_terminal_markers
+          Name: EE IK Terminal Ghost
+          Namespaces:
+            {}
+          Queue Size: 10
+          Value: true
+        # ################################
+        # YAML/RViz: EE goal InteractiveMarkers + current pose end
         # ################################
         - Alpha: 1
           Class: rviz/RobotModel

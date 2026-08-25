@@ -36,6 +36,14 @@ mm:
   # Conservative simulation limits — 待实机校验
   manipulator_min_pos  : [-3.00, -1.50, -2.80, -3.00, -3.00, -3.00]
   manipulator_max_pos  : [ 3.00,  1.50,  2.80,  3.00,  3.00,  3.00]
+
+  # ################################
+  # YAML: EE TCP offset (identity = CR10 flange) begin
+  # ################################
+  ee_tcp_xyz_rpy: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+  # ################################
+  # YAML: EE TCP offset end
+  # ################################
 # ################################
 # YAML: Ranger + CR10 simulation params end
 # ################################
