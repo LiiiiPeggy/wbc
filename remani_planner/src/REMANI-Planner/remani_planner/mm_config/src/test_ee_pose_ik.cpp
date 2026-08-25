@@ -615,6 +615,51 @@ int main(int argc, char **argv)
     // C++: ranking helpers tests end
     // ################################
 
+    // ################################
+    // C++: obstacle clearance API tests begin
+    // ################################
+    {
+        GridMap::Ptr clear_grid = makeInitializedGridMap(nh);
+        MMConfig::Ptr cfg_clear(new MMConfig());
+        cfg_clear->setParam(nh, clear_grid);
+        Eigen::Vector3d clear_car(0.0, 0.0, 0.0);
+        Eigen::VectorXd clear_q = b_q_start;
+        const double empty_clear =
+            cfg_clear->getWholeBodyObstacleClearance(clear_car, clear_q);
+        const double empty_car_clear =
+            cfg_clear->getCarObstacleClearance(clear_car);
+        const bool empty_coll = cfg_clear->checkcollision(clear_car, clear_q, true);
+
+        clear_grid->setOccupied(Eigen::Vector3d(1.0, 0.0, 0.5));
+        clear_grid->updateESDF3d();
+        const Eigen::Vector3d near_car(0.70, 0.0, 0.0);
+        const double occupied_clear =
+            cfg_clear->getWholeBodyObstacleClearance(near_car, clear_q);
+        const bool occupied_coll_bool =
+            cfg_clear->checkcollision(near_car, clear_q, true);
+        // Recompute checkcollision after reading clearance must be stable
+        const bool occupied_coll_bool2 =
+            cfg_clear->checkcollision(near_car, clear_q, true);
+
+        const bool clearance_pass = empty_clear > 0.3
+            && empty_car_clear > 0.3
+            && !empty_coll
+            && occupied_clear < empty_clear
+            && occupied_clear < 0.5
+            && occupied_coll_bool == occupied_coll_bool2;
+        printResult("obstacle clearance empty large / occupied small",
+                    clearance_pass, all_pass);
+        if(!clearance_pass){
+            ROS_ERROR("clearance: empty=%.4f car=%.4f occupied=%.4f coll=%d/%d",
+                      empty_clear, empty_car_clear, occupied_clear,
+                      static_cast<int>(occupied_coll_bool),
+                      static_cast<int>(occupied_coll_bool2));
+        }
+    }
+    // ################################
+    // C++: obstacle clearance API tests end
+    // ################################
+
     std::cout << (all_pass ? "ALL TESTS PASSED" : "TESTS FAILED") << std::endl;
     return all_pass ? 0 : 1;
 }

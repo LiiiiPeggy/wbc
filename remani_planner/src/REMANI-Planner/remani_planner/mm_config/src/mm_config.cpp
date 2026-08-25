@@ -2,6 +2,8 @@
 #include "mm_config/ee_kinematics_utils.hpp"
 #include <stdexcept>
 #include <algorithm>
+#include <limits>
+#include <cmath>
 
 namespace remani_planner
 {
@@ -958,6 +960,81 @@ bool MMConfig::checkManiObsCollision(Eigen::Vector3d car_state, Eigen::VectorXd 
     min_dist = safe_dist;
     return false;
 }
+
+// ################################
+// C++: read-only obstacle ESDF clearance scanners begin
+// ################################
+double MMConfig::getCarObstacleClearance(const Eigen::Vector3d &car_state)
+{
+    if(!grid_map_){
+        return 0.0;
+    }
+    std::vector<Eigen::Vector3d> car_pts;
+    getCarPts(car_state, car_pts);
+    if(car_pts.empty()){
+        return 0.0;
+    }
+    double min_dist = std::numeric_limits<double>::infinity();
+    for(unsigned int i = 0; i < car_pts.size(); ++i){
+        const double dist = grid_map_->getPreciseDistance(car_pts[i]);
+        if(std::isfinite(dist)){
+            min_dist = std::min(min_dist, dist);
+        }
+    }
+    return std::isfinite(min_dist) ? min_dist : 0.0;
+}
+
+double MMConfig::getWholeBodyObstacleClearance(const Eigen::Vector3d &car_state,
+                                               const Eigen::VectorXd &q)
+{
+    if(!grid_map_){
+        return 0.0;
+    }
+
+    double min_dist = getCarObstacleClearance(car_state);
+
+    Eigen::Matrix4d T_q = Eigen::Matrix4d::Identity();
+    T_q(0, 0) = cos(car_state(2));
+    T_q(0, 1) = -sin(car_state(2));
+    T_q(0, 3) = car_state(0);
+    T_q(1, 0) = sin(car_state(2));
+    T_q(1, 1) = cos(car_state(2));
+    T_q(1, 3) = car_state(1);
+
+    Eigen::Matrix4d T_now = T_q * T_q_0_;
+    std::vector<Eigen::Matrix4d> T_joint, T_joint_grad_nouse;
+    getJointTrans(q, T_joint, T_joint_grad_nouse);
+
+    if(manipulator_base_link_pts_.cols() > 0){
+        const int base_n = manipulator_base_link_pts_.cols();
+        for(int j = 0; j < base_n; ++j){
+            const Eigen::Vector3d pt_on_link =
+                (T_now * manipulator_base_link_pts_.col(j)).head(3);
+            const double dist = grid_map_->getPreciseDistance(pt_on_link);
+            if(std::isfinite(dist)){
+                min_dist = std::min(min_dist, dist);
+            }
+        }
+    }
+
+    for(int i = 0; i < manipulator_dof_; ++i){
+        T_now = T_now * T_joint[i];
+        const int pts_size = manipulator_link_pts_[i].cols();
+        for(int j = 0; j < pts_size; ++j){
+            const Eigen::Vector3d pt_on_link =
+                (T_now * manipulator_link_pts_[i].col(j)).head(3);
+            const double dist = grid_map_->getPreciseDistance(pt_on_link);
+            if(std::isfinite(dist)){
+                min_dist = std::min(min_dist, dist);
+            }
+        }
+    }
+
+    return std::isfinite(min_dist) ? min_dist : 0.0;
+}
+// ################################
+// C++: read-only obstacle ESDF clearance scanners end
+// ################################
 
 bool MMConfig::checkCarManiCollision(Eigen::VectorXd mani_state, bool safe, double &min_dist){
     // ################################

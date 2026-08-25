@@ -97,6 +97,17 @@ namespace remani_planner
         bool checkManicollision(Eigen::Vector3d car_state, Eigen::VectorXd mani_state, bool safe);
         bool checkcollision(Eigen::Vector3d car_state, Eigen::VectorXd mani_state, bool safe);
         bool checkcollision(Eigen::Vector3d car_state, Eigen::VectorXd mani_state, bool safe, int &coll_type /*0: car, 1: mani, 2: car-mani, 3: mani-mani*/);
+
+        // ################################
+        // C++: read-only obstacle ESDF clearance API begin
+        // ################################
+        double getWholeBodyObstacleClearance(const Eigen::Vector3d &car_state,
+                                             const Eigen::VectorXd &q);
+        double getCarObstacleClearance(const Eigen::Vector3d &car_state);
+        // ################################
+        // C++: read-only obstacle ESDF clearance API end
+        // ################################
+
         void visMM(ros::Publisher &pub, std::string ns, int idx, double alpha, const Eigen::Vector3d &car_state, const Eigen::VectorXd &joint_state, const bool &gripper_close);
         void visMMCheckBall(ros::Publisher &pub, std::string ns, int idx, double alpha, const Eigen::Vector3d &car_state, const Eigen::VectorXd &joint_state);
         void getMMMarkerArray(visualization_msgs::MarkerArray &marker_array, std::string ns, int idx, double alpha, const Eigen::Vector3d &car_state, const Eigen::VectorXd &joint_state, const bool &gripper_close);
