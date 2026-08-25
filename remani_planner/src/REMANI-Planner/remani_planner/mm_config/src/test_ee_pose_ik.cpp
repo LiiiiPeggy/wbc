@@ -4,12 +4,14 @@
 #include <mm_config/ee_kinematics_utils.hpp>
 #include <mm_config/fixed_base_arm_ik.hpp>
 #include <mm_config/mm_config.hpp>
+#include <mm_config/whole_body_ik.hpp>
 #include <ros/ros.h>
 
 #include <algorithm>
 #include <cmath>
 #include <iostream>
 #include <random>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -17,6 +19,8 @@ using remani_planner::MMConfig;
 using remani_planner::FixedBaseArmIk;
 using remani_planner::FixedBaseArmIkParams;
 using remani_planner::FixedBaseArmIkResult;
+using remani_planner::WholeBodyIkParams;
+using remani_planner::WholeBodyIkSolver;
 using remani_planner::poseError;
 using remani_planner::rotationLog;
 
@@ -352,6 +356,55 @@ int main(int argc, char **argv)
                 ik_failure_pass, all_pass);
     // ################################
     // C++: fixed-base 6-DoF arm IK tests end
+    // ################################
+
+    // ################################
+    // C++: whole-body IK params and solver scaffold tests begin
+    // ################################
+    bool params_load_pass = true;
+    try{
+        const WholeBodyIkParams default_params = WholeBodyIkParams::loadFromRosParam(nh);
+        params_load_pass = default_params.ee_goal_topic == "/ee_goal"
+            && default_params.ee_current_pose_topic == "/ee_current_pose"
+            && default_params.b_weight_joint > 0.0
+            && default_params.c_radii.size() == 4
+            && default_params.c_yaw_offsets_rad.size() == 3;
+    }catch(const std::exception &ex){
+        ROS_ERROR("WholeBodyIkParams default load failed: %s", ex.what());
+        params_load_pass = false;
+    }
+    printResult("WholeBodyIkParams loadFromRosParam defaults",
+                params_load_pass, all_pass);
+
+    bool params_reject_pass = false;
+    nh.setParam("fsm/ee_ik_b_weight_joint", 0.0);
+    try{
+        WholeBodyIkParams::loadFromRosParam(nh);
+    }catch(const std::runtime_error &){
+        params_reject_pass = true;
+    }
+    nh.deleteParam("fsm/ee_ik_b_weight_joint");
+    printResult("WholeBodyIkParams rejects zero b_weight_joint",
+                params_reject_pass, all_pass);
+
+    GridMap::Ptr grid_map(new GridMap());
+    WholeBodyIkParams solver_params;
+    try{
+        solver_params = WholeBodyIkParams::loadFromRosParam(nh);
+    }catch(const std::exception &){
+        solver_params = WholeBodyIkParams{};
+    }
+    WholeBodyIkSolver whole_body_ik(cfg_ik, grid_map, solver_params);
+    Eigen::Matrix<double, 9, 1> xi_start;
+    xi_start << ik_car.x(), ik_car.y(), ik_car.z(), q_seed(0), q_seed(1),
+                q_seed(2), q_seed(3), q_seed(4), q_seed(5);
+    const auto stub_result = whole_body_ik.solve(xi_start, T_goal);
+    printResult("WholeBodyIkSolver stub solve returns not implemented",
+                !stub_result.success
+                    && stub_result.fail_reason == "not implemented",
+                all_pass);
+    // ################################
+    // C++: whole-body IK params and solver scaffold tests end
     // ################################
 
     std::cout << (all_pass ? "ALL TESTS PASSED" : "TESTS FAILED") << std::endl;

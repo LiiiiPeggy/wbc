@@ -44,6 +44,13 @@ add_library( mm_config
     # ################################
     # CMake: fixed-base arm IK source end
     # ################################
+    # ################################
+    # CMake: whole-body IK source begin
+    # ################################
+    src/whole_body_ik.cpp
+    # ################################
+    # CMake: whole-body IK source end
+    # ################################
     )
 
 target_link_libraries( mm_config
