@@ -56,6 +56,7 @@
   <build_depend>path_searching</build_depend>
   <build_depend>traj_opt</build_depend>
   <build_depend>traj_utils</build_depend>
+  <depend>mm_config</depend>
 
   <build_export_depend>roscpp</build_export_depend>
   <build_export_depend>std_msgs</build_export_depend>
