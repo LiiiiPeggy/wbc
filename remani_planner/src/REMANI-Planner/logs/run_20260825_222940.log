@@ -1,0 +1,778 @@
+... logging to /home/gzz/.ros/log/f1706870-a077-11f1-9e52-fdf66165d635/roslaunch-GZZ-285704.log
+Checking log directory for disk usage. This may take a while.
+Press Ctrl-C to interrupt
+Done checking log file disk usage. Usage is <1GB.
+]2;/home/gzz/Codes/wbc/remani_planner/src/REMANI-Planner/remani_planner/plan_manage/launch/remani_sim.launch
+[1mstarted roslaunch server http://GZZ:34921/[0m
+
+SUMMARY
+========
+
+PARAMETERS
+ * /fake_mm/fake_mm/pub_urdf_joint_states: True
+ * /fake_mm/fsm/init_gripper_close: False
+ * /fake_mm/fsm/init_state: [-5.0, 0.0, 0.0, ...
+ * /fake_mm/fsm/init_yaw: 0.0
+ * /fake_mm/fsm/waypoint0: [0.0, 0.0, 0.0, 0...
+ * /fake_mm/fsm/waypoint0_gripper_close: True
+ * /fake_mm/fsm/waypoint0_yaw: 0.0
+ * /fake_mm/fsm/waypoint1: [5.0, 0.0, 0.0, 0...
+ * /fake_mm/fsm/waypoint1_gripper_close: False
+ * /fake_mm/fsm/waypoint1_yaw: 0.0
+ * /fake_mm/fsm/waypoint_num: 2
+ * /fake_mm/map/map_type: 0
+ * /fake_mm/mm/base_mani_fixed_joint_xyz_ypr: [0.2462, 0.0, 0.1...
+ * /fake_mm/mm/ee_tcp_xyz_rpy: [0.0, 0.0, 0.0, 0...
+ * /fake_mm/mm/manipulator_config: [0.1765, 0.607, 0...
+ * /fake_mm/mm/manipulator_dof: 6
+ * /fake_mm/mm/manipulator_max_acc: 1.57
+ * /fake_mm/mm/manipulator_max_pos: [3.0, 1.5, 2.8, 3...
+ * /fake_mm/mm/manipulator_max_vel: 0.8
+ * /fake_mm/mm/manipulator_min_pos: [-3.0, -1.5, -2.8...
+ * /fake_mm/mm/manipulator_self_thickness: 0.045
+ * /fake_mm/mm/manipulator_thickness: 0.1
+ * /fake_mm/mm/manipulator_type: cr10
+ * /fake_mm/mm/mobile_base_check_radius: 0.1
+ * /fake_mm/mm/mobile_base_dof: 2
+ * /fake_mm/mm/mobile_base_height: 0.15
+ * /fake_mm/mm/mobile_base_length: 1.1
+ * /fake_mm/mm/mobile_base_max_wheel_alpha: 8.0
+ * /fake_mm/mm/mobile_base_max_wheel_omega: 4.0
+ * /fake_mm/mm/mobile_base_non_singul_vel: 0.05
+ * /fake_mm/mm/mobile_base_wheel_base: 0.56
+ * /fake_mm/mm/mobile_base_wheel_radius: 0.125
+ * /fake_mm/mm/mobile_base_width: 0.9
+ * /fsm/target_type: 2
+ * /map_generator/bridges: [[0.0, 0.0, 1.0, ...
+ * /map_generator/clear_centers: [[-5.0, 0.0], [-2...
+ * /map_generator/clear_radius: 3.0
+ * /map_generator/fsm/init_gripper_close: False
+ * /map_generator/fsm/init_state: [-5.0, 0.0, 0.0, ...
+ * /map_generator/fsm/init_yaw: 0.0
+ * /map_generator/fsm/waypoint0: [0.0, 0.0, 0.0, 0...
+ * /map_generator/fsm/waypoint0_gripper_close: True
+ * /map_generator/fsm/waypoint0_yaw: 0.0
+ * /map_generator/fsm/waypoint1: [5.0, 0.0, 0.0, 0...
+ * /map_generator/fsm/waypoint1_gripper_close: False
+ * /map_generator/fsm/waypoint1_yaw: 0.0
+ * /map_generator/fsm/waypoint_num: 2
+ * /map_generator/map/float_obs_num: 2
+ * /map_generator/map/map_type: 0
+ * /map_generator/map/obs_num: 4
+ * /map_generator/map/resolution: 0.05
+ * /map_generator/map/seed: 30
+ * /map_generator/map/x_size: 16
+ * /map_generator/map/y_size: 12
+ * /map_generator/map/z_size: 3
+ * /map_generator/min_distance: 2.5
+ * /map_generator/mm/base_mani_fixed_joint_xyz_ypr: [0.2462, 0.0, 0.1...
+ * /map_generator/mm/ee_tcp_xyz_rpy: [0.0, 0.0, 0.0, 0...
+ * /map_generator/mm/manipulator_config: [0.1765, 0.607, 0...
+ * /map_generator/mm/manipulator_dof: 6
+ * /map_generator/mm/manipulator_max_acc: 1.57
+ * /map_generator/mm/manipulator_max_pos: [3.0, 1.5, 2.8, 3...
+ * /map_generator/mm/manipulator_max_vel: 0.8
+ * /map_generator/mm/manipulator_min_pos: [-3.0, -1.5, -2.8...
+ * /map_generator/mm/manipulator_self_thickness: 0.045
+ * /map_generator/mm/manipulator_thickness: 0.1
+ * /map_generator/mm/manipulator_type: cr10
+ * /map_generator/mm/mobile_base_check_radius: 0.1
+ * /map_generator/mm/mobile_base_dof: 2
+ * /map_generator/mm/mobile_base_height: 0.15
+ * /map_generator/mm/mobile_base_length: 1.1
+ * /map_generator/mm/mobile_base_max_wheel_alpha: 8.0
+ * /map_generator/mm/mobile_base_max_wheel_omega: 4.0
+ * /map_generator/mm/mobile_base_non_singul_vel: 0.05
+ * /map_generator/mm/mobile_base_wheel_base: 0.56
+ * /map_generator/mm/mobile_base_wheel_radius: 0.125
+ * /map_generator/mm/mobile_base_width: 0.9
+ * /map_generator/pub_rate: 1.0
+ * /mm_controller_node/fsm/ee_current_pose_topic: /ee_current_pose
+ * /mm_controller_node/fsm/ee_goal_topic: /ee_goal
+ * /mm_controller_node/fsm/ee_ik_b_accept_clearance: 0.2
+ * /mm_controller_node/fsm/ee_ik_b_accept_joint_margin: 0.15
+ * /mm_controller_node/fsm/ee_ik_b_accept_max_dq: 0.5
+ * /mm_controller_node/fsm/ee_ik_b_accept_max_xy: 0.15
+ * /mm_controller_node/fsm/ee_ik_b_accept_max_yaw_deg: 10.0
+ * /mm_controller_node/fsm/ee_ik_b_max_iters: 60
+ * /mm_controller_node/fsm/ee_ik_b_max_ms: 40.0
+ * /mm_controller_node/fsm/ee_ik_b_weight_joint: 1.0
+ * /mm_controller_node/fsm/ee_ik_b_weight_xy: 5.0
+ * /mm_controller_node/fsm/ee_ik_b_weight_yaw: 2.0
+ * /mm_controller_node/fsm/ee_ik_c_arm_iters: 40
+ * /mm_controller_node/fsm/ee_ik_c_arm_max_ms: 5.0
+ * /mm_controller_node/fsm/ee_ik_c_max_ms: 150.0
+ * /mm_controller_node/fsm/ee_ik_c_radii: [0.5, 0.75, 1.0, ...
+ * /mm_controller_node/fsm/ee_ik_c_yaw_bins: 12
+ * /mm_controller_node/fsm/ee_ik_c_yaw_offsets_deg: [0.0, -15.0, 15.0]
+ * /mm_controller_node/fsm/ee_ik_gap_ref: 0.2
+ * /mm_controller_node/fsm/ee_ik_joint_margin_req: 0.087
+ * /mm_controller_node/fsm/ee_ik_local_xy: 0.4
+ * /mm_controller_node/fsm/ee_ik_local_yaw_deg: 20.0
+ * /mm_controller_node/fsm/ee_ik_pos_tol: 0.01
+ * /mm_controller_node/fsm/ee_ik_rot_tol_deg: 2.0
+ * /mm_controller_node/fsm/ee_ik_w_gap: 2.0
+ * /mm_controller_node/fsm/ee_ik_w_limit: 1.0
+ * /mm_controller_node/fsm/ee_ik_w_q: 0.1
+ * /mm_controller_node/fsm/ee_ik_w_xy: 1.0
+ * /mm_controller_node/fsm/ee_ik_w_yaw: 0.3
+ * /mm_controller_node/fsm/ee_reach_pos_tol: 0.02
+ * /mm_controller_node/fsm/ee_reach_rot_tol_deg: 4.0
+ * /mm_controller_node/fsm/emergency_time: 1.5
+ * /mm_controller_node/fsm/global_plan: True
+ * /mm_controller_node/fsm/init_gripper_close: False
+ * /mm_controller_node/fsm/init_state: [-5.0, 0.0, 0.0, ...
+ * /mm_controller_node/fsm/init_yaw: 0.0
+ * /mm_controller_node/fsm/max_continuous_plan_failures: 20
+ * /mm_controller_node/fsm/planning_horizon: 5.0
+ * /mm_controller_node/fsm/replan_trajectory_time: 1.7
+ * /mm_controller_node/fsm/target_type: 2
+ * /mm_controller_node/fsm/thresh_replan_time: 2.5
+ * /mm_controller_node/fsm/time_for_gripper: 0.05
+ * /mm_controller_node/fsm/waypoint0: [0.0, 0.0, 0.0, 0...
+ * /mm_controller_node/fsm/waypoint0_gripper_close: True
+ * /mm_controller_node/fsm/waypoint0_yaw: 0.0
+ * /mm_controller_node/fsm/waypoint1: [5.0, 0.0, 0.0, 0...
+ * /mm_controller_node/fsm/waypoint1_gripper_close: False
+ * /mm_controller_node/fsm/waypoint1_yaw: 0.0
+ * /mm_controller_node/fsm/waypoint_num: 2
+ * /mm_controller_node/grid_map/use_global_map: False
+ * /mm_controller_node/grid_map/use_load_map: True
+ * /mm_controller_node/map/map_type: 0
+ * /mm_controller_node/mm/base_mani_fixed_joint_xyz_ypr: [0.2462, 0.0, 0.1...
+ * /mm_controller_node/mm/ee_tcp_xyz_rpy: [0.0, 0.0, 0.0, 0...
+ * /mm_controller_node/mm/manipulator_config: [0.1765, 0.607, 0...
+ * /mm_controller_node/mm/manipulator_dof: 6
+ * /mm_controller_node/mm/manipulator_max_acc: 1.57
+ * /mm_controller_node/mm/manipulator_max_pos: [3.0, 1.5, 2.8, 3...
+ * /mm_controller_node/mm/manipulator_max_vel: 0.8
+ * /mm_controller_node/mm/manipulator_min_pos: [-3.0, -1.5, -2.8...
+ * /mm_controller_node/mm/manipulator_self_thickness: 0.045
+ * /mm_controller_node/mm/manipulator_thickness: 0.1
+ * /mm_controller_node/mm/manipulator_type: cr10
+ * /mm_controller_node/mm/mobile_base_check_radius: 0.1
+ * /mm_controller_node/mm/mobile_base_dof: 2
+ * /mm_controller_node/mm/mobile_base_height: 0.15
+ * /mm_controller_node/mm/mobile_base_length: 1.1
+ * /mm_controller_node/mm/mobile_base_max_wheel_alpha: 8.0
+ * /mm_controller_node/mm/mobile_base_max_wheel_omega: 4.0
+ * /mm_controller_node/mm/mobile_base_non_singul_vel: 0.05
+ * /mm_controller_node/mm/mobile_base_wheel_base: 0.56
+ * /mm_controller_node/mm/mobile_base_wheel_radius: 0.125
+ * /mm_controller_node/mm/mobile_base_width: 0.9
+ * /mm_controller_node/optimization/constrain_points_perPiece: 16
+ * /mm_controller_node/optimization/dense_sample_resolution: 16
+ * /mm_controller_node/optimization/enable_dynamic_time_scaling: True
+ * /mm_controller_node/optimization/ground_safe_dis: 0.03
+ * /mm_controller_node/optimization/ground_safe_margin: 0.03
+ * /mm_controller_node/optimization/max_time_scale: 2.0
+ * /mm_controller_node/optimization/max_time_scaling_attempts: 2
+ * /mm_controller_node/optimization/mobile_base_opt_gear: True
+ * /mm_controller_node/optimization/safe_margin: 0.1
+ * /mm_controller_node/optimization/safe_margin_mani: 0.15
+ * /mm_controller_node/optimization/self_safe_margin: 0.1
+ * /mm_controller_node/optimization/weight_base_feasibility: 100.0
+ * /mm_controller_node/optimization/weight_manipulator_feasibility: 100.0
+ * /mm_controller_node/optimization/weight_manipulator_obstacle: 80000.0
+ * /mm_controller_node/optimization/weight_manipulator_self: 1000.0
+ * /mm_controller_node/optimization/weight_obstacle: 50000.0
+ * /mm_controller_node/optimization/weight_time: 1.0
+ * /mm_controller_node/optimization/wheel_limit_ratio: 0.95
+ * /mm_controller_node/search/allocate_num: 100000
+ * /mm_controller_node/search/check_num: 16
+ * /mm_controller_node/search/curvatureDisCoe: 0.4
+ * /mm_controller_node/search/dist_resolution: 0.6
+ * /mm_controller_node/search/goal_rate: 0.4
+ * /mm_controller_node/search/lambda_heu: 1
+ * /mm_controller_node/search/max_arc: 0.4
+ * /mm_controller_node/search/max_loop_num: 5000
+ * /mm_controller_node/search/max_mani_search_time: 0.3
+ * /mm_controller_node/search/max_sample_time: 1.5
+ * /mm_controller_node/search/max_seach_time: 3.0
+ * /mm_controller_node/search/min_turning_radius: 0.2
+ * /mm_controller_node/search/oneshot_check_len: 0.02
+ * /mm_controller_node/search/oneshot_range: 1.0
+ * /mm_controller_node/search/sample_time: 0.1
+ * /mm_controller_node/search/traj_back_penalty: 3.0
+ * /mm_controller_node/search/traj_forward_penalty: 1.0
+ * /mm_controller_node/search/traj_gear_switch_penalty: 10.0
+ * /mm_controller_node/search/traj_steer_change_penalty: 2.0
+ * /mm_controller_node/search/traj_steer_penalty: 5.0
+ * /mm_controller_node/search/try_astar_times: 5
+ * /mm_controller_node/search/yaw_resolution: 0.35
+ * /mm_controller_node/visualization/enable_debug_vis: False
+ * /mm_controller_node/visualization/enable_traj_mesh_vis: True
+ * /mm_controller_node/visualization/his_traj_max_points: 500
+ * /mm_controller_node/visualization/mesh_vis_stride: 3
+ * /mm_controller_node/visualization/tf_rate_hz: 20.0
+ * /mm_controller_node/visualization/vis_rate_hz: 15.0
+ * /model_vis/fsm/ee_current_pose_topic: /ee_current_pose
+ * /model_vis/fsm/ee_goal_topic: /ee_goal
+ * /model_vis/fsm/ee_ik_b_accept_clearance: 0.2
+ * /model_vis/fsm/ee_ik_b_accept_joint_margin: 0.15
+ * /model_vis/fsm/ee_ik_b_accept_max_dq: 0.5
+ * /model_vis/fsm/ee_ik_b_accept_max_xy: 0.15
+ * /model_vis/fsm/ee_ik_b_accept_max_yaw_deg: 10.0
+ * /model_vis/fsm/ee_ik_b_max_iters: 60
+ * /model_vis/fsm/ee_ik_b_max_ms: 40.0
+ * /model_vis/fsm/ee_ik_b_weight_joint: 1.0
+ * /model_vis/fsm/ee_ik_b_weight_xy: 5.0
+ * /model_vis/fsm/ee_ik_b_weight_yaw: 2.0
+ * /model_vis/fsm/ee_ik_c_arm_iters: 40
+ * /model_vis/fsm/ee_ik_c_arm_max_ms: 5.0
+ * /model_vis/fsm/ee_ik_c_max_ms: 150.0
+ * /model_vis/fsm/ee_ik_c_radii: [0.5, 0.75, 1.0, ...
+ * /model_vis/fsm/ee_ik_c_yaw_bins: 12
+ * /model_vis/fsm/ee_ik_c_yaw_offsets_deg: [0.0, -15.0, 15.0]
+ * /model_vis/fsm/ee_ik_gap_ref: 0.2
+ * /model_vis/fsm/ee_ik_joint_margin_req: 0.087
+ * /model_vis/fsm/ee_ik_local_xy: 0.4
+ * /model_vis/fsm/ee_ik_local_yaw_deg: 20.0
+ * /model_vis/fsm/ee_ik_pos_tol: 0.01
+ * /model_vis/fsm/ee_ik_rot_tol_deg: 2.0
+ * /model_vis/fsm/ee_ik_w_gap: 2.0
+ * /model_vis/fsm/ee_ik_w_limit: 1.0
+ * /model_vis/fsm/ee_ik_w_q: 0.1
+ * /model_vis/fsm/ee_ik_w_xy: 1.0
+ * /model_vis/fsm/ee_ik_w_yaw: 0.3
+ * /model_vis/fsm/ee_reach_pos_tol: 0.02
+ * /model_vis/fsm/ee_reach_rot_tol_deg: 4.0
+ * /model_vis/fsm/emergency_time: 1.5
+ * /model_vis/fsm/global_plan: True
+ * /model_vis/fsm/init_gripper_close: False
+ * /model_vis/fsm/init_state: [-5.0, 0.0, 0.0, ...
+ * /model_vis/fsm/init_yaw: 0.0
+ * /model_vis/fsm/max_continuous_plan_failures: 20
+ * /model_vis/fsm/planning_horizon: 5.0
+ * /model_vis/fsm/replan_trajectory_time: 1.7
+ * /model_vis/fsm/target_type: 2
+ * /model_vis/fsm/thresh_replan_time: 2.5
+ * /model_vis/fsm/time_for_gripper: 0.05
+ * /model_vis/fsm/waypoint0: [0.0, 0.0, 0.0, 0...
+ * /model_vis/fsm/waypoint0_gripper_close: True
+ * /model_vis/fsm/waypoint0_yaw: 0.0
+ * /model_vis/fsm/waypoint1: [5.0, 0.0, 0.0, 0...
+ * /model_vis/fsm/waypoint1_gripper_close: False
+ * /model_vis/fsm/waypoint1_yaw: 0.0
+ * /model_vis/fsm/waypoint_num: 2
+ * /model_vis/grid_map/use_global_map: False
+ * /model_vis/grid_map/use_load_map: True
+ * /model_vis/map/map_type: 0
+ * /model_vis/mm/base_mani_fixed_joint_xyz_ypr: [0.2462, 0.0, 0.1...
+ * /model_vis/mm/ee_tcp_xyz_rpy: [0.0, 0.0, 0.0, 0...
+ * /model_vis/mm/manipulator_config: [0.1765, 0.607, 0...
+ * /model_vis/mm/manipulator_dof: 6
+ * /model_vis/mm/manipulator_max_acc: 1.57
+ * /model_vis/mm/manipulator_max_pos: [3.0, 1.5, 2.8, 3...
+ * /model_vis/mm/manipulator_max_vel: 0.8
+ * /model_vis/mm/manipulator_min_pos: [-3.0, -1.5, -2.8...
+ * /model_vis/mm/manipulator_self_thickness: 0.045
+ * /model_vis/mm/manipulator_thickness: 0.1
+ * /model_vis/mm/manipulator_type: cr10
+ * /model_vis/mm/mobile_base_check_radius: 0.1
+ * /model_vis/mm/mobile_base_dof: 2
+ * /model_vis/mm/mobile_base_height: 0.15
+ * /model_vis/mm/mobile_base_length: 1.1
+ * /model_vis/mm/mobile_base_max_wheel_alpha: 8.0
+ * /model_vis/mm/mobile_base_max_wheel_omega: 4.0
+ * /model_vis/mm/mobile_base_non_singul_vel: 0.05
+ * /model_vis/mm/mobile_base_wheel_base: 0.56
+ * /model_vis/mm/mobile_base_wheel_radius: 0.125
+ * /model_vis/mm/mobile_base_width: 0.9
+ * /model_vis/optimization/constrain_points_perPiece: 16
+ * /model_vis/optimization/dense_sample_resolution: 16
+ * /model_vis/optimization/enable_dynamic_time_scaling: True
+ * /model_vis/optimization/ground_safe_dis: 0.03
+ * /model_vis/optimization/ground_safe_margin: 0.03
+ * /model_vis/optimization/max_time_scale: 2.0
+ * /model_vis/optimization/max_time_scaling_attempts: 2
+ * /model_vis/optimization/mobile_base_opt_gear: True
+ * /model_vis/optimization/safe_margin: 0.1
+ * /model_vis/optimization/safe_margin_mani: 0.15
+ * /model_vis/optimization/self_safe_margin: 0.1
+ * /model_vis/optimization/weight_base_feasibility: 100.0
+ * /model_vis/optimization/weight_manipulator_feasibility: 100.0
+ * /model_vis/optimization/weight_manipulator_obstacle: 80000.0
+ * /model_vis/optimization/weight_manipulator_self: 1000.0
+ * /model_vis/optimization/weight_obstacle: 50000.0
+ * /model_vis/optimization/weight_time: 1.0
+ * /model_vis/optimization/wheel_limit_ratio: 0.95
+ * /model_vis/search/allocate_num: 100000
+ * /model_vis/search/check_num: 16
+ * /model_vis/search/curvatureDisCoe: 0.4
+ * /model_vis/search/dist_resolution: 0.6
+ * /model_vis/search/goal_rate: 0.4
+ * /model_vis/search/lambda_heu: 1
+ * /model_vis/search/max_arc: 0.4
+ * /model_vis/search/max_loop_num: 5000
+ * /model_vis/search/max_mani_search_time: 0.3
+ * /model_vis/search/max_sample_time: 1.5
+ * /model_vis/search/max_seach_time: 3.0
+ * /model_vis/search/min_turning_radius: 0.2
+ * /model_vis/search/oneshot_check_len: 0.02
+ * /model_vis/search/oneshot_range: 1.0
+ * /model_vis/search/sample_time: 0.1
+ * /model_vis/search/traj_back_penalty: 3.0
+ * /model_vis/search/traj_forward_penalty: 1.0
+ * /model_vis/search/traj_gear_switch_penalty: 10.0
+ * /model_vis/search/traj_steer_change_penalty: 2.0
+ * /model_vis/search/traj_steer_penalty: 5.0
+ * /model_vis/search/try_astar_times: 5
+ * /model_vis/search/yaw_resolution: 0.35
+ * /model_vis/visualization/enable_debug_vis: False
+ * /model_vis/visualization/enable_traj_mesh_vis: True
+ * /model_vis/visualization/his_traj_max_points: 500
+ * /model_vis/visualization/mesh_vis_stride: 3
+ * /model_vis/visualization/tf_rate_hz: 20.0
+ * /model_vis/visualization/vis_rate_hz: 15.0
+ * /remani_planner_node/fsm/ee_current_pose_topic: /ee_current_pose
+ * /remani_planner_node/fsm/ee_goal_topic: /ee_goal
+ * /remani_planner_node/fsm/ee_ik_b_accept_clearance: 0.2
+ * /remani_planner_node/fsm/ee_ik_b_accept_joint_margin: 0.15
+ * /remani_planner_node/fsm/ee_ik_b_accept_max_dq: 0.5
+ * /remani_planner_node/fsm/ee_ik_b_accept_max_xy: 0.15
+ * /remani_planner_node/fsm/ee_ik_b_accept_max_yaw_deg: 10.0
+ * /remani_planner_node/fsm/ee_ik_b_max_iters: 60
+ * /remani_planner_node/fsm/ee_ik_b_max_ms: 40.0
+ * /remani_planner_node/fsm/ee_ik_b_weight_joint: 1.0
+ * /remani_planner_node/fsm/ee_ik_b_weight_xy: 5.0
+ * /remani_planner_node/fsm/ee_ik_b_weight_yaw: 2.0
+ * /remani_planner_node/fsm/ee_ik_c_arm_iters: 40
+ * /remani_planner_node/fsm/ee_ik_c_arm_max_ms: 5.0
+ * /remani_planner_node/fsm/ee_ik_c_max_ms: 150.0
+ * /remani_planner_node/fsm/ee_ik_c_radii: [0.5, 0.75, 1.0, ...
+ * /remani_planner_node/fsm/ee_ik_c_yaw_bins: 12
+ * /remani_planner_node/fsm/ee_ik_c_yaw_offsets_deg: [0.0, -15.0, 15.0]
+ * /remani_planner_node/fsm/ee_ik_gap_ref: 0.2
+ * /remani_planner_node/fsm/ee_ik_joint_margin_req: 0.087
+ * /remani_planner_node/fsm/ee_ik_local_xy: 0.4
+ * /remani_planner_node/fsm/ee_ik_local_yaw_deg: 20.0
+ * /remani_planner_node/fsm/ee_ik_pos_tol: 0.01
+ * /remani_planner_node/fsm/ee_ik_rot_tol_deg: 2.0
+ * /remani_planner_node/fsm/ee_ik_w_gap: 2.0
+ * /remani_planner_node/fsm/ee_ik_w_limit: 1.0
+ * /remani_planner_node/fsm/ee_ik_w_q: 0.1
+ * /remani_planner_node/fsm/ee_ik_w_xy: 1.0
+ * /remani_planner_node/fsm/ee_ik_w_yaw: 0.3
+ * /remani_planner_node/fsm/ee_reach_pos_tol: 0.02
+ * /remani_planner_node/fsm/ee_reach_rot_tol_deg: 4.0
+ * /remani_planner_node/fsm/emergency_time: 1.5
+ * /remani_planner_node/fsm/fail_safe: True
+ * /remani_planner_node/fsm/global_plan: True
+ * /remani_planner_node/fsm/init_gripper_close: False
+ * /remani_planner_node/fsm/init_state: [-5.0, 0.0, 0.0, ...
+ * /remani_planner_node/fsm/init_yaw: 0.0
+ * /remani_planner_node/fsm/max_continuous_plan_failures: 20
+ * /remani_planner_node/fsm/planning_horizon: 5.0
+ * /remani_planner_node/fsm/replan_trajectory_time: 1.7
+ * /remani_planner_node/fsm/target_type: 2
+ * /remani_planner_node/fsm/thresh_no_replan_meter: 2.5
+ * /remani_planner_node/fsm/thresh_replan_time: 2.5
+ * /remani_planner_node/fsm/time_for_gripper: 0.05
+ * /remani_planner_node/fsm/waypoint0: [0.0, 0.0, 0.0, 0...
+ * /remani_planner_node/fsm/waypoint0_gripper_close: True
+ * /remani_planner_node/fsm/waypoint0_yaw: 0.0
+ * /remani_planner_node/fsm/waypoint1: [5.0, 0.0, 0.0, 0...
+ * /remani_planner_node/fsm/waypoint1_gripper_close: False
+ * /remani_planner_node/fsm/waypoint1_yaw: 0.0
+ * /remani_planner_node/fsm/waypoint_num: 2
+ * /remani_planner_node/grid_map/cx: 321.04638671875
+ * /remani_planner_node/grid_map/cy: 243.44969177246094
+ * /remani_planner_node/grid_map/depth_filter_margin: 2
+ * /remani_planner_node/grid_map/depth_filter_maxdist: 5.0
+ * /remani_planner_node/grid_map/depth_filter_mindist: 0.2
+ * /remani_planner_node/grid_map/depth_filter_tolerance: 0.15
+ * /remani_planner_node/grid_map/esdf_slice_height: -0.1
+ * /remani_planner_node/grid_map/frame_id: world
+ * /remani_planner_node/grid_map/fx: 387.229248046875
+ * /remani_planner_node/grid_map/fy: 387.229248046875
+ * /remani_planner_node/grid_map/ground_height: -0.01
+ * /remani_planner_node/grid_map/k_depth_scaling_factor: 1000.0
+ * /remani_planner_node/grid_map/local_bound_inflate: 0.0
+ * /remani_planner_node/grid_map/local_map_margin: 15
+ * /remani_planner_node/grid_map/local_update_range_x: 17
+ * /remani_planner_node/grid_map/local_update_range_y: 17
+ * /remani_planner_node/grid_map/local_update_range_z: 3.0
+ * /remani_planner_node/grid_map/map_size_x: 16.0
+ * /remani_planner_node/grid_map/map_size_y: 12.0
+ * /remani_planner_node/grid_map/map_size_z: 3.0
+ * /remani_planner_node/grid_map/max_ray_length: 4.5
+ * /remani_planner_node/grid_map/min_ray_length: 0.1
+ * /remani_planner_node/grid_map/obstacles_inflation: 0.08
+ * /remani_planner_node/grid_map/p_hit: 0.65
+ * /remani_planner_node/grid_map/p_max: 0.9
+ * /remani_planner_node/grid_map/p_min: 0.12
+ * /remani_planner_node/grid_map/p_miss: 0.35
+ * /remani_planner_node/grid_map/p_occ: 0.8
+ * /remani_planner_node/grid_map/pose_type: 1
+ * /remani_planner_node/grid_map/resolution: 0.05
+ * /remani_planner_node/grid_map/show_esdf_time: False
+ * /remani_planner_node/grid_map/show_occ_time: False
+ * /remani_planner_node/grid_map/skip_pixel: 2
+ * /remani_planner_node/grid_map/use_depth_filter: True
+ * /remani_planner_node/grid_map/use_global_map: False
+ * /remani_planner_node/grid_map/use_load_map: True
+ * /remani_planner_node/grid_map/virtual_ceil_height: 4.0
+ * /remani_planner_node/grid_map/visualization_truncate_height: 2.8
+ * /remani_planner_node/grid_map/z_length: 0.0
+ * /remani_planner_node/manager/control_points_distance: 0.4
+ * /remani_planner_node/manager/feasibility_tolerance: 0.05
+ * /remani_planner_node/manager/polyTraj_piece_length: 2.0
+ * /remani_planner_node/map/map_type: 0
+ * /remani_planner_node/mm/base_mani_fixed_joint_xyz_ypr: [0.2462, 0.0, 0.1...
+ * /remani_planner_node/mm/ee_tcp_xyz_rpy: [0.0, 0.0, 0.0, 0...
+ * /remani_planner_node/mm/manipulator_config: [0.1765, 0.607, 0...
+ * /remani_planner_node/mm/manipulator_dof: 6
+ * /remani_planner_node/mm/manipulator_max_acc: 1.57
+ * /remani_planner_node/mm/manipulator_max_pos: [3.0, 1.5, 2.8, 3...
+ * /remani_planner_node/mm/manipulator_max_vel: 0.8
+ * /remani_planner_node/mm/manipulator_min_pos: [-3.0, -1.5, -2.8...
+ * /remani_planner_node/mm/manipulator_self_thickness: 0.045
+ * /remani_planner_node/mm/manipulator_thickness: 0.1
+ * /remani_planner_node/mm/manipulator_type: cr10
+ * /remani_planner_node/mm/mobile_base_check_radius: 0.1
+ * /remani_planner_node/mm/mobile_base_dof: 2
+ * /remani_planner_node/mm/mobile_base_height: 0.15
+ * /remani_planner_node/mm/mobile_base_length: 1.1
+ * /remani_planner_node/mm/mobile_base_max_wheel_alpha: 8.0
+ * /remani_planner_node/mm/mobile_base_max_wheel_omega: 4.0
+ * /remani_planner_node/mm/mobile_base_non_singul_vel: 0.05
+ * /remani_planner_node/mm/mobile_base_wheel_base: 0.56
+ * /remani_planner_node/mm/mobile_base_wheel_radius: 0.125
+ * /remani_planner_node/mm/mobile_base_width: 0.9
+ * /remani_planner_node/optimization/constrain_points_perPiece: 16
+ * /remani_planner_node/optimization/dense_sample_resolution: 16
+ * /remani_planner_node/optimization/enable_dynamic_time_scaling: True
+ * /remani_planner_node/optimization/ground_safe_dis: 0.03
+ * /remani_planner_node/optimization/ground_safe_margin: 0.03
+ * /remani_planner_node/optimization/max_time_scale: 2.0
+ * /remani_planner_node/optimization/max_time_scaling_attempts: 2
+ * /remani_planner_node/optimization/mobile_base_opt_gear: True
+ * /remani_planner_node/optimization/safe_margin: 0.1
+ * /remani_planner_node/optimization/safe_margin_mani: 0.15
+ * /remani_planner_node/optimization/self_safe_margin: 0.1
+ * /remani_planner_node/optimization/weight_base_feasibility: 100.0
+ * /remani_planner_node/optimization/weight_manipulator_feasibility: 100.0
+ * /remani_planner_node/optimization/weight_manipulator_obstacle: 80000.0
+ * /remani_planner_node/optimization/weight_manipulator_self: 1000.0
+ * /remani_planner_node/optimization/weight_obstacle: 50000.0
+ * /remani_planner_node/optimization/weight_time: 1.0
+ * /remani_planner_node/optimization/wheel_limit_ratio: 0.95
+ * /remani_planner_node/search/allocate_num: 100000
+ * /remani_planner_node/search/check_num: 16
+ * /remani_planner_node/search/curvatureDisCoe: 0.4
+ * /remani_planner_node/search/dist_resolution: 0.6
+ * /remani_planner_node/search/goal_rate: 0.4
+ * /remani_planner_node/search/lambda_heu: 1
+ * /remani_planner_node/search/max_arc: 0.4
+ * /remani_planner_node/search/max_loop_num: 5000
+ * /remani_planner_node/search/max_mani_search_time: 0.3
+ * /remani_planner_node/search/max_sample_time: 1.5
+ * /remani_planner_node/search/max_seach_time: 3.0
+ * /remani_planner_node/search/min_turning_radius: 0.5
+ * /remani_planner_node/search/oneshot_check_len: 0.02
+ * /remani_planner_node/search/oneshot_range: 1.0
+ * /remani_planner_node/search/sample_time: 0.1
+ * /remani_planner_node/search/traj_back_penalty: 3.0
+ * /remani_planner_node/search/traj_forward_penalty: 1.0
+ * /remani_planner_node/search/traj_gear_switch_penalty: 10.0
+ * /remani_planner_node/search/traj_steer_change_penalty: 2.0
+ * /remani_planner_node/search/traj_steer_penalty: 5.0
+ * /remani_planner_node/search/try_astar_times: 5
+ * /remani_planner_node/search/yaw_resolution: 0.35
+ * /remani_planner_node/visualization/enable_debug_vis: False
+ * /remani_planner_node/visualization/enable_traj_mesh_vis: True
+ * /remani_planner_node/visualization/his_traj_max_points: 500
+ * /remani_planner_node/visualization/mesh_vis_stride: 3
+ * /remani_planner_node/visualization/tf_rate_hz: 20.0
+ * /remani_planner_node/visualization/vis_rate_hz: 15.0
+ * /robot_description: <?xml version='1....
+ * /rosdistro: noetic
+ * /rosversion: 1.17.4
+ * /search/max_seach_time: 3.0
+ * /search/min_turning_radius: 0.5
+
+NODES
+  /
+    ee_goal_marker_node (remani_planner/ee_goal_marker_node)
+    fake_mm (fake_mm/fake_mm)
+    map_generator (map_generator/map_generator)
+    mm_controller_node (mm_controller/mm_controller_node)
+    model_vis (fake_mm/model_vis)
+    remani_planner_node (remani_planner/remani_planner_node)
+    robot_state_publisher (robot_state_publisher/robot_state_publisher)
+    rviz (rviz/rviz)
+[33m[WARN] [1787668181.667568148]: The root link base_link has an inertia specified in the URDF, but KDL does not support a root link with an inertia.  As a workaround, you can add an extra dummy link to your URDF.[0m
+[33m[WARN] [1787668181.763642453]: Finished generate Cuboids Map [0m
+[0m[INFO] [1787668181.831777301]: MMConfig: type=cr10 thickness=0.100 self_thickness=0.045[0m
+[0m[INFO] [1787668181.846270145]: KinoAstar: max_seach_time=3.000 s min_turning_radius=0.500[0m
+[FSM]: from INIT to WAIT_TARGET
+[rospack] Error: failed to parse command-line options: too many positional options have been specified on the command line
+[librospack]: error while executing command
+[rospack] Error: failed to parse command-line options: too many positional options have been specified on the command line
+[librospack]: error while executing command
+[rospack] Error: failed to parse command-line options: too many positional options have been specified on the command line
+[librospack]: error while executing command
+[31m[ERROR] [1787668184.205282144]: Marker 'ee_goal/0': Text is empty or only consists of whitespace.[0m
+[31m[ERROR] [1787668184.219380417]: Marker 'ee_goal/1': Text is empty or only consists of whitespace.[0m
+[rospack] Error: failed to parse command-line options: too many positional options have been specified on the command line
+[librospack]: error while executing command
+[rospack] Error: failed to parse command-line options: too many positional options have been specified on the command line
+[librospack]: error while executing command
+[rospack] Error: failed to parse command-line options: too many positional options have been specified on the command line
+[librospack]: error while executing command
+[rospack] Error: failed to parse command-line options: too many positional options have been specified on the command line
+[librospack]: error while executing command
+[rospack] Error: failed to parse command-line options: too many positional options have been specified on the command line
+[librospack]: error while executing command
+[rospack] Error: failed to parse command-line options: too many positional options have been specified on the command line
+[librospack]: error while executing command
+[31m[ERROR] [1787668244.349022996]: Marker 'ee_goal/4': Text is empty or only consists of whitespace.[0m
+[31m[ERROR] [1787668244.349428185]: Marker 'ee_goal/5': Text is empty or only consists of whitespace.[0m
+Triggered! traget type: 2
+[FSM]: from WAIT_TARGET to GEN_NEW_TRAJ
+[33m[WARN] [1787668249.293179906]: KinoAstar: goal (1) is not free![0m
+[47;30m
+[replan 0]==============================================[0m
+[0m[INFO] [1787668249.293024311]: continous_failures_count: 0[0m
+[PLAN TIME] (frontend failed)
+Hybrid A*       : 0.15 ms
+Manipulator     : skipped
+Whole-body RRT  : skipped
+Frontend check  : skipped
+Initialization  : skipped
+Optimization    : skipped
+Safety check    : skipped
+Time scaling    : skipped
+Safety recheck  : skipped
+Total           : 0.22044 ms
+[PLAN TIME] (frontend failed)
+Hybrid A*       : 0.06 ms
+Manipulator     : skipped
+Whole-body RRT  : skipped
+Frontend check  : skipped
+Initialization  : skipped
+Optimization    : skipped
+Safety check    : skipped
+Time scaling    : skipped
+Safety recheck  : skipped
+Total           : 0.064747 ms
+[PLAN TIME] (frontend failed)
+Hybrid A*       : 0.06 ms
+Manipulator     : skipped
+Whole-body RRT  : skipped
+Frontend check  : skipped
+Initialization  : skipped
+Optimization    : skipped
+Safety check    : skipped
+Time scaling    : skipped
+Safety recheck  : skipped
+Total           : 0.060229 ms
+[PLAN TIME] (frontend failed)
+Hybrid A*       : 0.06 ms
+Manipulator     : skipped
+Whole-body RRT  : skipped
+Frontend check  : skipped
+Initialization  : skipped
+Optimization    : skipped
+Safety check    : skipped
+Time scaling    : skipped
+Safety recheck  : skipped
+Total           : 0.059477 ms
+[PLAN TIME] (frontend failed)
+Hybrid A*       : 0.06 ms
+Manipulator     : skipped
+Whole-body RRT  : skipped
+Frontend check  : skipped
+Initialization  : skipped
+Optimization    : skipped
+Safety check    : skipped
+Time scaling    : skipped
+Safety recheck  : skipped
+Total           : 0.059238 ms
+[31m[ERROR] [1787668249.293628771]: KinoAstar: terminal goal not free (coll=1); reject planning (no RRT)[0m
+[PLAN TIME] (frontend failed)
+Hybrid A*       : skipped
+Manipulator     : skipped
+Whole-body RRT  : skipped
+Frontend check  : skipped
+Initialization  : skipped
+Optimization    : skipped
+Safety check    : skipped
+Time scaling    : skipped
+Safety recheck  : skipped
+Total           : 0.161814 ms
+[31m[ERROR] [1787668249.293814345]: KinoAstar: terminal goal not free (coll=1); reject planning (no RRT)[0m
+[PLAN TIME] (frontend failed)
+Hybrid A*       : skipped
+Manipulator     : skipped
+Whole-body RRT  : skipped
+Frontend check  : skipped
+Initialization  : skipped
+Optimization    : skipped
+Safety check    : skipped
+Time scaling    : skipped
+Safety recheck  : skipped
+Total           : 0.187283 ms
+[31m[ERROR] [1787668249.293954233]: KinoAstar: terminal goal not free (coll=1); reject planning (no RRT)[0m
+[PLAN TIME] (frontend failed)
+Hybrid A*       : skipped
+Manipulator     : skipped
+Whole-body RRT  : skipped
+Frontend check  : skipped
+Initialization  : skipped
+Optimization    : skipped
+Safety check    : skipped
+Time scaling    : skipped
+Safety recheck  : skipped
+Total           : 0.117454 ms
+[31m[ERROR] [1787668249.294071444]: KinoAstar: terminal goal not free (coll=1); reject planning (no RRT)[0m
+[PLAN TIME] (frontend failed)
+Hybrid A*       : skipped
+Manipulator     : skipped
+Whole-body RRT  : skipped
+Frontend check  : skipped
+Initialization  : skipped
+Optimization    : skipped
+Safety check    : skipped
+Time scaling    : skipped
+Safety recheck  : skipped
+Total           : 0.112447 ms
+[31m[ERROR] [1787668249.294185971]: KinoAstar: terminal goal not free (coll=1); reject planning (no RRT)[0m
+[PLAN TIME] (frontend failed)
+Hybrid A*       : skipped
+Manipulator     : skipped
+Whole-body RRT  : skipped
+Frontend check  : skipped
+Initialization  : skipped
+Optimization    : skipped
+Safety check    : skipped
+Time scaling    : skipped
+Safety recheck  : skipped
+Total           : 0.113324 ms
+[31m[ERROR] [1787668249.294197601]: [FSM] abort current goal: terminal/start state invalid (kino status=6)[0m
+[FSM]: from GEN_NEW_TRAJ to WAIT_TARGET
+Triggered! traget type: 2
+[FSM]: from WAIT_TARGET to GEN_NEW_TRAJ
+[33m[WARN] [1787668251.364964213]: KinoAstar: goal (1) is not free![0m
+[47;30m
+[replan 10]==============================================[0m
+[0m[INFO] [1787668251.364761864]: continous_failures_count: 0[0m
+[PLAN TIME] (frontend failed)
+Hybrid A*       : 0.20 ms
+Manipulator     : skipped
+Whole-body RRT  : skipped
+Frontend check  : skipped
+Initialization  : skipped
+Optimization    : skipped
+Safety check    : skipped
+Time scaling    : skipped
+Safety recheck  : skipped
+Total           : 0.265144 ms
+[PLAN TIME] (frontend failed)
+Hybrid A*       : 0.11 ms
+Manipulator     : skipped
+Whole-body RRT  : skipped
+Frontend check  : skipped
+Initialization  : skipped
+Optimization    : skipped
+Safety check    : skipped
+Time scaling    : skipped
+Safety recheck  : skipped
+Total           : 0.11516 ms
+[PLAN TIME] (frontend failed)
+Hybrid A*       : 0.10 ms
+Manipulator     : skipped
+Whole-body RRT  : skipped
+Frontend check  : skipped
+Initialization  : skipped
+Optimization    : skipped
+Safety check    : skipped
+Time scaling    : skipped
+Safety recheck  : skipped
+Total           : 0.106274 ms
+[PLAN TIME] (frontend failed)
+Hybrid A*       : 0.10 ms
+Manipulator     : skipped
+Whole-body RRT  : skipped
+Frontend check  : skipped
+Initialization  : skipped
+Optimization    : skipped
+Safety check    : skipped
+Time scaling    : skipped
+Safety recheck  : skipped
+Total           : 0.105351 ms
+[PLAN TIME] (frontend failed)
+Hybrid A*       : 0.10 ms
+Manipulator     : skipped
+Whole-body RRT  : skipped
+Frontend check  : skipped
+Initialization  : skipped
+Optimization    : skipped
+Safety check    : skipped
+Time scaling    : skipped
+Safety recheck  : skipped
+Total           : 0.105235 ms
+[31m[ERROR] [1787668251.365723456]: KinoAstar: terminal goal not free (coll=1); reject planning (no RRT)[0m
+[PLAN TIME] (frontend failed)
+Hybrid A*       : skipped
+Manipulator     : skipped
+Whole-body RRT  : skipped
+Frontend check  : skipped
+Initialization  : skipped
+Optimization    : skipped
+Safety check    : skipped
+Time scaling    : skipped
+Safety recheck  : skipped
+Total           : 0.274256 ms
+[31m[ERROR] [1787668251.366008631]: KinoAstar: terminal goal not free (coll=1); reject planning (no RRT)[0m
+[PLAN TIME] (frontend failed)
+Hybrid A*       : skipped
+Manipulator     : skipped
+Whole-body RRT  : skipped
+Frontend check  : skipped
+Initialization  : skipped
+Optimization    : skipped
+Safety check    : skipped
+Time scaling    : skipped
+Safety recheck  : skipped
+Total           : 0.267908 ms
+[31m[ERROR] [1787668251.366282268]: KinoAstar: terminal goal not free (coll=1); reject planning (no RRT)[0m
+[PLAN TIME] (frontend failed)
+Hybrid A*       : skipped
+Manipulator     : skipped
+Whole-body RRT  : skipped
+Frontend check  : skipped
+Initialization  : skipped
+Optimization    : skipped
+Safety check    : skipped
+Time scaling    : skipped
+Safety recheck  : skipped
+Total           : 0.26459 ms
+[31m[ERROR] [1787668251.366557810]: KinoAstar: terminal goal not free (coll=1); reject planning (no RRT)[0m
+[PLAN TIME] (frontend failed)
+Hybrid A*       : skipped
+Manipulator     : skipped
+Whole-body RRT  : skipped
+Frontend check  : skipped
+Initialization  : skipped
+Optimization    : skipped
+Safety check    : skipped
+Time scaling    : skipped
+Safety recheck  : skipped
+Total           : 0.267601 ms
+[31m[ERROR] [1787668251.366832992]: KinoAstar: terminal goal not free (coll=1); reject planning (no RRT)[0m
+[PLAN TIME] (frontend failed)
+Hybrid A*       : skipped
+Manipulator     : skipped
+Whole-body RRT  : skipped
+Frontend check  : skipped
+Initialization  : skipped
+Optimization    : skipped
+Safety check    : skipped
+Time scaling    : skipped
+Safety recheck  : skipped
+Total           : 0.267327 ms
+[31m[ERROR] [1787668251.366863897]: [FSM] abort current goal: terminal/start state invalid (kino status=6)[0m
+[FSM]: from GEN_NEW_TRAJ to WAIT_TARGET
+[31m[ERROR] [1787668318.373541080]: Marker 'ee_goal/8': Text is empty or only consists of whitespace.[0m
