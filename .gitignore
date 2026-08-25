@@ -65,3 +65,4 @@ Thumbs.db
 # ################################
 .worktrees/
 .superpowers/
+upright_ws/src/universal_robot/
