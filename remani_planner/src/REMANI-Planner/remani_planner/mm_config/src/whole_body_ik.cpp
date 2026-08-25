@@ -413,6 +413,55 @@ FixedBaseArmIkParams WholeBodyIkSolver::makeArmIkParams() const
     return p;
 }
 
+// ################################
+// C++: ranking helpers (Task 8) begin
+// ################################
+double computeJointLimitMargin(MMConfig &cfg, const Eigen::VectorXd &q)
+{
+    const Eigen::VectorXd &q_min = cfg.getManipulatorMinPos();
+    const Eigen::VectorXd &q_max = cfg.getManipulatorMaxPos();
+    if(q.size() != q_min.size() || q.size() != q_max.size() || q.size() == 0){
+        return 0.0;
+    }
+    double margin = std::numeric_limits<double>::infinity();
+    for(int i = 0; i < q.size(); ++i){
+        margin = std::min(margin, std::min(q(i) - q_min(i), q_max(i) - q(i)));
+    }
+    return std::isfinite(margin) ? margin : 0.0;
+}
+
+double computeCandidateCost(const WholeBodyIkParams &p,
+                            const WholeBodyGoalCandidate &c)
+{
+    // Spec §5.6: limit term is sum_i max(0, m_req - m_i)^2.
+    // Candidate stores only min_joint_margin; use that as conservative proxy
+    // (equal to full sum when a single joint is the bottleneck).
+    const double limit_deficit =
+        std::max(0.0, p.rank_joint_margin_req - c.min_joint_margin);
+    const double joint_limit_penalty = limit_deficit * limit_deficit;
+    const double gap_deficit =
+        std::max(0.0, p.rank_gap_ref - c.obstacle_clearance);
+    return p.rank_w_xy * c.base_xy_disp
+         + p.rank_w_yaw * c.yaw_disp
+         + p.rank_w_q * c.q_disp_norm
+         + p.rank_w_limit * joint_limit_penalty
+         + p.rank_w_gap * gap_deficit;
+}
+
+bool passesFastPathQuality(const WholeBodyIkParams &p,
+                           const WholeBodyGoalCandidate &c)
+{
+    return c.hard_valid
+        && c.min_joint_margin >= p.b_accept_joint_margin
+        && c.obstacle_clearance >= p.b_accept_clearance
+        && c.base_xy_disp <= p.b_accept_max_xy
+        && c.yaw_disp <= p.b_accept_max_yaw_rad
+        && c.q_disp_norm <= p.b_accept_max_dq;
+}
+// ################################
+// C++: ranking helpers (Task 8) end
+// ################################
+
 WholeBodyIkResult WholeBodyIkSolver::solve(const Eigen::Matrix<double, 9, 1> &xi_start,
                                            const Eigen::Matrix4d &T_goal)
 {

@@ -12,6 +12,18 @@
 namespace remani_planner
 {
 
+// ################################
+// C++: ranking helpers (Task 8) begin
+// ################################
+double computeJointLimitMargin(MMConfig &cfg, const Eigen::VectorXd &q);
+double computeCandidateCost(const WholeBodyIkParams &p,
+                            const WholeBodyGoalCandidate &c);
+bool passesFastPathQuality(const WholeBodyIkParams &p,
+                           const WholeBodyGoalCandidate &c);
+// ################################
+// C++: ranking helpers (Task 8) end
+// ################################
+
 class WholeBodyIkSolver {
 public:
     using Ptr = std::shared_ptr<WholeBodyIkSolver>;

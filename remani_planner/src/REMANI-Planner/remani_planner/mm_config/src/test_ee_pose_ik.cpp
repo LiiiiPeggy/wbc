@@ -578,6 +578,43 @@ int main(int argc, char **argv)
     // C++: Stage B near-goal and collision tests end
     // ################################
 
+    // ################################
+    // C++: ranking helpers tests begin
+    // ################################
+    {
+        WholeBodyIkParams rank_p = WholeBodyIkParams::loadFromRosParam(nh);
+        WholeBodyGoalCandidate good_margin;
+        good_margin.hard_valid = true;
+        good_margin.base_xy_disp = 0.10;
+        good_margin.yaw_disp = 0.05;
+        good_margin.q_disp_norm = 0.20;
+        good_margin.min_joint_margin = 0.40;
+        good_margin.obstacle_clearance = 0.50;
+        good_margin.q = b_q_start;
+
+        WholeBodyGoalCandidate poor_margin = good_margin;
+        poor_margin.min_joint_margin = 0.02;
+
+        const double cost_good = remani_planner::computeCandidateCost(rank_p, good_margin);
+        const double cost_poor = remani_planner::computeCandidateCost(rank_p, poor_margin);
+        const double margin_from_api =
+            remani_planner::computeJointLimitMargin(*cfg_stage_b, b_q_start);
+        const bool ranking_pass = cost_poor > cost_good
+            && std::isfinite(cost_good) && std::isfinite(cost_poor)
+            && margin_from_api > 0.0
+            && remani_planner::passesFastPathQuality(rank_p, good_margin)
+            && !remani_planner::passesFastPathQuality(rank_p, poor_margin);
+        printResult("ranking: worse joint margin raises cost",
+                    ranking_pass, all_pass);
+        if(!ranking_pass){
+            ROS_ERROR("ranking: cost_good=%.4e cost_poor=%.4e margin_api=%.4e",
+                      cost_good, cost_poor, margin_from_api);
+        }
+    }
+    // ################################
+    // C++: ranking helpers tests end
+    // ################################
+
     std::cout << (all_pass ? "ALL TESTS PASSED" : "TESTS FAILED") << std::endl;
     return all_pass ? 0 : 1;
 }
