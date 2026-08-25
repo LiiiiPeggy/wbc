@@ -87,6 +87,10 @@ private:
     int control_state = 0; // 0: common, 1: in out
     Eigen::Vector3d direct_pos;
     ros::Time begin_time;
+    // ################################
+    // C++: Retain the injected finalized /moma profile
+            // ################################
+    std::shared_ptr<const MomaParam> moma_param;
     MomaTraj traj;
 
     OMPCState now_state;
@@ -105,6 +109,15 @@ private:
 public:
     double ctrl_freq = 10.0;
     
+    // ################################
+    // C++: Inject shared finalized /moma profile
+    // ################################
+    void setMomaParam(const std::shared_ptr<const MomaParam>& profile)
+    {
+        ROS_ASSERT(profile);
+        moma_param = profile;
+    }
+
     bool hasTraj() { return has_traj; }
     fake_moma::MomaCmd getCmd(Eigen::VectorXd now_state);
     void pubCmd(Eigen::VectorXd now_state, ros::Publisher &puber, bool gripper = true);

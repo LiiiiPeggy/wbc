@@ -42,26 +42,29 @@ namespace nmoma_planner
     {
         public:
             GridMap::Ptr grid_map;
-            MomaParam moma_param;
+            // ################################
+            // C++: Retain the injected finalized /moma profile
+            // ################################
+            std::shared_ptr<const MomaParam> moma_param;
             ob::StateSpacePtr reeds_shepp;
 
         public:
-            MomaStateSpace(GridMap::Ptr grid_map_, MomaParam moma_param_) : 
-                ob::RealVectorStateSpace(moma_param_.dof_num+3),
+            MomaStateSpace(GridMap::Ptr grid_map_, std::shared_ptr<const MomaParam> moma_param_) :
+                ob::RealVectorStateSpace(moma_param_->dof_num+3),
                 grid_map(grid_map_),
                 moma_param(moma_param_)
             {
-                ob::RealVectorBounds bounds(moma_param.dof_num+3);
+                ob::RealVectorBounds bounds(moma_param->dof_num+3);
                 bounds.setLow(0, grid_map->min_boundary.x());
                 bounds.setHigh(0, grid_map->max_boundary.x());
                 bounds.setLow(1, grid_map->min_boundary.y());
                 bounds.setHigh(1, grid_map->max_boundary.y());
                 bounds.setLow(2, -M_PI);
                 bounds.setHigh(2, M_PI);
-                for (size_t i = 0; i < moma_param.dof_num; i++)
+                for (size_t i = 0; i < moma_param->dof_num; i++)
                 {
-                    bounds.setLow(i+3, moma_param.joint_pos_limit_min[i]);
-                    bounds.setHigh(i+3, moma_param.joint_pos_limit_max[i]);
+                    bounds.setLow(i+3, moma_param->joint_pos_limit_min[i]);
+                    bounds.setHigh(i+3, moma_param->joint_pos_limit_max[i]);
                 }
                 setBounds(bounds);
                 reeds_shepp =std::make_shared<ob::ReedsSheppStateSpace>(1.0e-2);
@@ -119,17 +122,17 @@ namespace nmoma_planner
             //     const auto *cstate1 = state1->as<StateType>();
             //     const auto *cstate2 = state2->as<StateType>();
 
-            //     Eigen::VectorXd diff(moma_param.dof_num+3);
-            //     for (size_t i = 0; i < moma_param.dof_num + 3; i++)
+            //     Eigen::VectorXd diff(moma_param->dof_num+3);
+            //     for (size_t i = 0; i < moma_param->dof_num + 3; i++)
             //         diff(i) = (cstate2->values[i] - cstate1->values[i]);
 
             //     double theta_direct = atan2(diff[1], diff[0]);
             //     double theta_direct_inv = atan2(-diff[1], -diff[0]);
             //     double dist_so2 = min(distSO2(cstate1->values[2], theta_direct) + distSO2(cstate2->values[2], theta_direct), 
             //                             distSO2(cstate1->values[2], theta_direct_inv) + distSO2(cstate2->values[2], theta_direct_inv));
-            //     double time = diff.head(2).norm() / moma_param.max_v + dist_so2 / moma_param.max_w;
-            //     for (size_t i = 0; i < moma_param.dof_num; i++)
-            //         time = max(time, fabs(cstate1->values[i+3] - cstate2->values[i+3]) / moma_param.joint_vel_limit(i));
+            //     double time = diff.head(2).norm() / moma_param->max_v + dist_so2 / moma_param->max_w;
+            //     for (size_t i = 0; i < moma_param->dof_num; i++)
+            //         time = max(time, fabs(cstate1->values[i+3] - cstate2->values[i+3]) / moma_param->joint_vel_limit(i));
             //     return time;
             // }
 
@@ -138,8 +141,8 @@ namespace nmoma_planner
                 const auto *cstate1 = state1->as<StateType>();
                 const auto *cstate2 = state2->as<StateType>();
 
-                Eigen::VectorXd diff(moma_param.dof_num+3);
-                for (size_t i = 0; i < moma_param.dof_num + 3; i++)
+                Eigen::VectorXd diff(moma_param->dof_num+3);
+                for (size_t i = 0; i < moma_param->dof_num + 3; i++)
                     diff(i) = (cstate2->values[i] - cstate1->values[i]);
 
                 double dist_r2 = diff.head(2).norm();
@@ -150,9 +153,9 @@ namespace nmoma_planner
                     dist_so2 = distSO2(cstate1->values[2], theta_direct) + distSO2(cstate2->values[2], theta_direct);
                 }
 
-                double time = dist_r2 / moma_param.max_v + dist_so2 / moma_param.max_w;
-                for (size_t i = 0; i < moma_param.dof_num; i++)
-                    time = max(time, fabs(cstate1->values[i+3] - cstate2->values[i+3]) / moma_param.joint_vel_limit(i));
+                double time = dist_r2 / moma_param->max_v + dist_so2 / moma_param->max_w;
+                for (size_t i = 0; i < moma_param->dof_num; i++)
+                    time = max(time, fabs(cstate1->values[i+3] - cstate2->values[i+3]) / moma_param->joint_vel_limit(i));
                 return time;
             }
 
@@ -165,19 +168,19 @@ namespace nmoma_planner
 
                 if (t == 0.0)
                 {
-                    for (size_t i = 0; i < moma_param.dof_num + 3; i++)
+                    for (size_t i = 0; i < moma_param->dof_num + 3; i++)
                         statet->values[i] = fromt->values[i];
                     return;
                 }
                 else if (t == 1.0)
                 {
-                    for (size_t i = 0; i < moma_param.dof_num + 3; i++)
+                    for (size_t i = 0; i < moma_param->dof_num + 3; i++)
                         statet->values[i] = tot->values[i];
                     return;
                 }
 
-                Eigen::VectorXd diff(moma_param.dof_num+3);
-                for (size_t i = 0; i < moma_param.dof_num + 3; i++)
+                Eigen::VectorXd diff(moma_param->dof_num+3);
+                for (size_t i = 0; i < moma_param->dof_num + 3; i++)
                     diff(i) = (tot->values[i] - fromt->values[i]);
 
                 double dist_so2 = distSO2(fromt->values[2], tot->values[2]);
@@ -195,9 +198,9 @@ namespace nmoma_planner
                     double dist_theta = dist_so2;
 
                     double t_total = distance(from, to);
-                    double chassis_time = dist_r2 / moma_param.max_v + dist_theta / moma_param.max_w;
-                    double chassis_v = chassis_time * moma_param.max_v / t_total;
-                    double chassis_w = chassis_time * moma_param.max_w / t_total;
+                    double chassis_time = dist_r2 / moma_param->max_v + dist_theta / moma_param->max_w;
+                    double chassis_v = chassis_time * moma_param->max_v / t_total;
+                    double chassis_w = chassis_time * moma_param->max_w / t_total;
 
                     if (dist_start > t * t_total * chassis_w)
                     {
@@ -226,7 +229,7 @@ namespace nmoma_planner
                     statet->values[2] = getInterpolatedSO2(fromt->values[2], tot->values[2], t);
                 }
                 
-                for (size_t i = 3; i < moma_param.dof_num + 3; i++)
+                for (size_t i = 3; i < moma_param->dof_num + 3; i++)
                     statet->values[i] = fromt->values[i] + diff[i] * t;
 
                 return;
@@ -239,8 +242,8 @@ namespace nmoma_planner
             //     const auto *tot = to->as<StateType>();
             //     auto *statet = state->as<StateType>();
 
-            //     Eigen::VectorXd diff(moma_param.dof_num+3);
-            //     for (size_t i = 0; i < moma_param.dof_num + 3; i++)
+            //     Eigen::VectorXd diff(moma_param->dof_num+3);
+            //     for (size_t i = 0; i < moma_param->dof_num + 3; i++)
             //         diff(i) = (tot->values[i] - fromt->values[i]);
 
             //     double theta_direct = atan2(diff[1], diff[0]);
@@ -266,9 +269,9 @@ namespace nmoma_planner
             //     }
 
             //     double t_total = distance(from, to);
-            //     double chassis_time = dist_r2 / moma_param.max_v + dist_theta / moma_param.max_w;
-            //     double chassis_v = chassis_time * moma_param.max_v / t_total;
-            //     double chassis_w = chassis_time * moma_param.max_w / t_total;
+            //     double chassis_time = dist_r2 / moma_param->max_v + dist_theta / moma_param->max_w;
+            //     double chassis_v = chassis_time * moma_param->max_v / t_total;
+            //     double chassis_w = chassis_time * moma_param->max_w / t_total;
 
             //     if (dist_start > t * t_total * chassis_w)
             //     {
@@ -290,7 +293,7 @@ namespace nmoma_planner
             //         statet->values[2] = getInterpolatedSO2(theta_mid, tot->values[2], temp * chassis_w / dist_end);
             //     }
 
-            //     for (size_t i = 3; i < moma_param.dof_num + 3; i++)
+            //     for (size_t i = 3; i < moma_param->dof_num + 3; i++)
             //     {
             //         double joint_diff = (tot->values[i] - fromt->values[i]);
             //         statet->values[i] = fromt->values[i] + diff[i] * t;
@@ -379,7 +382,7 @@ namespace nmoma_planner
                 std::cout << "[OMPL] Start simplifyMax" << std::endl;
                 const ob::SpaceInformationPtr& si = path.getSpaceInformation();
                 auto space = std::dynamic_pointer_cast<MomaStateSpace>(si->getStateSpace());
-                MomaParam moma_param = space->moma_param;
+                std::shared_ptr<const MomaParam> moma_param = space->moma_param;
                 
                 std::cout << "[OMPL] Reduce Vertice" << std::endl;
                 
@@ -398,11 +401,11 @@ namespace nmoma_planner
                     );
                    
                     double dist_so2 = space->distSO2(this_state->values[2], direct_theta);
-                    double time = dist_so2 / moma_param.max_w;
+                    double time = dist_so2 / moma_param->max_w;
                     double total_time = space->distance(this_state, next_state);
 
                     ob::State* new_state = si->allocState();
-                    // for(size_t i = 0; i < moma_param.dof_num+3; i++)
+                    // for(size_t i = 0; i < moma_param->dof_num+3; i++)
                     //     new_state->as<MomaStateSpace::StateType>()->values[i] = this_state->values[i];
                     // new_state->as<MomaStateSpace::StateType>()->values[2] = direct_theta;
                     space->interpolate(this_state, next_state, time / total_time, new_state);
@@ -423,7 +426,10 @@ namespace nmoma_planner
     {
         private:
             GridMap::Ptr grid_map;
-            MomaParam moma_param;
+            // ################################
+            // C++: Retain the injected finalized /moma profile
+            // ################################
+            std::shared_ptr<const MomaParam> moma_param;
             ob::StateSpacePtr space;
             ob::SpaceInformationPtr si;
             og::PRMstar *prm_planner;
@@ -437,6 +443,15 @@ namespace nmoma_planner
             OMPLPlanner(GridMap::Ptr grid_map_) : grid_map(grid_map_) {}
 
             ~OMPLPlanner() {};
+
+            // ################################
+            // C++: Inject shared finalized /moma profile
+            // ################################
+            inline void setMomaParam(const std::shared_ptr<const MomaParam>& profile)
+            {
+                ROS_ASSERT(profile);
+                moma_param = profile;
+            }
 
             inline void init(ros::NodeHandle& nh)
             {
@@ -493,8 +508,8 @@ namespace nmoma_planner
     inline bool OMPLPlanner::isStateValid(const ob::State *state)
     {
         const MomaStateSpace::StateType *moma_state = state->as<MomaStateSpace::StateType>();
-        Eigen::VectorXd gstate(moma_param.dof_num + 3);
-        for (size_t i = 0; i < moma_param.dof_num + 3; i++)
+        Eigen::VectorXd gstate(moma_param->dof_num + 3);
+        for (size_t i = 0; i < moma_param->dof_num + 3; i++)
             gstate(i) = moma_state->values[i];
         return !(grid_map->isWholeBodyCollision(gstate));
     }

@@ -50,19 +50,46 @@ include_directories(
   ${PCL_INCLUDE_DIRS}
 )
 
-add_library(fake_moma src/moma_sim.cpp)
+# ################################
+# CMake: real shared MomaParam library
+# ################################
+add_library(fake_moma
+  src/moma_param_load.cpp
+  src/moma_param_cr10.cpp
+)
 add_dependencies(fake_moma fake_moma_gencpp)
+target_link_libraries(fake_moma
+  ${catkin_LIBRARIES}
+)
 
+# ################################
+# CMake: CR10 FK / EE-gradient validation gate
+# ################################
+add_executable(test_topay_cr10_fk src/test_topay_cr10_fk.cpp)
+add_dependencies(test_topay_cr10_fk fake_moma_gencpp)
+target_link_libraries(test_topay_cr10_fk
+  fake_moma
+  ${catkin_LIBRARIES}
+)
+
+# ################################
+# CMake: fake_moma simulator executable
+# ################################
 add_executable (fake_moma_node src/moma_sim.cpp)
 add_dependencies(fake_moma_node fake_moma_gencpp)
 target_link_libraries(fake_moma_node
+  fake_moma
   ${catkin_LIBRARIES}
   ${PCL_LIBRARIES}
 )
 
+# ################################
+# CMake: fake_moma visualization executable
+# ################################
 add_executable (moma_vis_node src/moma_vis.cpp)
 add_dependencies(moma_vis_node fake_moma_gencpp)
 target_link_libraries(moma_vis_node
+  fake_moma
   ${catkin_LIBRARIES}
   ${PCL_LIBRARIES}
 )

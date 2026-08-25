@@ -1,0 +1,54 @@
+# ################################
+# YAML: Global shared Tracer7 robot profile
+# ################################
+moma:
+  robot_name: tracer7
+  kinematics: topay_alt
+  dof_num: 7
+
+  chassis:
+    length: 0.685
+    width: 0.57
+    height: 0.155
+    collision_radius: 0.4
+
+  limits:
+    max_v: 1.0
+    max_a: 0.8
+    max_w: 1.25
+    max_dw: 1.0
+
+  mount:
+    relative_R: [0.7071068, 0.7071068, 0.0, -0.7071068, 0.7071068, 0.0, 0.0, 0.0, 1.0]
+    relative_t: [0.0, 0.115, 0.016]
+
+  arm:
+    cylinder_radius: 0.055
+    link_length: [0.2405, 0.0, 0.256, 0.0, 0.21, 0.0, 0.144]
+    joint_pos_limit_min: [-3.1, -2.26, -3.1, -2.355, -3.1, -2.23, -6.28]
+    joint_pos_limit_max: [3.1, 2.26, 3.1, 2.355, 3.1, 2.23, 6.28]
+    joint_vel_limit: [2.35, 2.35, 2.35, 2.35, 2.35, 2.35, 2.35]
+    joint_acc_limit: [6.28, 6.28, 6.28, 6.28, 6.28, 6.28, 6.28]
+    joint_eff_limit: [60.0, 60.0, 30.0, 30.0, 10.0, 10.0, 10.0]
+    joint_offset: [-1.5708, 0.0, 0.0, 1.5708, 0.0, 0.0, -1.5708, 0.0, 0.0, 1.5708, 0.0, 0.0, -1.5708, 0.0, 0.0, 1.5708, 0.0, 0.0, 0.0, 0.0, 0.0]
+    joint_dof_axis: [0.0, -1.0, 0.0, 0.0, 1.0, 0.0, 0.0, -1.0, 0.0, 0.0, 1.0, 0.0, 0.0, -1.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0]
+
+  collision:
+    link_length: [0.139, 0.1015, 0.1525, 0.1035, 0.1285, 0.0815, 0.144, 0.05]
+    points: [0.049, 0.139, 0.0, 0.1015, 0.0725, 0.1525, 0.0, 0.1035, 0.0585, 0.1285, 0.0, 0.0815, 0.074, 0.144, 0.0, 0.1]
+    point_radius: [0.06, 0.06, 0.0, 0.08, 0.04, 0.04, 0.0, 0.07, 0.035, 0.035, 0.0, 0.06, 0.035, 0.035, 0.0, 0.08]
+
+  # ################################
+  # YAML: Tracer7 mesh attachments preserve legacy visual frame offsets
+  # ################################
+  mesh_parts:
+    - {role: base, file: "package://fake_moma/meshes/tracer.dae", xyz: [0.0, 0.0, 0.0], rpy: [1.57079632679, 0.0, 0.0]}
+    - {role: arm_base, file: "package://fake_moma/meshes/link0.STL", xyz: [0.0, 0.0, 0.0], rpy: [0.0, 0.0, 0.0]}
+    - {role: arm_link, index: 0, file: "package://fake_moma/meshes/link1.STL", xyz: [0.0, 0.0, 0.1015], rpy: [-1.5708, 0.0, 0.0]}
+    - {role: arm_link, index: 1, file: "package://fake_moma/meshes/link2.STL", xyz: [0.0, 0.0, 0.0], rpy: [1.5708, 0.0, 0.0]}
+    - {role: arm_link, index: 2, file: "package://fake_moma/meshes/link3.STL", xyz: [0.0, 0.0, 0.1035], rpy: [-1.5708, 0.0, 0.0]}
+    - {role: arm_link, index: 3, file: "package://fake_moma/meshes/link4.STL", xyz: [0.0, 0.0, 0.0], rpy: [1.5708, 0.0, 0.0]}
+    - {role: arm_link, index: 4, file: "package://fake_moma/meshes/link5.STL", xyz: [0.0, 0.0, 0.0815], rpy: [-1.5708, 0.0, 0.0]}
+    - {role: arm_link, index: 5, file: "package://fake_moma/meshes/link6.STL", xyz: [0.0, 0.0, 0.0], rpy: [1.5708, 0.0, 0.0]}
+    - {role: arm_link, index: 6, file: "package://fake_moma/meshes/link7.STL", xyz: [0.0, 0.0, 0.074], rpy: [0.0, 0.0, 0.0]}
+    - {role: ag95, file: "package://fake_moma/meshes/gripper.dae", xyz: [0.0, 0.0, 0.0], rpy: [0.0, 0.0, 0.0]}

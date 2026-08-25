@@ -36,8 +36,14 @@ namespace nmoma_planner
         std::vector<Eigen::Vector4d> car_seq;
 
         MomaTraj() {}
+        // ################################
+        // C++: Preserve the profile arm DOF with trajectory samples
+        // ################################
+        size_t dof_num = 0;
+
         MomaTraj(PolyTrajectory<9, 5> ploy_traj_, 
-                 const Eigen::Vector3d& start_state_) : start_state(start_state_), poly_traj(ploy_traj_)
+                 const Eigen::Vector3d& start_state_, size_t dof_num_) :
+                 start_state(start_state_), poly_traj(ploy_traj_), dof_num(dof_num_)
         {
             double Integral_appr_res = seq_res / approx_res;
             double half_Integral_appr_res = Integral_appr_res / 2.0;
@@ -138,21 +144,29 @@ namespace nmoma_planner
             car_state.y() += diff_t/6.0 * (v1.y()*sin(p1.x()) + 4.0*v2.y()*sin(p2.x()) + v3.y()*sin(p3.x()));
             car_state.z() = p3.x();
 
+            // ################################
+            // C++: Whole-body trajectory state dimension follows the arm DOF
+            // ################################
+            const int state_dim = 3 + static_cast<int>(dof_num);
             Eigen::VectorXd state;
-            state.resize(10);
+            state.resize(state_dim);
             state.head(3) = car_state.head(3);
-            state.tail(7) = poly_traj.getPos(t).tail(7);
+            state.tail(dof_num) = poly_traj.getPos(t).segment(2, dof_num);
 
             return state;
         }
 
         Eigen::VectorXd getDState(double t) const
         {
-            Eigen::VectorXd state = Eigen::VectorXd::Zero(10);
+            // ################################
+            // C++: Whole-body derivative dimension follows the arm DOF
+            // ################################
+            const int state_dim = 3 + static_cast<int>(dof_num);
+            Eigen::VectorXd state = Eigen::VectorXd::Zero(state_dim);
             t = std::min(std::max(t, 0.0), getTotalDuration());
             state(0) = poly_traj.getVel(t)(1);
             state(1) = poly_traj.getVel(t)(0);
-            state.tail(7) = poly_traj.getVel(t).tail(7);
+            state.tail(dof_num) = poly_traj.getVel(t).segment(2, dof_num);
 
             return state;
         }
@@ -184,11 +198,15 @@ namespace nmoma_planner
             points_vec.push_back(x);
             assert((int) points_vec.size() == num+2);
             
+            // ################################
+            // C++: Sampled trajectory rows include state plus yaw sine and cosine
+            // ################################
+            const int state_dim = 3 + static_cast<int>(dof_num);
             RowMatrixXd points;
-            points.resize(points_vec.size(), 12);
+            points.resize(points_vec.size(), state_dim + 2);
             for (size_t i = 0; i < points_vec.size(); i++)
             {
-                points.row(i).head(10) = points_vec[i];
+                points.row(i).head(state_dim) = points_vec[i];
                 points.row(i).tail(2) = Eigen::Vector2d(cos(points_vec[i](2)), sin(points_vec[i](2)));
             }
             return points;
@@ -233,15 +251,23 @@ namespace nmoma_planner
 
             if ((int)points_vec.size() != num+2)
             {
-                points.resize(1, 10);
+                // ################################
+                // C++: Arc-sampling fallback preserves whole-body width
+                // ################################
+                const int state_dim = 3 + static_cast<int>(dof_num);
+                points.resize(1, state_dim);
                 return points;
             }
 
             // assert((int) points_vec.size() == num+2);
 
-            points.resize(points_vec.size(), 10);
+            // ################################
+            // C++: Arc-sampling rows use the profile whole-body width
+            // ################################
+            const int state_dim = 3 + static_cast<int>(dof_num);
+            points.resize(points_vec.size(), state_dim);
             for (size_t i = 0; i < points_vec.size(); i++)
-                points.row(i) = points_vec[i].head(10);
+                points.row(i) = points_vec[i].head(state_dim);
             return points;
         }
     };
@@ -620,7 +646,10 @@ namespace nmoma_planner
 
         private:
             // params
-            MomaParam moma_param;
+            // ################################
+            // C++: Retain the injected finalized /moma profile
+            // ################################
+            std::shared_ptr<const MomaParam> moma_param;
 
             //data
             int piece_num;
@@ -649,6 +678,14 @@ namespace nmoma_planner
             DebugManager debug_manager;
 
             MomaTrajOpt(GridMap::Ptr grid_map_) : grid_map(grid_map_) {}
+            // ################################
+            // C++: Inject shared finalized /moma profile
+            // ################################
+            inline void setMomaParam(const std::shared_ptr<const MomaParam>& profile)
+            {
+                ROS_ASSERT(profile);
+                moma_param = profile;
+            }
             inline void init(ros::NodeHandle& nh);
             inline MomaTraj getTraj() const;
             inline bool checkFeasible(MomaTraj traj);
@@ -942,7 +979,10 @@ namespace nmoma_planner
 
     inline MomaTraj MomaTrajOpt::getTraj() const
     {
-        return MomaTraj(minco_opt.getTraj(), start_state.head(3));
+        // ################################
+        // C++: Attach the loaded arm DOF to the generated trajectory
+        // ################################
+        return MomaTraj(minco_opt.getTraj(), start_state.head(3), moma_param->dof_num);
     }
 
     inline bool MomaTrajOpt::checkFeasible(MomaTraj traj)
@@ -955,11 +995,11 @@ namespace nmoma_planner
         double max_domega = 0.0;
         double max_d2omega = 0.0;
         double min_dist = 1.0e+10;
-        Eigen::VectorXd max_q; max_q.resize(moma_param.dof_num); max_q.setZero();
-        Eigen::VectorXd max_dq; max_dq.resize(moma_param.dof_num); max_dq.setZero();
-        Eigen::VectorXd max_d2q; max_d2q.resize(moma_param.dof_num); max_d2q.setZero();
-        Eigen::VectorXd temp_state; temp_state.resize(moma_param.dof_num+3); temp_state.setZero();
-        std::vector<Eigen::Vector4d> min_dist_mani = moma_param.getColliPts(temp_state);
+        Eigen::VectorXd max_q; max_q.resize(moma_param->dof_num); max_q.setZero();
+        Eigen::VectorXd max_dq; max_dq.resize(moma_param->dof_num); max_dq.setZero();
+        Eigen::VectorXd max_d2q; max_d2q.resize(moma_param->dof_num); max_d2q.setZero();
+        Eigen::VectorXd temp_state; temp_state.resize(moma_param->dof_num+3); temp_state.setZero();
+        std::vector<Eigen::Vector4d> min_dist_mani = moma_param->getColliPts(temp_state);
         for (size_t i=0; i<min_dist_mani.size(); i++)
             min_dist_mani[i].x() = 1.0e+10;
 
@@ -978,7 +1018,7 @@ namespace nmoma_planner
             if (fabs(acc(0)) > fabs(max_d2omega))
                 max_d2omega = acc(0);
             
-            for (size_t i=0; i<moma_param.dof_num; i++)
+            for (size_t i=0; i<moma_param->dof_num; i++)
             {
                 if (fabs(state(i+3)) > fabs(max_q(i)))
                     max_q(i) = state(i+3);
@@ -993,7 +1033,7 @@ namespace nmoma_planner
             if (d < min_dist)
                 min_dist = d;
 
-            std::vector<Eigen::Vector4d> mani_pts = moma_param.getColliPts(state);
+            std::vector<Eigen::Vector4d> mani_pts = moma_param->getColliPts(state);
             for (size_t i=0; i<mani_pts.size(); i++)
             {
                 double d = 0.0;
@@ -1003,40 +1043,40 @@ namespace nmoma_planner
             }
         }
 
-        if (fabs(max_vel) > 1.01 * moma_param.max_v)
+        if (fabs(max_vel) > 1.01 * moma_param->max_v)
             feasible = false;
 
-        if (fabs(max_acc) > 1.01 * moma_param.max_a)
+        if (fabs(max_acc) > 1.01 * moma_param->max_a)
             feasible = false;
 
-        if (fabs(max_domega) > 1.01 * moma_param.max_w)
+        if (fabs(max_domega) > 1.01 * moma_param->max_w)
             feasible = false;
 
-        if (fabs(max_d2omega) > 1.01 * moma_param.max_dw)
+        if (fabs(max_d2omega) > 1.01 * moma_param->max_dw)
             feasible = false;
 
-        for (size_t i=0; i<moma_param.dof_num; i++)
-            if (fabs(max_q(i)) > 1.01 * moma_param.joint_pos_limit_max(i))
+        for (size_t i=0; i<moma_param->dof_num; i++)
+            if (fabs(max_q(i)) > 1.01 * moma_param->joint_pos_limit_max(i))
             {
                 feasible = false;
                 break;
             }
 
-        for (size_t i=0; i<moma_param.dof_num; i++)
-            if (fabs(max_dq(i)) > 1.01 * moma_param.joint_vel_limit(i))
+        for (size_t i=0; i<moma_param->dof_num; i++)
+            if (fabs(max_dq(i)) > 1.01 * moma_param->joint_vel_limit(i))
             {
                 feasible = false;
                 break;
             }
 
-        for (size_t i=0; i<moma_param.dof_num; i++)
-            if (fabs(max_d2q(i)) > 1.01 * moma_param.joint_acc_limit(i))
+        for (size_t i=0; i<moma_param->dof_num; i++)
+            if (fabs(max_d2q(i)) > 1.01 * moma_param->joint_acc_limit(i))
             {
                 feasible = false;
                 break;
             }
 
-        if (min_dist < 0.99 * moma_param.chassis_colli_radius)
+        if (min_dist < 0.99 * moma_param->chassis_colli_radius)
             feasible = false;
     
         for (size_t i=0; i<min_dist_mani.size(); i++)
@@ -1059,11 +1099,11 @@ namespace nmoma_planner
         double max_domega = 0.0;
         double max_d2omega = 0.0;
         double min_dist = 1.0e+10;
-        Eigen::VectorXd max_q; max_q.resize(moma_param.dof_num); max_q.setZero();
-        Eigen::VectorXd max_dq; max_dq.resize(moma_param.dof_num); max_dq.setZero();
-        Eigen::VectorXd max_d2q; max_d2q.resize(moma_param.dof_num); max_d2q.setZero();
-        Eigen::VectorXd temp_state; temp_state.resize(moma_param.dof_num+3); temp_state.setZero();
-        std::vector<Eigen::Vector4d> min_dist_mani = moma_param.getColliPts(temp_state);
+        Eigen::VectorXd max_q; max_q.resize(moma_param->dof_num); max_q.setZero();
+        Eigen::VectorXd max_dq; max_dq.resize(moma_param->dof_num); max_dq.setZero();
+        Eigen::VectorXd max_d2q; max_d2q.resize(moma_param->dof_num); max_d2q.setZero();
+        Eigen::VectorXd temp_state; temp_state.resize(moma_param->dof_num+3); temp_state.setZero();
+        std::vector<Eigen::Vector4d> min_dist_mani = moma_param->getColliPts(temp_state);
         for (size_t i=0; i<min_dist_mani.size(); i++)
             min_dist_mani[i].x() = 1.0e+10;
 
@@ -1082,7 +1122,7 @@ namespace nmoma_planner
             if (fabs(acc(0)) > fabs(max_d2omega))
                 max_d2omega = acc(0);
             
-            for (size_t i=0; i<moma_param.dof_num; i++)
+            for (size_t i=0; i<moma_param->dof_num; i++)
             {
                 if (fabs(state(i+3)) > fabs(max_q(i)))
                     max_q(i) = state(i+3);
@@ -1097,7 +1137,7 @@ namespace nmoma_planner
             if (d < min_dist)
                 min_dist = d;
 
-            std::vector<Eigen::Vector4d> mani_pts = moma_param.getColliPts(state);
+            std::vector<Eigen::Vector4d> mani_pts = moma_param->getColliPts(state);
             for (size_t i=0; i<mani_pts.size(); i++)
             {
                 double d = 0.0;
@@ -1108,7 +1148,7 @@ namespace nmoma_planner
         }
 
         PRINTF_WHITE("[Moma Opt] traj max velocity: ");
-        if (fabs(max_vel) > 1.01 * moma_param.max_v)
+        if (fabs(max_vel) > 1.01 * moma_param->max_v)
         {
             feasible = false;
             PRINT_RED(max_vel);
@@ -1117,7 +1157,7 @@ namespace nmoma_planner
             PRINTF_WHITE(max_vel<<"\n");
         
         PRINTF_WHITE("[Moma Opt] traj max acceleration: ");
-        if (fabs(max_acc) > 1.01 * moma_param.max_a)
+        if (fabs(max_acc) > 1.01 * moma_param->max_a)
         {
             feasible = false;
             PRINT_RED(max_acc);
@@ -1126,7 +1166,7 @@ namespace nmoma_planner
             PRINTF_WHITE(max_acc<<"\n");
 
         PRINTF_WHITE("[Moma Opt] traj max domega: ");
-        if (fabs(max_domega) > 1.01 * moma_param.max_w)
+        if (fabs(max_domega) > 1.01 * moma_param->max_w)
         {
             feasible = false;
             PRINT_RED(max_domega);
@@ -1135,7 +1175,7 @@ namespace nmoma_planner
             PRINTF_WHITE(max_domega<<"\n");
 
         PRINTF_WHITE("[Moma Opt] traj max d2omega: ");
-        if (fabs(max_d2omega) > 1.01 * moma_param.max_dw)
+        if (fabs(max_d2omega) > 1.01 * moma_param->max_dw)
         {
             feasible = false;
             PRINT_RED(max_d2omega);
@@ -1144,8 +1184,8 @@ namespace nmoma_planner
             PRINTF_WHITE(max_d2omega<<"\n");
 
         PRINTF_WHITE("[Moma Opt] traj max q: ");
-        for (size_t i=0; i<moma_param.dof_num; i++)
-            if (fabs(max_q(i)) > 1.01 * moma_param.joint_pos_limit_max(i))
+        for (size_t i=0; i<moma_param->dof_num; i++)
+            if (fabs(max_q(i)) > 1.01 * moma_param->joint_pos_limit_max(i))
             {
                 feasible = false;
                 PRINTF_RED(max_q(i)<<" ");
@@ -1155,8 +1195,8 @@ namespace nmoma_planner
         PRINTF_WHITE("\n");
 
         PRINTF_WHITE("[Moma Opt] traj max dq: ");
-        for (size_t i=0; i<moma_param.dof_num; i++)
-            if (fabs(max_dq(i)) > 1.01 * moma_param.joint_vel_limit(i))
+        for (size_t i=0; i<moma_param->dof_num; i++)
+            if (fabs(max_dq(i)) > 1.01 * moma_param->joint_vel_limit(i))
             {
                 feasible = false;
                 PRINTF_RED(max_dq(i)<<" ");
@@ -1166,8 +1206,8 @@ namespace nmoma_planner
         PRINTF_WHITE("\n");
 
         PRINTF_WHITE("[Moma Opt] traj max d2q: ");
-        for (size_t i=0; i<moma_param.dof_num; i++)
-            if (fabs(max_d2q(i)) > 1.01 * moma_param.joint_acc_limit(i))
+        for (size_t i=0; i<moma_param->dof_num; i++)
+            if (fabs(max_d2q(i)) > 1.01 * moma_param->joint_acc_limit(i))
             {
                 feasible = false;
                 PRINTF_RED(max_d2q(i)<<" ");
@@ -1177,7 +1217,7 @@ namespace nmoma_planner
         PRINTF_WHITE("\n");
 
         PRINTF_WHITE("[Moma Opt] traj chassis min distance: ");
-        if (min_dist < 0.99 * moma_param.chassis_colli_radius)
+        if (min_dist < 0.99 * moma_param->chassis_colli_radius)
         {
             feasible = false;
             PRINT_RED(min_dist);
@@ -1263,7 +1303,7 @@ namespace nmoma_planner
         array_msg.markers.push_back(p);
         for (size_t i=0; i<end_path.size(); i++)
         {
-            visualization_msgs::MarkerArray node_array = moma_param.getColliCylinderArray(end_path[i]);
+            visualization_msgs::MarkerArray node_array = moma_param->getColliCylinderArray(end_path[i]);
             size_t array_size = node_array.markers.size();
             for (size_t j=0; j<array_size; j++)
             {
@@ -1280,8 +1320,8 @@ namespace nmoma_planner
             pt.z = 0.0;
             line_strip.points.push_back(pt);
             geometry_msgs::Point pt_arrow;
-            pt_arrow.x = end_path[i].x() + moma_param.chassis_colli_radius*cos(end_path[i].z());
-            pt_arrow.y = end_path[i].y() + moma_param.chassis_colli_radius*sin(end_path[i].z());
+            pt_arrow.x = end_path[i].x() + moma_param->chassis_colli_radius*cos(end_path[i].z());
+            pt_arrow.y = end_path[i].y() + moma_param->chassis_colli_radius*sin(end_path[i].z());
             arrow.points.clear();
             arrow.points.push_back(pt);
             arrow.points.push_back(pt_arrow);

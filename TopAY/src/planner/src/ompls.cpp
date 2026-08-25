@@ -17,20 +17,20 @@ namespace nmoma_planner
         paths_list.clear();
         for (int i=0; i<traj_num; i++)
         {
-            Eigen::VectorXd start(moma_param.dof_num+3);
-            Eigen::VectorXd end(moma_param.dof_num+3);
+            Eigen::VectorXd start(moma_param->dof_num+3);
+            Eigen::VectorXd end(moma_param->dof_num+3);
             while(true)
             {
                 start[0] = rand_x(eng);
                 start[1] = rand_y(eng);
                 double dist;
                 grid_map->getDistance2d(start.head(2), dist);
-                if (dist < moma_param.chassis_colli_radius)
+                if (dist < moma_param->chassis_colli_radius)
                     continue;
                 end[0] = rand_x(eng);
                 end[1] = rand_y(eng);
                 grid_map->getDistance2d(end.head(2), dist);
-                if (dist < moma_param.chassis_colli_radius)
+                if (dist < moma_param->chassis_colli_radius)
                     continue;
                 if ((start-end).head(2).norm() < 14.0 && (start-end).head(2).norm() > 1.0)
                 {
@@ -39,7 +39,7 @@ namespace nmoma_planner
                     {
                         if (try_num ++ > 100)
                             break;
-                        for (size_t j = 0; j < moma_param.dof_num+1; j++)
+                        for (size_t j = 0; j < moma_param->dof_num+1; j++)
                             start[j+2] = rand_theta(eng);
                     }while (grid_map->isWholeBodyCollision(start));
                     if (try_num > 100)
@@ -49,7 +49,7 @@ namespace nmoma_planner
                     {
                         if (try_num ++ > 100)
                             break;
-                        for (size_t j = 0; j < moma_param.dof_num+1; j++)
+                        for (size_t j = 0; j < moma_param->dof_num+1; j++)
                             end[j+2] = rand_theta(eng);
                     }while (grid_map->isWholeBodyCollision(end));
                     if (try_num > 100)
@@ -57,7 +57,7 @@ namespace nmoma_planner
                     break;
                 }
             }
-            for (size_t j = 0; j < moma_param.dof_num+3; j++)
+            for (size_t j = 0; j < moma_param->dof_num+3; j++)
             {
                 start_state[j] = start[j];
                 end_state[j] = end[j];
@@ -91,8 +91,8 @@ namespace nmoma_planner
             {
                 const MomaStateSpace::StateType *moma_state = path->getState(idx)->as<MomaStateSpace::StateType>();
 
-                Eigen::VectorXd node(moma_param.dof_num+3);
-                for (size_t j=0; j<moma_param.dof_num+3; j++)
+                Eigen::VectorXd node(moma_param->dof_num+3);
+                for (size_t j=0; j<moma_param->dof_num+3; j++)
                     node(j) = moma_state->values[j];
                 eigen_path.push_back(node);  
             }
@@ -111,7 +111,7 @@ namespace nmoma_planner
         //设置机器人的初始状态
         ob::ScopedState<MomaStateSpace> start_state(space);
         ob::ScopedState<MomaStateSpace> end_state(space);
-        for (size_t i = 0; i < moma_param.dof_num + 3; i++)
+        for (size_t i = 0; i < moma_param->dof_num + 3; i++)
         {
             start_state[i] = start[i];
             end_state[i] = end[i];
@@ -144,8 +144,8 @@ namespace nmoma_planner
                         double t = (double) i / (double) cnt;
                         PRINT_GREEN("add node: " << t);
                         space->interpolate(moma_state1, moma_state2, t, moma_state);
-                        Eigen::VectorXd node(moma_param.dof_num+3);
-                        for (size_t j=0; j<moma_param.dof_num+3; j++)
+                        Eigen::VectorXd node(moma_param->dof_num+3);
+                        for (size_t j=0; j<moma_param->dof_num+3; j++)
                             node(j) = moma_state->as<MomaStateSpace::StateType>()->values[j];
                         path_list.push_back(node);  
                         PRINT_GREEN("add node: " << node.transpose());
@@ -159,8 +159,8 @@ namespace nmoma_planner
                 {
                     const MomaStateSpace::StateType *moma_state = path->getState(idx)->as<MomaStateSpace::StateType>();
 
-                    Eigen::VectorXd node(moma_param.dof_num+3);
-                    for (size_t i=0; i<moma_param.dof_num+3; i++)
+                    Eigen::VectorXd node(moma_param->dof_num+3);
+                    for (size_t i=0; i<moma_param->dof_num+3; i++)
                         node(i) = moma_state->values[i];
                     path_list.push_back(node);  
                 } 
@@ -200,7 +200,7 @@ namespace nmoma_planner
         //设置机器人的初始状态
         ob::ScopedState<MomaStateSpace> start_state(space);
         ob::ScopedState<MomaStateSpace> end_state(space);
-        for (size_t i = 0; i < moma_param.dof_num + 3; i++)
+        for (size_t i = 0; i < moma_param->dof_num + 3; i++)
         {
             start_state[i] = start[i];
             end_state[i] = end[i];
@@ -276,8 +276,8 @@ namespace nmoma_planner
                         double temp = temp_time - cnt * path_dt;
                         double t = (double) (time - temp) / (double) time;
                         space->interpolate(moma_state1, moma_state2, t, moma_state);
-                        Eigen::VectorXd node(moma_param.dof_num+3);
-                        for (size_t j=0; j<moma_param.dof_num+3; j++)
+                        Eigen::VectorXd node(moma_param->dof_num+3);
+                        for (size_t j=0; j<moma_param->dof_num+3; j++)
                             node(j) = moma_state->as<MomaStateSpace::StateType>()->values[j];
                         path_list.push_back(node);  
                         cnt++;
@@ -344,8 +344,8 @@ namespace nmoma_planner
                 {
                     const MomaStateSpace::StateType *moma_state = path->getState(idx)->as<MomaStateSpace::StateType>();
 
-                    Eigen::VectorXd node(moma_param.dof_num+3);
-                    for (size_t i=0; i<moma_param.dof_num+3; i++)
+                    Eigen::VectorXd node(moma_param->dof_num+3);
+                    for (size_t i=0; i<moma_param->dof_num+3; i++)
                         node(i) = moma_state->values[i];
                     path_list.push_back(node);  
                 } 
@@ -366,7 +366,7 @@ namespace nmoma_planner
         std::vector<ob::State*> state_list;
         for (auto& waypoint : path_list) {
             ob::State* state = space->allocState();
-            for (size_t i = 0; i < moma_param.dof_num + 3; i++)
+            for (size_t i = 0; i < moma_param->dof_num + 3; i++)
                 state->as<MomaStateSpace::StateType>()->values[i] = waypoint(i);
             path.append(state);
         };
@@ -379,8 +379,8 @@ namespace nmoma_planner
         {
             const MomaStateSpace::StateType *moma_state = path.getState(idx)->as<MomaStateSpace::StateType>();
 
-            Eigen::VectorXd node(moma_param.dof_num+3);
-            for (size_t i=0; i<moma_param.dof_num+3; i++){
+            Eigen::VectorXd node(moma_param->dof_num+3);
+            for (size_t i=0; i<moma_param->dof_num+3; i++){
                 node(i) = moma_state->values[i];
             }
             path_list.push_back(node);  

@@ -8,14 +8,19 @@ namespace nmoma_planner
     {
         start_state = init_path[0];
         end_state = init_path.back();
-        ee_pose = moma_param.getFKPose(init_path.back());
+        ee_pose = moma_param->getFKPose(init_path.back());
 
         /* sample begin. */
         std::vector<Eigen::VectorXd> sampled_path;
         sampled_path.clear();
-        Eigen::VectorXd state12d = Eigen::VectorXd::Zero(12); // x y theta delta_theta delta_arc, q
+        // ################################
+        // C++: FALM optimizer arm segments follow the loaded DOF
+        // ################################
+        const int sample_state_dim = 5 + static_cast<int>(moma_param->dof_num);
+        const int minco_dim = 2 + static_cast<int>(moma_param->dof_num);
+        Eigen::VectorXd state12d = Eigen::VectorXd::Zero(sample_state_dim); // x y theta delta_theta delta_arc, q
         state12d.head(3) = init_path[0].head(3);
-        state12d.tail(7) = init_path[0].tail(7);
+        state12d.segment(5, moma_param->dof_num) = init_path[0].tail(moma_param->dof_num);
         sampled_path.push_back(state12d);
         for (size_t i = 1; i<init_path.size(); i++)
         {
@@ -32,7 +37,7 @@ namespace nmoma_planner
                     state12d[2] = now_theta;
                     state12d[3] = theta_diff;
                     state12d[4] = 0.0;
-                    state12d.tail(7) = init_path[i].tail(7);
+                    state12d.segment(5, moma_param->dof_num) = init_path[i].tail(moma_param->dof_num);
                     sampled_path.push_back(state12d);
                 }
                 else
@@ -51,7 +56,7 @@ namespace nmoma_planner
                     state12d[2] = direct_theta;
                     state12d[3] = 0.0;
                     state12d[4] = arc_len;
-                    state12d.tail(7) = init_path[i].tail(7);
+                    state12d.segment(5, moma_param->dof_num) = init_path[i].tail(moma_param->dof_num);
                     sampled_path.push_back(state12d);
 
                     normalizeAngle(sampled_path.back()[2], now_theta);
@@ -70,7 +75,7 @@ namespace nmoma_planner
                     state12d[2] = now_theta;
                     state12d[3] = 0.0;
                     state12d[4] = arc_len;
-                    state12d.tail(7) = init_path[i].tail(7);
+                    state12d.segment(5, moma_param->dof_num) = init_path[i].tail(moma_param->dof_num);
                     sampled_path.push_back(state12d);
                 }
             }
@@ -103,7 +108,7 @@ namespace nmoma_planner
         }
         double total_time = getDurationTrapezoid(weighted_total_len, 
                                                  boundary_vel_(0, 0), 0.0, 
-                                                 moma_param.max_v, moma_param.max_a);
+                                                 moma_param->max_v, moma_param->max_a);
 
         std::vector<Eigen::VectorXd> vector_inner_pts; // 储存分段采样后的坐标点 yaw,s,q
         double sample_interval = total_time / std::max(int(total_time / opt_param.sample_interval + 0.5), opt_param.min_piece_num);
@@ -114,7 +119,7 @@ namespace nmoma_planner
         {
             double arc = getArcTrapezoid(t, weighted_total_len, 
                                          boundary_vel_(0, 0), 0.0, 
-                                         moma_param.max_v, moma_param.max_a);
+                                         moma_param->max_v, moma_param->max_a);
             for (size_t k = now_idx; k<path_num; k++)
             {
                 Eigen::VectorXd path_node = sampled_path[k];
@@ -125,10 +130,10 @@ namespace nmoma_planner
                     now_idx = k; 
                     double l1 = tmp_arc-arc;
                     double l = weighted_path_arcs[k] - weighted_path_arcs[k-1];
-                    Eigen::VectorXd pts = Eigen::VectorXd::Zero(9);
+                    Eigen::VectorXd pts = Eigen::VectorXd::Zero(minco_dim);
                     pts(0) = pre_path_node[2] + (l-l1)/l*(path_node[3]);
                     pts(1) = path_arcs[k-1] + (l-l1)/l*(path_node[4]);
-                    pts.tail(7) = pre_path_node.tail(7) + (l-l1)/l*(path_node.tail(7) - pre_path_node.tail(7));
+                    pts.segment(2, moma_param->dof_num) = pre_path_node.segment(5, moma_param->dof_num) + (l-l1)/l*(path_node.segment(5, moma_param->dof_num) - pre_path_node.segment(5, moma_param->dof_num));
                     vector_inner_pts.push_back(pts);
 
                     double interp_x = l1/l*pre_path_node[0] + (l-l1)/l*(path_node[0]);
@@ -148,24 +153,24 @@ namespace nmoma_planner
         minco_start_state(0, 2) = boundary_acc_(1, 0);
         minco_start_state(1, 1) = boundary_vel_(0, 0);
         minco_start_state(1, 2) = boundary_acc_(0, 0);
-        minco_start_state.col(0).tail(7) = sampled_path[0].tail(7);
-        minco_start_state.col(1).tail(7) = boundary_vel_.col(0).tail(7);
-        minco_start_state.col(2).tail(7) = boundary_acc_.col(0).tail(7);
+        minco_start_state.col(0).middleRows(2, moma_param->dof_num) = sampled_path[0].segment(5, moma_param->dof_num);
+        minco_start_state.col(1).middleRows(2, moma_param->dof_num) = boundary_vel_.col(0).tail(moma_param->dof_num);
+        minco_start_state.col(2).middleRows(2, moma_param->dof_num) = boundary_acc_.col(0).tail(moma_param->dof_num);
 
         // end pva
         minco_end_state = Eigen::MatrixXd::Zero(9, 3);
         minco_end_state(0, 0) = sampled_path.back()[2];
         minco_end_state(1, 0) = path_arcs.back();
-        minco_end_state.col(0).tail(7) = sampled_path.back().tail(7);
-        minco_end_state.col(1).tail(7) = boundary_vel_.col(1).tail(7);
-        minco_end_state.col(2).tail(7) = boundary_acc_.col(1).tail(7);
+        minco_end_state.col(0).middleRows(2, moma_param->dof_num) = sampled_path.back().segment(5, moma_param->dof_num);
+        minco_end_state.col(1).middleRows(2, moma_param->dof_num) = boundary_vel_.col(1).tail(moma_param->dof_num);
+        minco_end_state.col(2).middleRows(2, moma_param->dof_num) = boundary_acc_.col(1).tail(moma_param->dof_num);
 
         // GO!
         piece_num = vector_inner_pts.size() + 1;
         times = Eigen::VectorXd::Constant(piece_num, sample_interval);
         inner_pts = Eigen::MatrixXd::Zero(9, piece_num-1);
         for (size_t i = 0; i < vector_inner_pts.size(); i++)
-            inner_pts.col(i) = vector_inner_pts[i];
+            inner_pts.col(i).head(minco_dim) = vector_inner_pts[i];
 
         /* init opt problem done. */
 #ifdef PUB_DEBUG
@@ -185,7 +190,10 @@ namespace nmoma_planner
         minco_opt.generate(minco_start_state, minco_end_state, inner_pts, times);
 
         // init optimization variables
-        int variable_num = 10 * piece_num;
+        // ################################
+        // C++: Size opt vars from Tau/Theta/Arc + dof_num joints
+        // ################################
+        int variable_num = (3 + static_cast<int>(moma_param->dof_num)) * piece_num;
         Eigen::VectorXd x;
         x.resize(variable_num);
         int opt_var_idx = 0;
@@ -195,20 +203,20 @@ namespace nmoma_planner
         opt_var_idx += piece_num;
         Eigen::Map<Eigen::VectorXd> Arc(x.data()+opt_var_idx, piece_num);
         opt_var_idx += piece_num;
-        Eigen::Map<Eigen::MatrixXd> Vq(x.data()+opt_var_idx, moma_param.dof_num, piece_num);
+        Eigen::Map<Eigen::MatrixXd> Vq(x.data()+opt_var_idx, moma_param->dof_num, piece_num);
         for (int i = 0; i < piece_num - 1; i++)
         {
             Tau(i) = logC2(times(i));
             Theta(i) = inner_pts(0, i);
             Arc(i) = inner_pts(1, i);
-            for (size_t j = 0; j < moma_param.dof_num; j++)
-                Vq(j, i) = invSigmoidC2(inner_pts(j+2, i), moma_param.joint_pos_limit_max(j));
+            for (size_t j = 0; j < moma_param->dof_num; j++)
+                Vq(j, i) = invSigmoidC2(inner_pts(j+2, i), moma_param->joint_pos_limit_max(j));
         }
         Tau[piece_num-1] = logC2(times(piece_num-1));
         Theta[piece_num-1] = minco_end_state(0, 0);
         Arc[piece_num-1] = minco_end_state(1, 0);
-        for (size_t j = 0; j < moma_param.dof_num; j++)
-                Vq(j, piece_num - 1) = invSigmoidC2(minco_end_state(j+2, 0), moma_param.joint_pos_limit_max(j));
+        for (size_t j = 0; j < moma_param->dof_num; j++)
+                Vq(j, piece_num - 1) = invSigmoidC2(minco_end_state(j+2, 0), moma_param->joint_pos_limit_max(j));
         
 #ifdef PUB_DEBUG
         init_traj = getTraj();
@@ -256,8 +264,13 @@ namespace nmoma_planner
 #endif
         
         // chassis_colli(1) + moment(4) + aβchassis(2)
-        // mani_colli(12) + mani_chas_colli(11) + mani_self(55) + pvajoint(21=7*3)
-        int non_equal_num = (opt_param.int_K + 1) * piece_num * (7 + 12 + 11 + 55 + 21);
+        // mani_colli(12) + mani_chas_colli(11) + mani_self(55) + pvajoint(3 * dof_num)
+        // ################################
+        // C++: Size arm constraints from the profile DOF
+        // ################################
+        int non_equal_num = (opt_param.int_K + 1) * piece_num
+                            * (7 + 12 + 11 + 55
+                               + 3 * static_cast<int>(moma_param->dof_num));
         opt_param.second_stage.alm_data.reset(9, non_equal_num);
         int iter = 0;
         bool success = false;
@@ -341,8 +354,8 @@ namespace nmoma_planner
         Eigen::Map<const Eigen::VectorXd> Arc(x.data()+opt_var_idx, obj.piece_num);
         Eigen::Map<Eigen::VectorXd> gradArc(grad.data()+opt_var_idx, obj.piece_num);
         opt_var_idx += obj.piece_num;
-        Eigen::Map<const Eigen::MatrixXd> Vq(x.data()+opt_var_idx, obj.moma_param.dof_num, obj.piece_num);
-        Eigen::Map<Eigen::MatrixXd> gradVq(grad.data()+opt_var_idx, obj.moma_param.dof_num, obj.piece_num);
+        Eigen::Map<const Eigen::MatrixXd> Vq(x.data()+opt_var_idx, obj.moma_param->dof_num, obj.piece_num);
+        Eigen::Map<Eigen::MatrixXd> gradVq(grad.data()+opt_var_idx, obj.moma_param->dof_num, obj.piece_num);
 
         obj.calTfromTau(Tau, obj.times);
         obj.minco_end_state(0, 0) = Theta[obj.piece_num-1];
@@ -352,11 +365,11 @@ namespace nmoma_planner
         obj.inner_pts.row(1) = Arc.head(obj.piece_num-1);
         for (int i = 0; i < obj.piece_num-1; i++)
         {
-            for (size_t j = 0; j < obj.moma_param.dof_num; j++)
-                obj.inner_pts(j+2, i) = obj.sigmoidC2(Vq(j, i), obj.moma_param.joint_pos_limit_max(j));
+            for (size_t j = 0; j < obj.moma_param->dof_num; j++)
+                obj.inner_pts(j+2, i) = obj.sigmoidC2(Vq(j, i), obj.moma_param->joint_pos_limit_max(j));
         }
-        for (int i = 0; i < obj.moma_param.dof_num; i++)
-            obj.minco_end_state(i+2, 0) = obj.sigmoidC2(Vq(i, obj.piece_num-1), obj.moma_param.joint_pos_limit_max(i));
+        for (int i = 0; i < obj.moma_param->dof_num; i++)
+            obj.minco_end_state(i+2, 0) = obj.sigmoidC2(Vq(i, obj.piece_num-1), obj.moma_param->joint_pos_limit_max(i));
         obj.minco_opt.generate(obj.minco_start_state, obj.minco_end_state, obj.inner_pts, obj.times);
 
         // get jerk cost with grad (C,T)
@@ -384,18 +397,21 @@ namespace nmoma_planner
         // update grad
         gradTheta.head(obj.piece_num-1) = gdP.row(0);
         gradArc.head(obj.piece_num-1) = gdP.row(1);
-        Eigen::MatrixXd gradQ = gdP.bottomRows(7);
+        // ################################
+        // C++: Extract FALM joint gradients using profile DOF
+        // ################################
+        Eigen::MatrixXd gradQ = gdP.middleRows(2, obj.moma_param->dof_num);
         for (int i = 0; i < obj.piece_num-1; i++)
-            for (size_t j = 0; j < obj.moma_param.dof_num; j++)
-                gradVq(j, i) = gradQ(j, i) * obj.getQtoVqGrad(Vq(j, i), obj.moma_param.joint_pos_limit_max(j));
+            for (size_t j = 0; j < obj.moma_param->dof_num; j++)
+                gradVq(j, i) = gradQ(j, i) * obj.getQtoVqGrad(Vq(j, i), obj.moma_param->joint_pos_limit_max(j));
 
         for (int i = 0; i < obj.piece_num; i++)
             gradTau(i) = (gdT(i) + obj.opt_param.first_stage.time_weight) * obj.getTtoTauGrad(Tau(i));
 
         gradTheta[obj.piece_num-1] = gdP_tail(0, 0);
         gradArc[obj.piece_num-1] = gdP_tail(1, 0);
-        for (size_t j = 0; j < obj.moma_param.dof_num; j++)
-            gradVq(j, obj.piece_num-1) = gdP_tail(j+2, 0) * obj.getQtoVqGrad(Vq(j, obj.piece_num-1), obj.moma_param.joint_pos_limit_max(j));
+        for (size_t j = 0; j < obj.moma_param->dof_num; j++)
+            gradVq(j, obj.piece_num-1) = gdP_tail(j+2, 0) * obj.getQtoVqGrad(Vq(j, obj.piece_num-1), obj.moma_param->joint_pos_limit_max(j));
 
         // PRINT_GREEN("jerk_cost: " << jerk_cost << ", penalty_cost: " << penalty_cost << ", time_cost: " << time_cost);
 
@@ -418,8 +434,8 @@ namespace nmoma_planner
         Eigen::Map<const Eigen::VectorXd> Arc(x.data()+opt_var_idx, obj.piece_num);
         Eigen::Map<Eigen::VectorXd> gradArc(grad.data()+opt_var_idx, obj.piece_num);
         opt_var_idx += obj.piece_num;
-        Eigen::Map<const Eigen::MatrixXd> Vq(x.data()+opt_var_idx, obj.moma_param.dof_num, obj.piece_num);
-        Eigen::Map<Eigen::MatrixXd> gradVq(grad.data()+opt_var_idx, obj.moma_param.dof_num, obj.piece_num);
+        Eigen::Map<const Eigen::MatrixXd> Vq(x.data()+opt_var_idx, obj.moma_param->dof_num, obj.piece_num);
+        Eigen::Map<Eigen::MatrixXd> gradVq(grad.data()+opt_var_idx, obj.moma_param->dof_num, obj.piece_num);
 
         obj.calTfromTau(Tau, obj.times);
         obj.minco_end_state(0, 0) = Theta[obj.piece_num-1];
@@ -429,11 +445,11 @@ namespace nmoma_planner
         obj.inner_pts.row(1) = Arc.head(obj.piece_num-1);
         for (int i = 0; i < obj.piece_num-1; i++)
         {
-            for (size_t j = 0; j < obj.moma_param.dof_num; j++)
-                obj.inner_pts(j+2, i) = obj.sigmoidC2(Vq(j, i), obj.moma_param.joint_pos_limit_max(j));
+            for (size_t j = 0; j < obj.moma_param->dof_num; j++)
+                obj.inner_pts(j+2, i) = obj.sigmoidC2(Vq(j, i), obj.moma_param->joint_pos_limit_max(j));
         }
-        for (int i = 0; i < obj.moma_param.dof_num; i++)
-            obj.minco_end_state(i+2, 0) = obj.sigmoidC2(Vq(i, obj.piece_num-1), obj.moma_param.joint_pos_limit_max(i));
+        for (int i = 0; i < obj.moma_param->dof_num; i++)
+            obj.minco_end_state(i+2, 0) = obj.sigmoidC2(Vq(i, obj.piece_num-1), obj.moma_param->joint_pos_limit_max(i));
         obj.minco_opt.generate(obj.minco_start_state, obj.minco_end_state, obj.inner_pts, obj.times);
 
         // get jerk cost with grad (C,T)
@@ -461,18 +477,21 @@ namespace nmoma_planner
         // update grad
         gradTheta.head(obj.piece_num-1) = gdP.row(0);
         gradArc.head(obj.piece_num-1) = gdP.row(1);
-        Eigen::MatrixXd gradQ = gdP.bottomRows(7);
+        // ################################
+        // C++: Extract FALM joint gradients using profile DOF
+        // ################################
+        Eigen::MatrixXd gradQ = gdP.middleRows(2, obj.moma_param->dof_num);
         for (int i = 0; i < obj.piece_num-1; i++)
-            for (size_t j = 0; j < obj.moma_param.dof_num; j++)
-                gradVq(j, i) = gradQ(j, i) * obj.getQtoVqGrad(Vq(j, i), obj.moma_param.joint_pos_limit_max(j));
+            for (size_t j = 0; j < obj.moma_param->dof_num; j++)
+                gradVq(j, i) = gradQ(j, i) * obj.getQtoVqGrad(Vq(j, i), obj.moma_param->joint_pos_limit_max(j));
 
         for (int i = 0; i < obj.piece_num; i++)
             gradTau(i) = (gdT(i) + obj.opt_param.second_stage.time_weight) * obj.getTtoTauGrad(Tau(i));
             
         gradTheta[obj.piece_num-1] = gdP_tail(0, 0);
         gradArc[obj.piece_num-1] = gdP_tail(1, 0);
-        for (size_t j = 0; j < obj.moma_param.dof_num; j++)
-            gradVq(j, obj.piece_num-1) = gdP_tail(j+2, 0) * obj.getQtoVqGrad(Vq(j, obj.piece_num-1), obj.moma_param.joint_pos_limit_max(j));
+        for (size_t j = 0; j < obj.moma_param->dof_num; j++)
+            gradVq(j, obj.piece_num-1) = gdP_tail(j+2, 0) * obj.getQtoVqGrad(Vq(j, obj.piece_num-1), obj.moma_param->joint_pos_limit_max(j));
 
         // PRINT_GREEN("jerk_cost: " << jerk_cost << ", penalty_cost: " << penalty_cost << ", time_cost: " << time_cost);
         obj.debug_manager["jerk"] += jerk_cost;
@@ -588,15 +607,15 @@ namespace nmoma_planner
                     Eigen::MatrixXd gradBeta; gradBeta.resize(3, 2); gradBeta.setZero();
                     for(int omg_sym = -1; omg_sym <= 1; omg_sym += 2)
                     {
-                        violaMom = omg_sym * moma_param.max_v * dstate.x() 
-                                          + moma_param.max_w * dstate.y() 
-                                          - moma_param.max_v * moma_param.max_w;
+                        violaMom = omg_sym * moma_param->max_v * dstate.x() 
+                                          + moma_param->max_w * dstate.y() 
+                                          - moma_param->max_v * moma_param->max_w;
                         if(violaMom > 0)
                         {
                             smoothL1Penalty(violaMom, violaMomPena, violaMomPenaD);
-                            gradViolaMt = real_alpha * (omg_sym * moma_param.max_v * d2state.x() + moma_param.max_w * d2state.y());
-                            gradBeta(1, 0) += omg * step * opt_param.first_stage.moment_weight * violaMomPenaD * omg_sym * moma_param.max_v;
-                            gradBeta(1, 1) += omg * step * opt_param.first_stage.moment_weight * violaMomPenaD * moma_param.max_w;
+                            gradViolaMt = real_alpha * (omg_sym * moma_param->max_v * d2state.x() + moma_param->max_w * d2state.y());
+                            gradBeta(1, 0) += omg * step * opt_param.first_stage.moment_weight * violaMomPenaD * omg_sym * moma_param->max_v;
+                            gradBeta(1, 1) += omg * step * opt_param.first_stage.moment_weight * violaMomPenaD * moma_param->max_w;
                             gdT(i) += omg * opt_param.first_stage.moment_weight * (violaMomPenaD * gradViolaMt * step + violaMomPena / opt_param.int_K);
                             cost += omg * step * opt_param.first_stage.moment_weight * violaMomPena;
                             cost_moment += omg * step * opt_param.first_stage.moment_weight * violaMomPena;
@@ -604,23 +623,23 @@ namespace nmoma_planner
                     }
                     for(int omg_sym = -1; omg_sym <= 1; omg_sym += 2)
                     {
-                        violaMom = omg_sym * moma_param.max_v * dstate.x() 
-                                   - moma_param.max_w * dstate.y() 
-                                   - moma_param.max_v * moma_param.max_w;
+                        violaMom = omg_sym * moma_param->max_v * dstate.x() 
+                                   - moma_param->max_w * dstate.y() 
+                                   - moma_param->max_v * moma_param->max_w;
                         if(violaMom > 0)
                         {
                             smoothL1Penalty(violaMom, violaMomPena, violaMomPenaD);
-                            gradViolaMt = real_alpha * (omg_sym * moma_param.max_v * d2state.x() - moma_param.max_w * d2state.y());
-                            gradBeta(1, 0) += omg * step * opt_param.first_stage.moment_weight * violaMomPenaD * omg_sym * moma_param.max_v;
-                            gradBeta(1, 1) -= omg * step * opt_param.first_stage.moment_weight * violaMomPenaD * moma_param.max_w;
+                            gradViolaMt = real_alpha * (omg_sym * moma_param->max_v * d2state.x() - moma_param->max_w * d2state.y());
+                            gradBeta(1, 0) += omg * step * opt_param.first_stage.moment_weight * violaMomPenaD * omg_sym * moma_param->max_v;
+                            gradBeta(1, 1) -= omg * step * opt_param.first_stage.moment_weight * violaMomPenaD * moma_param->max_w;
                             gdT(i) += omg * opt_param.first_stage.moment_weight * (violaMomPenaD * gradViolaMt * step + violaMomPena / opt_param.int_K);
                             cost += omg * step * opt_param.first_stage.moment_weight * violaMomPena;
                             cost_moment += omg * step * opt_param.first_stage.moment_weight * violaMomPena;
                         }
                     }
 
-                    double violaAcc = d2state.y()*d2state.y() - moma_param.max_a*moma_param.max_a;
-                    double violaAlp = d2state.x()*d2state.x() - moma_param.max_dw*moma_param.max_dw;
+                    double violaAcc = d2state.y()*d2state.y() - moma_param->max_a*moma_param->max_a;
+                    double violaAlp = d2state.x()*d2state.x() - moma_param->max_dw*moma_param->max_dw;
                     double violaAccPena, violaAccPenaD, violaAlpPena, violaAlpPenaD;
                     if(violaAcc > 0)
                     {
@@ -846,7 +865,7 @@ namespace nmoma_planner
                         double collision_cost;
                         double aug_grad;
                         double colli_mu = mu[non_equal_idx];
-                        gx[non_equal_idx] = (moma_param.chassis_colli_radius * 1.05 - sdf_value) * scale_cx(constrain_idx);
+                        gx[non_equal_idx] = (moma_param->chassis_colli_radius * 1.05 - sdf_value) * scale_cx(constrain_idx);
                         if (rho * gx[non_equal_idx] + colli_mu > 0)
                         {
                             collision_cost = getAugmentedCost(rho, gx[non_equal_idx], colli_mu) * opt_param.second_stage.collision_weight;
@@ -871,15 +890,15 @@ namespace nmoma_planner
                         double moment_cost;
                         double aug_grad;
                         double moment_mu = mu[non_equal_idx];
-                        gx[non_equal_idx] = (omg_sym * moma_param.max_v * dstate.x() 
-                                             + moma_param.max_w * dstate.y() 
-                                             - moma_param.max_v * moma_param.max_w) * scale_cx(constrain_idx);
+                        gx[non_equal_idx] = (omg_sym * moma_param->max_v * dstate.x() 
+                                             + moma_param->max_w * dstate.y() 
+                                             - moma_param->max_v * moma_param->max_w) * scale_cx(constrain_idx);
                         if (rho * gx[non_equal_idx] + moment_mu > 0)
                         {
                             moment_cost = getAugmentedCost(rho, gx[non_equal_idx], moment_mu) * opt_param.second_stage.moment_weight;
                             aug_grad = getAugmentedGrad(rho, gx[non_equal_idx], moment_mu) * scale_cx(constrain_idx) * opt_param.second_stage.moment_weight;
-                            gradBeta(1, 0) += omg_sym * moma_param.max_v * aug_grad;
-                            gradBeta(1, 1) += moma_param.max_w * aug_grad;
+                            gradBeta(1, 0) += omg_sym * moma_param->max_v * aug_grad;
+                            gradBeta(1, 1) += moma_param->max_w * aug_grad;
                         }
                         else
                         {
@@ -894,15 +913,15 @@ namespace nmoma_planner
                         double moment_cost;
                         double aug_grad;
                         double moment_mu = mu[non_equal_idx];
-                        gx[non_equal_idx] = (omg_sym * moma_param.max_v * dstate.x() 
-                                             - moma_param.max_w * dstate.y() 
-                                             - moma_param.max_v * moma_param.max_w) * scale_cx(constrain_idx);
+                        gx[non_equal_idx] = (omg_sym * moma_param->max_v * dstate.x() 
+                                             - moma_param->max_w * dstate.y() 
+                                             - moma_param->max_v * moma_param->max_w) * scale_cx(constrain_idx);
                         if (rho * gx[non_equal_idx] + moment_mu > 0)
                         {
                             moment_cost = getAugmentedCost(rho, gx[non_equal_idx], moment_mu) * opt_param.second_stage.moment_weight;
                             aug_grad = getAugmentedGrad(rho, gx[non_equal_idx], moment_mu) * scale_cx(constrain_idx) * opt_param.second_stage.moment_weight;
-                            gradBeta(1, 0) += omg_sym * moma_param.max_v * aug_grad;
-                            gradBeta(1, 1) -= moma_param.max_w * aug_grad;
+                            gradBeta(1, 0) += omg_sym * moma_param->max_v * aug_grad;
+                            gradBeta(1, 1) -= moma_param->max_w * aug_grad;
                         }
                         else
                         {
@@ -918,7 +937,7 @@ namespace nmoma_planner
                         double acc_cost;
                         double aug_grad;
                         double acc_mu = mu[non_equal_idx];
-                        gx[non_equal_idx] = (d2state.y()*d2state.y() - moma_param.max_a*moma_param.max_a) * scale_cx(constrain_idx);
+                        gx[non_equal_idx] = (d2state.y()*d2state.y() - moma_param->max_a*moma_param->max_a) * scale_cx(constrain_idx);
                         if (rho * gx[non_equal_idx] + acc_mu > 0)
                         {
                             acc_cost = getAugmentedCost(rho, gx[non_equal_idx], acc_mu) * opt_param.second_stage.acc_weight;
@@ -939,7 +958,7 @@ namespace nmoma_planner
                         double acc_cost;
                         double aug_grad;
                         double alp_mu = mu[non_equal_idx];
-                        gx[non_equal_idx] = (d2state.x()*d2state.x() - moma_param.max_dw*moma_param.max_dw) * scale_cx(constrain_idx);
+                        gx[non_equal_idx] = (d2state.x()*d2state.x() - moma_param->max_dw*moma_param->max_dw) * scale_cx(constrain_idx);
                         if (rho * gx[non_equal_idx] + alp_mu > 0)
                         {
                             acc_cost = getAugmentedCost(rho, gx[non_equal_idx], alp_mu) * opt_param.second_stage.domega_weight;
@@ -963,13 +982,13 @@ namespace nmoma_planner
                               + gradBeta.row(2).dot(d3state.head(2))) * real_alpha;
                     
                     // manipulator (12 + 11 + 55)
-                    gradBeta = Eigen::MatrixXd::Zero(3, moma_param.dof_num);
+                    gradBeta = Eigen::MatrixXd::Zero(3, moma_param->dof_num);
                     // manipulator environment collision * 12
-                    Eigen::VectorXd moma_pos = Eigen::VectorXd::Zero(3+moma_param.dof_num);
+                    Eigen::VectorXd moma_pos = Eigen::VectorXd::Zero(3+moma_param->dof_num);
                     moma_pos.head(2) = CurrentXY;
                     moma_pos(2) = state(0);
-                    moma_pos.tail(moma_param.dof_num) = state.tail(moma_param.dof_num);
-                    std::vector<Eigen::Vector4d> colli_pts = moma_param.getColliPts(moma_pos);
+                    moma_pos.tail(moma_param->dof_num) = state.segment(2, moma_param->dof_num);
+                    std::vector<Eigen::Vector4d> colli_pts = moma_param->getColliPts(moma_pos);
                     std::vector<Eigen::Vector3d> pos_grads;
                     for (size_t cidx = 0; cidx < colli_pts.size(); cidx++)
                     {
@@ -1002,17 +1021,21 @@ namespace nmoma_planner
                         // grad_to_pos.setZero();
                         pos_grads.push_back(grad_to_pos);
                     }
+                    // ################################
+                    // C++: Dual-radius self collision; keep FALM constraint count
+                    // ################################
                     // moma self collision
                     for (size_t cidx=0; cidx<colli_pts.size(); cidx++)
                     {
+                        const double self_radius_i = moma_param->getColliSelfRadius(cidx);
                         // with chassis * 11
                         if (cidx > 0)
                         {
                             double collision_cost;
                             double aug_grad;
                             double colli_mu = mu[non_equal_idx];
-                            gx[non_equal_idx] = (moma_param.chassis_height + moma_param.relative_t(2) + 
-                                                 colli_pts[cidx](3) - colli_pts[cidx](2)) * scale_cx(constrain_idx);
+                            gx[non_equal_idx] = (moma_param->chassis_height + self_radius_i
+                                                 - colli_pts[cidx](2)) * scale_cx(constrain_idx);
                             if (rho * gx[non_equal_idx] + colli_mu > 0)
                             {
                                 collision_cost = getAugmentedCost(rho, gx[non_equal_idx], colli_mu) * opt_param.second_stage.mani_colli_weight;
@@ -1031,12 +1054,12 @@ namespace nmoma_planner
                         for (size_t cj=cidx+1; cj<colli_pts.size(); cj++)
                         {
                             // with other link (55)
-                            if (moma_param.collision_matrix(cidx, cj) != -1)
+                            if (moma_param->collision_matrix(cidx, cj) != -1)
                                 continue;
 
                             Eigen::Vector3d diff = colli_pts[cidx].head(3) - colli_pts[cj].head(3);
-                            double dist = (colli_pts[cidx](3) + colli_pts[cj](3)) * 
-                                         (colli_pts[cidx](3) + colli_pts[cj](3)) - diff.squaredNorm();
+                            const double self_sum = self_radius_i + moma_param->getColliSelfRadius(cj);
+                            double dist = self_sum * self_sum - diff.squaredNorm();
 
                             double collision_cost;
                             double aug_grad;
@@ -1061,15 +1084,15 @@ namespace nmoma_planner
                         }
                     }
 
-                    Eigen::VectorXd moma_grad = moma_param.getColliGrads(moma_pos, pos_grads);
+                    Eigen::VectorXd moma_grad = moma_param->getColliGrads(moma_pos, pos_grads);
 
                     // joint pos limit * 7
-                    for (size_t ji = 0; ji < moma_param.dof_num; ji++)
+                    for (size_t ji = 0; ji < moma_param->dof_num; ji++)
                     {
                         double jpos_cost;
                         double aug_grad;
                         double jpos_mu = mu[non_equal_idx];
-                        gx[non_equal_idx] = (moma_pos(ji+3)*moma_pos(ji+3) - moma_param.joint_pos_limit_max(ji)*moma_param.joint_pos_limit_max(ji)) * scale_cx(constrain_idx);
+                        gx[non_equal_idx] = (moma_pos(ji+3)*moma_pos(ji+3) - moma_param->joint_pos_limit_max(ji)*moma_param->joint_pos_limit_max(ji)) * scale_cx(constrain_idx);
                         if (rho * gx[non_equal_idx] + jpos_mu > 0)
                         {
                             jpos_cost = getAugmentedCost(rho, gx[non_equal_idx], jpos_mu) * opt_param.second_stage.mani_pos_weight;
@@ -1088,16 +1111,22 @@ namespace nmoma_planner
                     VecCoeffChainY.head(i*(inner_num+1)+j+1).array() += moma_grad.y();
                     gdC.block<6, 1>(i*6, 0) += beta0 * moma_grad(2);
                     gdT(i) += moma_grad(2) * dstate(0) * real_alpha;
-                    gradBeta.block<1, 7>(0, 0) = moma_grad.tail(moma_param.dof_num);
-                    gdT(i) += moma_grad.tail(moma_param.dof_num).dot(dstate.tail(moma_param.dof_num)) * real_alpha;
+                    // ################################
+                    // C++: Project FALM trajectory gradients across the profile arm DOF
+                    // ################################
+                    // ################################
+                    // C++: Project arm grads into row 0 (transpose: col vec -> row block)
+                    // ################################
+                    gradBeta.row(0) = moma_grad.tail(moma_param->dof_num).transpose();
+                    gdT(i) += moma_grad.tail(moma_param->dof_num).dot(dstate.segment(2, moma_param->dof_num)) * real_alpha;
                                         
                     // joint vel and acc * 14
-                    Eigen::VectorXd dq = dstate.tail(moma_param.dof_num);
-                    Eigen::VectorXd d2q = d2state.tail(moma_param.dof_num);
-                    Eigen::VectorXd d3q = d3state.tail(moma_param.dof_num);
-                    Eigen::VectorXd violaDq = dq.cwiseAbs2() - moma_param.joint_vel_limit.cwiseAbs2();
-                    Eigen::VectorXd violaD2q = d2q.cwiseAbs2() - moma_param.joint_acc_limit.cwiseAbs2();
-                    for (size_t jidx = 0; jidx < moma_param.dof_num; jidx++)
+                    Eigen::VectorXd dq = dstate.segment(2, moma_param->dof_num);
+                    Eigen::VectorXd d2q = d2state.segment(2, moma_param->dof_num);
+                    Eigen::VectorXd d3q = d3state.segment(2, moma_param->dof_num);
+                    Eigen::VectorXd violaDq = dq.cwiseAbs2() - moma_param->joint_vel_limit.cwiseAbs2();
+                    Eigen::VectorXd violaD2q = d2q.cwiseAbs2() - moma_param->joint_acc_limit.cwiseAbs2();
+                    for (size_t jidx = 0; jidx < moma_param->dof_num; jidx++)
                     {
                         {
                             double vel_cost;
@@ -1139,12 +1168,12 @@ namespace nmoma_planner
                             constrain_idx++;
                         }
                     }
-                    gdC.block<6, 7>(i*6, 2) += beta0 * gradBeta.row(0) 
+                    gdC.block(i*6, 2, 6, moma_param->dof_num) += beta0 * gradBeta.row(0)
                                                + beta1 * gradBeta.row(1) 
                                                + beta2 * gradBeta.row(2);
-                    gdT(i) += (gradBeta.row(0).dot(dstate.tail(moma_param.dof_num))
-                            + gradBeta.row(1).dot(d2state.tail(moma_param.dof_num)) 
-                            + gradBeta.row(2).dot(d3state.tail(moma_param.dof_num))) * real_alpha;
+                    gdT(i) += (gradBeta.row(0).dot(dstate.segment(2, moma_param->dof_num))
+                            + gradBeta.row(1).dot(d2state.segment(2, moma_param->dof_num))
+                            + gradBeta.row(2).dot(d3state.segment(2, moma_param->dof_num))) * real_alpha;
                 }
                 else
                 {
@@ -1185,11 +1214,11 @@ namespace nmoma_planner
         }
 
         // final ee
-        Eigen::VectorXd end_moma_state = Eigen::VectorXd::Zero(moma_param.dof_num+3);
+        Eigen::VectorXd end_moma_state = Eigen::VectorXd::Zero(moma_param->dof_num+3);
         end_moma_state.head(2) = VecTrajFinalXY.back();
         end_moma_state(2) = minco_end_state(0, 0);
-        end_moma_state.tail(moma_param.dof_num) = minco_end_state.col(0).tail(moma_param.dof_num);
-        Eigen::VectorXd ee_pose_now = moma_param.getFKPose(end_moma_state);
+        end_moma_state.tail(moma_param->dof_num) = minco_end_state.col(0).middleRows(2, moma_param->dof_num);
+        Eigen::VectorXd ee_pose_now = moma_param->getFKPose(end_moma_state);
         final_pose_error = ee_pose_now - ee_pose;
 
         Eigen::VectorXd grad_ee = Eigen::VectorXd::Zero(ee_pose_now.size());
@@ -1237,13 +1266,16 @@ namespace nmoma_planner
             beta1 << 0.0, 1.0, 2.0 * s1, 3.0 * s2, 4.0 * s3, 5.0 * s4;
             dstate = c.transpose() * beta1;
 
-            Eigen::VectorXd grad_ee2moma = moma_param.getEEGrads(end_moma_state, grad_ee);
+            Eigen::VectorXd grad_ee2moma = moma_param->getEEGrads(end_moma_state, grad_ee);
             
             gdC.block<6, 1>((piece_num-1)*6, 0) += beta0 * grad_ee2moma(2);
-            Eigen::Matrix<double, 1, 7> grad_temp_tail = grad_ee2moma.tail(moma_param.dof_num);
-            gdC.block<6, 7>((piece_num-1)*6, 2) += beta0 * grad_temp_tail;
+            // ################################
+            // C++: Apply terminal FALM gradients across the profile arm DOF
+            // ################################
+            Eigen::RowVectorXd grad_temp_tail = grad_ee2moma.tail(moma_param->dof_num).transpose();
+            gdC.block((piece_num-1)*6, 2, 6, moma_param->dof_num) += beta0 * grad_temp_tail;
             gdT(piece_num-1) += grad_ee2moma(2) * dstate(0);
-            gdT(piece_num-1) += grad_ee2moma.tail(moma_param.dof_num).dot(dstate.tail(moma_param.dof_num));
+            gdT(piece_num-1) += grad_ee2moma.tail(moma_param->dof_num).dot(dstate.segment(2, moma_param->dof_num));
 
             VecCoeffChainX.array() += grad_ee2moma(0);
             VecCoeffChainY.array() += grad_ee2moma(1);
@@ -1282,7 +1314,7 @@ namespace nmoma_planner
         opt_var_idx += obj.piece_num;
         Eigen::Map<const Eigen::VectorXd> Arc(x.data()+opt_var_idx, obj.piece_num);
         opt_var_idx += obj.piece_num;
-        Eigen::Map<const Eigen::MatrixXd> Vq(x.data()+opt_var_idx, obj.moma_param.dof_num, obj.piece_num);
+        Eigen::Map<const Eigen::MatrixXd> Vq(x.data()+opt_var_idx, obj.moma_param->dof_num, obj.piece_num);
 
         Eigen::VectorXd Ts;
         obj.calTfromTau(Tau, Ts);
@@ -1294,11 +1326,11 @@ namespace nmoma_planner
         Inner_pts.row(1) = Arc.head(obj.piece_num-1);
         for (int i = 0; i < obj.piece_num-1; i++)
         {
-            for (size_t j = 0; j < obj.moma_param.dof_num; j++)
-                Inner_pts(j+2, i) = obj.sigmoidC2(Vq(j, i), obj.moma_param.joint_pos_limit_max(j));
+            for (size_t j = 0; j < obj.moma_param->dof_num; j++)
+                Inner_pts(j+2, i) = obj.sigmoidC2(Vq(j, i), obj.moma_param->joint_pos_limit_max(j));
         }
-        for (int i = 0; i < obj.moma_param.dof_num; i++)
-            obj.minco_end_state(i+2, 0) = obj.sigmoidC2(Vq(i, obj.piece_num-1), obj.moma_param.joint_pos_limit_max(i));
+        for (int i = 0; i < obj.moma_param->dof_num; i++)
+            obj.minco_end_state(i+2, 0) = obj.sigmoidC2(Vq(i, obj.piece_num-1), obj.moma_param->joint_pos_limit_max(i));
         obj.minco_opt.generate(obj.minco_start_state, obj.minco_end_state, Inner_pts, Ts);
 
         // MomaTraj temp_traj = obj.getTraj();

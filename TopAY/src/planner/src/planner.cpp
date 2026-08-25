@@ -2,8 +2,22 @@
 
 namespace nmoma_planner
 {
-    void Planner::init(ros::NodeHandle& nh)
+    // ################################
+    // C++: Load the shared global /moma robot profile
+    // ################################
+    void Planner::init(ros::NodeHandle& nh, const ros::NodeHandle& root_nh)
     {
+        // ################################
+        // C++: inject shared MomaParam into parallel workers
+        // ################################
+        moma_param_shared_ = std::make_shared<const MomaParam>(MomaParam::fromRos(root_nh));
+        ROS_ASSERT(moma_param_shared_);
+        moma_param = *moma_param_shared_;
+        ROS_INFO_STREAM("[planner] robot_name=" << moma_param.robot_name
+                        << " dof_num=" << moma_param.dof_num
+                        << " kinematics=" << MomaParam::kinematicsName(moma_param.kinematics)
+                        << " mount_t=" << moma_param.relative_t.transpose());
+
         GET_PARAM_OR_THROW(nh, "agent/local_mode", local_mode);
         GET_PARAM_OR_THROW(nh, "agent/replan_interval", replan_interval);
         GET_PARAM_OR_THROW(nh, "agent/planning_horizon", planning_horizon);
@@ -38,22 +52,28 @@ namespace nmoma_planner
         }
 
         grid_map.reset(new GridMap);
+        grid_map->setMomaParam(moma_param_shared_);
         grid_map->init(nh);
         
         graph_search = std::make_shared<JPS::GraphSearch>(grid_map, moma_param.chassis_colli_radius);
         birrts = std::make_shared<BiRRTs>(grid_map);
+        birrts->setMomaParam(moma_param_shared_);
         birrts->init(nh);
         topo_prm.reset(new TopologyPRM);
         topo_prm->setEnv(grid_map);
         topo_prm->init(nh);
         mcrrts = std::make_shared<MCRRTs>(grid_map);
+        mcrrts->setMomaParam(moma_param_shared_);
         mcrrts->init(nh);
         ompl_planner = std::make_shared<OMPLPlanner>(grid_map);
+        ompl_planner->setMomaParam(moma_param_shared_);
         ompl_planner->init(nh);
         traj_opter = std::make_shared<MomaTrajOpt>(grid_map);
+        traj_opter->setMomaParam(moma_param_shared_);
         traj_opter->init(nh);
         mpc.reset(new OMPC);
         // mpc.reset(new MPC);
+        mpc->setMomaParam(moma_param_shared_);
         mpc->init(nh);
 
         traj_opters.resize(8);
@@ -61,8 +81,10 @@ namespace nmoma_planner
         for (int i = 0; i < 8; i++)
         {
             traj_opters[i] = std::make_unique<MomaTrajOpt>(grid_map);
+            traj_opters[i]->setMomaParam(moma_param_shared_);
             traj_opters[i]->init(nh);
             mc_rrtsers[i].reset(new MCRRTs(grid_map));
+            mc_rrtsers[i]->setMomaParam(moma_param_shared_);
             mc_rrtsers[i]->init(nh);
             opt_traj_pub_list.push_back(
                 nh.advertise<visualization_msgs::MarkerArray>("/opt_traj_" + std::to_string(i + 1), 1)
@@ -141,6 +163,8 @@ namespace nmoma_planner
         now_state.resize(3+moma_param.dof_num);
         now_state.setZero();
         now_dstate = now_state;
+        ROS_ASSERT(static_cast<int>(moma_param_shared_->dof_num) + 3
+                   == static_cast<int>(now_state.size()));
         begin_time = ros::Time::now();
 
         car_pts_pub =  nh.advertise<visualization_msgs::MarkerArray>("car_pts", 1);
@@ -233,15 +257,21 @@ namespace nmoma_planner
             end_state.head(3) = se2_set;
             
             ros::Time find_time_start = ros::Time::now();
-            bool timeout;
-            do
+            bool timeout = false;
+            // ################################
+            // C++: Prefer home arm at goal if free; else sample until free or timeout
+            // ################################
+            if (grid_map->isWholeBodyCollision(end_state))
             {
-                for (size_t i=0; i<moma_param.dof_num; i++)
-                    end_state(3+i) = (moma_param.joint_pos_limit_max(i) - 
-                                    moma_param.joint_pos_limit_min(i)) * rand_q(eng)
-                                    + moma_param.joint_pos_limit_min(i);
-            } while (grid_map->isWholeBodyCollision(end_state)
-                    && !(timeout = (ros::Time::now() - find_time_start).toSec() > 1.0));
+                do
+                {
+                    for (size_t i=0; i<moma_param.dof_num; i++)
+                        end_state(3+i) = (moma_param.joint_pos_limit_max(i) - 
+                                        moma_param.joint_pos_limit_min(i)) * rand_q(eng)
+                                        + moma_param.joint_pos_limit_min(i);
+                } while (grid_map->isWholeBodyCollision(end_state)
+                        && !(timeout = (ros::Time::now() - find_time_start).toSec() > 1.0));
+            }
 
             if(timeout) return;
         }
@@ -266,22 +296,23 @@ namespace nmoma_planner
 
         vis_time(time_txt, duration, 4546);
 
-        vis_path_mesh(end_traj, 16, 
-            tracking_traj,
-            {226.0/255.0, 145.0/255.0, 53.0/255.0, 0.1}, 2010);
-
-        geometry_msgs::Point pos;
-        pos.x = 1.0;
-        pos.y = 2.0;
-        pos.z = 1.0;
-        
-
-        if (succ)
+        // ################################
+        // C++: Only visualize when a trajectory was actually produced
+        // ################################
+        if (succ && end_traj.is_init)
         {
+            vis_path_mesh(end_traj, 16,
+                tracking_traj,
+                {226.0/255.0, 145.0/255.0, 53.0/255.0, 0.1}, 2010);
+
             global_traj = end_traj;
             mpc->setTraj(end_traj, 0.0);
             begin_time = ros::Time::now();
             has_traj = true;
+        }
+        else
+        {
+            PRINT_RED("[Planner] Goal rejected: planning failed (node stays up).");
         }
 
         return;
@@ -602,7 +633,11 @@ namespace nmoma_planner
             ros::Time start_time = ros::Time::now();
             if (tsvr->has_goal && tsvr->has_traj && tsvr->is_safe && (!tsvr->in_plan) )
             {
-                Eigen::VectorXd temp_state = Eigen::VectorXd::Zero(10);
+                // ################################
+                // C++: Whole-body state dimension from dof_num
+                // ################################
+                const int state_dim = 3 + static_cast<int>(tsvr->moma_param.dof_num);
+                Eigen::VectorXd temp_state = Eigen::VectorXd::Zero(state_dim);
                 std::vector<Eigen::Vector4d> min_dist_mani = tsvr->moma_param.getColliPts(temp_state);
                 double res = 0.01;
                 for (double t=0.0; t<tsvr->end_traj.getTotalDuration(); t+=res)
@@ -870,8 +905,12 @@ namespace nmoma_planner
                             break;
                         }
                         boost::this_thread::interruption_point();
-                        Eigen::MatrixXd boundary_vel = Eigen::MatrixXd::Zero(10, 2);
-                        Eigen::MatrixXd boundary_acc = Eigen::MatrixXd::Zero(10, 2);
+                        // ################################
+                        // C++: Whole-body state dimension from dof_num
+                        // ################################
+                        const int state_dim = 3 + static_cast<int>(moma_param.dof_num);
+                        Eigen::MatrixXd boundary_vel = Eigen::MatrixXd::Zero(state_dim, 2);
+                        Eigen::MatrixXd boundary_acc = Eigen::MatrixXd::Zero(state_dim, 2);
                         boundary_vel.col(0) = start_v;
     
                         _succ = 
@@ -958,9 +997,16 @@ namespace nmoma_planner
                 
                 for(auto &res : results) succ = succ || res.first;
             }
+            // ################################
+            // C++: Retry once with critical topo before falling back to OMPL
+            // ################################
+            if (succ)
+                break;
+            if (_critical)
+                break;
+            PRINT_YELLOW("Non-Critical optimization failed, try critical optimization");
             _critical = true;
-            if (!succ) PRINT_YELLOW("Non-Critical optimization failed, try critical optimization");
-        } while(!succ && !_critical);
+        } while(true);
         
         // ros::Time t1 = ros::Time::now();
         // vector<thread> optimize_threads;
@@ -976,8 +1022,12 @@ namespace nmoma_planner
         do {
             auto ompl_path = planOmpls(start, end, start_v);
             if (ompl_path.empty()) break; // OMPL failed
-            Eigen::MatrixXd boundary_vel = Eigen::MatrixXd::Zero(10, 2);
-            Eigen::MatrixXd boundary_acc = Eigen::MatrixXd::Zero(10, 2);
+            // ################################
+            // C++: Whole-body state dimension from dof_num
+            // ################################
+            const int state_dim = 3 + static_cast<int>(moma_param.dof_num);
+            Eigen::MatrixXd boundary_vel = Eigen::MatrixXd::Zero(state_dim, 2);
+            Eigen::MatrixXd boundary_acc = Eigen::MatrixXd::Zero(state_dim, 2);
             boundary_vel.col(0) = start_v;
             if (!this->traj_opters[0]->optimizeTraj(ompl_path, boundary_vel, boundary_acc)
                 || !this->traj_opters[0]->printConstraintsSituations(traj_opters[0]->getTraj())
@@ -1123,8 +1173,12 @@ namespace nmoma_planner
                         return;
                     }
                     
-                    Eigen::MatrixXd boundary_vel = Eigen::MatrixXd::Zero(10, 2);
-                    Eigen::MatrixXd boundary_acc = Eigen::MatrixXd::Zero(10, 2);
+                    // ################################
+                    // C++: Whole-body state dimension from dof_num
+                    // ################################
+                    const int state_dim = 3 + static_cast<int>(moma_param.dof_num);
+                    Eigen::MatrixXd boundary_vel = Eigen::MatrixXd::Zero(state_dim, 2);
+                    Eigen::MatrixXd boundary_acc = Eigen::MatrixXd::Zero(state_dim, 2);
                     boundary_vel.col(0) = start_v;
 
                     bool _succ = 
@@ -1155,16 +1209,27 @@ namespace nmoma_planner
                 }
                 PRINT_YELLOW("[Threads] " << n_succ << " / " << topo_select_paths.size() << " succeed");
             }
+            // ################################
+            // C++: Retry once with critical topo before falling back to OMPL
+            // ################################
+            if (succ)
+                break;
+            if (_critical)
+                break;
+            PRINT_YELLOW("Non-Critical optimization failed, try critical optimization");
             _critical = true;
-            if (!succ) PRINT_YELLOW("Non-Critical optimization failed, try critical optimization");
-        } while(!succ && !_critical);
+        } while(true);
 
         if (!succ) {
         do {
             auto ompl_path = planOmpls(start, end, start_v);
             if (ompl_path.empty()) break; // OMPL failed
-            Eigen::MatrixXd boundary_vel = Eigen::MatrixXd::Zero(10, 2);
-            Eigen::MatrixXd boundary_acc = Eigen::MatrixXd::Zero(10, 2);
+            // ################################
+            // C++: Whole-body state dimension from dof_num
+            // ################################
+            const int state_dim = 3 + static_cast<int>(moma_param.dof_num);
+            Eigen::MatrixXd boundary_vel = Eigen::MatrixXd::Zero(state_dim, 2);
+            Eigen::MatrixXd boundary_acc = Eigen::MatrixXd::Zero(state_dim, 2);
             boundary_vel.col(0) = start_v;
             if (!this->traj_opters[0]->optimizeTraj(ompl_path, boundary_vel, boundary_acc)
                 || !this->traj_opters[0]->printConstraintsSituations(traj_opters[0]->getTraj())
@@ -1303,8 +1368,12 @@ namespace nmoma_planner
                             break;
                         }
                         boost::this_thread::interruption_point();
-                        Eigen::MatrixXd boundary_vel = Eigen::MatrixXd::Zero(10, 2);
-                        Eigen::MatrixXd boundary_acc = Eigen::MatrixXd::Zero(10, 2);
+                        // ################################
+                        // C++: Whole-body state dimension from dof_num
+                        // ################################
+                        const int state_dim = 3 + static_cast<int>(moma_param.dof_num);
+                        Eigen::MatrixXd boundary_vel = Eigen::MatrixXd::Zero(state_dim, 2);
+                        Eigen::MatrixXd boundary_acc = Eigen::MatrixXd::Zero(state_dim, 2);
                         boundary_vel.col(0) = start_v;
     
                         _succ = 
@@ -1377,8 +1446,12 @@ namespace nmoma_planner
         do {
             auto ompl_path = planOmpls(start, end, start_v);
             if (ompl_path.empty()) break; // OMPL failed
-            Eigen::MatrixXd boundary_vel = Eigen::MatrixXd::Zero(10, 2);
-            Eigen::MatrixXd boundary_acc = Eigen::MatrixXd::Zero(10, 2);
+            // ################################
+            // C++: Whole-body state dimension from dof_num
+            // ################################
+            const int state_dim = 3 + static_cast<int>(moma_param.dof_num);
+            Eigen::MatrixXd boundary_vel = Eigen::MatrixXd::Zero(state_dim, 2);
+            Eigen::MatrixXd boundary_acc = Eigen::MatrixXd::Zero(state_dim, 2);
             boundary_vel.col(0) = start_v;
             if (!this->traj_opters[0]->optimizeTraj(ompl_path, boundary_vel, boundary_acc)
                 || !this->traj_opters[0]->printConstraintsSituations(traj_opters[0]->getTraj())
@@ -1668,120 +1741,60 @@ namespace nmoma_planner
         moma_marker.markers.push_back(delet_p);
         pub.publish(moma_marker);
 
-        for(auto wp : path) {
-            visualization_msgs::Marker diff_marker;
+        // ################################
+        // C++: Trajectory ghost uses profile mesh_parts + getLinkTransforms
+        // ################################
+        auto meshLinkTransform = [](const KinematicResult& links, const MeshPart& part) -> Eigen::Matrix4d
+        {
+            switch (part.role)
             {
-                diff_marker.header.frame_id = "world";
-                diff_marker.id = id++;
-                diff_marker.type = visualization_msgs::Marker::MESH_RESOURCE;
-                diff_marker.action = visualization_msgs::Marker::ADD;
-                diff_marker.mesh_resource = "package://fake_moma/meshes/tracer.dae";
-                // pose
-                diff_marker.pose.position.x = wp[0];
-                diff_marker.pose.position.y = wp[1];
-                diff_marker.pose.position.z = moma_param.chassis_height;
-                // orientation
-                Eigen::Quaterniond q = euler2rotation(M_PI_2, wp[2], 0.0);
-                diff_marker.pose.orientation.w = q.w();
-                diff_marker.pose.orientation.x = q.x();
-                diff_marker.pose.orientation.y = q.y();
-                diff_marker.pose.orientation.z = q.z();
-                // color
-                diff_marker.color.a = rgba[3];
-                diff_marker.color.r = rgba[0];
-                diff_marker.color.g = rgba[1];
-                diff_marker.color.b = rgba[2];
-                // scale
-                diff_marker.scale.x = 1.0;
-                diff_marker.scale.y = 1.0;
-                diff_marker.scale.z = 1.0;
+                case MeshRole::Base:
+                    return links.base_T;
+                case MeshRole::ArmBase:
+                    return links.arm_base_T;
+                case MeshRole::ArmLink:
+                    return links.arm_link_T.at(part.index);
+                case MeshRole::Ag95:
+                    return links.ee_T;
             }
-            moma_marker.markers.push_back(diff_marker);
+            throw std::runtime_error("Unknown profile mesh role in vis_path_mesh");
+        };
+        auto poseFromTransform = [](const Eigen::Matrix4d& transform) -> geometry_msgs::Pose
+        {
+            geometry_msgs::Pose pose;
+            const Eigen::Quaterniond orientation(transform.block<3, 3>(0, 0));
+            pose.position.x = transform(0, 3);
+            pose.position.y = transform(1, 3);
+            pose.position.z = transform(2, 3);
+            pose.orientation.w = orientation.w();
+            pose.orientation.x = orientation.x();
+            pose.orientation.y = orientation.y();
+            pose.orientation.z = orientation.z();
+            return pose;
+        };
 
-            Eigen::Vector3d ap(
-                diff_marker.pose.position.x, 
-                diff_marker.pose.position.y, 
-                diff_marker.pose.position.z
-            );
-
-            Eigen::Quaterniond aq(cos(wp[2]/2.0), 0.0, 0.0, sin(wp[2]/2.0));
-            ap += aq.matrix() * moma_param.relative_t;
-            aq = aq.matrix() * moma_param.relative_R;
-
-            //link0
-            visualization_msgs::Marker link_marker;
+        for (const Eigen::VectorXd& wp : path)
+        {
+            const KinematicResult links = moma_param.getLinkTransforms(wp);
+            for (const MeshPart& part : moma_param.mesh_parts)
             {
-                link_marker.header.frame_id = "world";
-                link_marker.id = id++;
-                link_marker.type = visualization_msgs::Marker::MESH_RESOURCE;
-                link_marker.action = visualization_msgs::Marker::ADD;
-                link_marker.pose.position.x = ap.x();
-                link_marker.pose.position.y = ap.y();
-                link_marker.pose.position.z = ap.z();
-                link_marker.pose.orientation.w = aq.w();
-                link_marker.pose.orientation.x = aq.x();
-                link_marker.pose.orientation.y = aq.y();
-                link_marker.pose.orientation.z = aq.z();
-                link_marker.color.a = rgba[3];
-                link_marker.color.r = rgba[0];
-                link_marker.color.g = rgba[1];
-                link_marker.color.b = rgba[2];
-                link_marker.scale.x = 1.0;
-                link_marker.scale.y = 1.0;
-                link_marker.scale.z = 1.0;
-                link_marker.mesh_resource = "package://fake_moma/meshes/link0.STL";
+                visualization_msgs::Marker marker;
+                marker.header.frame_id = "world";
+                marker.header.stamp = ros::Time::now();
+                marker.id = id++;
+                marker.type = visualization_msgs::Marker::MESH_RESOURCE;
+                marker.action = visualization_msgs::Marker::ADD;
+                marker.mesh_resource = part.file;
+                marker.pose = poseFromTransform(meshLinkTransform(links, part) * part.link_T_visual);
+                marker.scale.x = part.scale.x();
+                marker.scale.y = part.scale.y();
+                marker.scale.z = part.scale.z();
+                marker.color.a = rgba[3];
+                marker.color.r = rgba[0];
+                marker.color.g = rgba[1];
+                marker.color.b = rgba[2];
+                moma_marker.markers.push_back(marker);
             }
-            moma_marker.markers.push_back(link_marker);
-
-            //link1-7
-            for (size_t i = 0; i < moma_param.dof_num; i++)
-            {
-                visualization_msgs::Marker link_marker;
-                {
-                    link_marker.header.frame_id = "world";
-                    link_marker.id = id++;
-                    link_marker.type = visualization_msgs::Marker::MESH_RESOURCE;
-                    link_marker.action = visualization_msgs::Marker::ADD;
-                    ap += aq.matrix() * Eigen::Vector3d(0.0, 0.0, moma_param.link_length[i]);
-                    link_marker.pose.position.x = ap.x();
-                    link_marker.pose.position.y = ap.y();
-                    link_marker.pose.position.z = ap.z();
-                    aq = aq.matrix() * euler2rotation(moma_param.joint_offset.row(i))
-                            * euler2rotation(moma_param.joint_dof_axis.row(i)*wp[i+3]);
-                    link_marker.pose.orientation.w = aq.w();
-                    link_marker.pose.orientation.x = aq.x();
-                    link_marker.pose.orientation.y = aq.y();
-                    link_marker.pose.orientation.z = aq.z();
-                    link_marker.color.a = rgba[3];
-                    link_marker.color.r = rgba[0];
-                    link_marker.color.g = rgba[1];
-                    link_marker.color.b = rgba[2];
-                    link_marker.scale.x = 1.0;
-                    link_marker.scale.y = 1.0;
-                    link_marker.scale.z = 1.0;
-                    link_marker.mesh_resource = "package://fake_moma/meshes/link"+std::to_string(i+1)+".STL";
-                }
-                moma_marker.markers.push_back(link_marker);
-            }
-
-            //gripper
-            visualization_msgs::Marker gripper_marker;
-            {
-                gripper_marker.header.frame_id = "world";
-                gripper_marker.id = id++;
-                gripper_marker.type = visualization_msgs::Marker::MESH_RESOURCE;
-                gripper_marker.action = visualization_msgs::Marker::ADD;
-                gripper_marker.pose = moma_marker.markers.back().pose;
-                gripper_marker.color.a = rgba[3];
-                gripper_marker.color.r = rgba[0];
-                gripper_marker.color.g = rgba[1];
-                gripper_marker.color.b = rgba[2];
-                gripper_marker.scale.x = 1.0;
-                gripper_marker.scale.y = 1.0;
-                gripper_marker.scale.z = 1.0;
-                gripper_marker.mesh_resource = "package://fake_moma/meshes/gripper.dae";
-            }
-            moma_marker.markers.push_back(gripper_marker);
         }
 
         if (!path.empty()) pub.publish(moma_marker);
@@ -1793,12 +1806,16 @@ namespace nmoma_planner
         RowMatrixXd path_m = traj.sampleTimePoints(nsample);
         std::vector<Eigen::VectorXd> path;
 
-        Eigen::VectorXd prev_state = path_m.row(0).head(10);
-        Eigen::VectorXd end_state = path_m.row(path_m.rows()-1).head(10);
+        // ################################
+        // C++: Visualized trajectory states use the profile whole-body width
+        // ################################
+        const int state_dim = 3 + static_cast<int>(moma_param.dof_num);
+        Eigen::VectorXd prev_state = path_m.row(0).head(state_dim);
+        Eigen::VectorXd end_state = path_m.row(path_m.rows()-1).head(state_dim);
         path.push_back(prev_state);
 
         for (int i = 0; i < path_m.rows(); i++) {
-            Eigen::VectorXd state = path_m.row(i).head(10);
+            Eigen::VectorXd state = path_m.row(i).head(state_dim);
             if ((state.head(2) - prev_state.head(2)).norm() > 0.5
             && (state.head(2) - end_state.head(2)).norm() > 0.5) {
                 path.push_back(state);

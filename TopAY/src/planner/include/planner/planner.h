@@ -7,6 +7,7 @@
 // #include <c10/cuda/CUDAStream.h>
 // #include <ATen/cuda/CUDAContext.h>
 #include <mutex>
+#include <memory>
 #include <stdlib.h>
 
 #include <string.h>
@@ -79,7 +80,10 @@ namespace nmoma_planner
             // data
             Eigen::Vector3d se2_set;
             Eigen::VectorXd now_state;
-            Eigen::VectorXd now_dstate; // v, w, 0, q1-q7
+            // ################################
+            // C++: Document the profile-sized arm derivative tail
+            // ################################
+            Eigen::VectorXd now_dstate; // v, w, 0, arm joint derivatives
             default_random_engine eng;
 
             // trajs
@@ -97,6 +101,7 @@ namespace nmoma_planner
             OMPC::Ptr mpc;
             // MPC::Ptr mpc;
             MomaParam moma_param;
+            std::shared_ptr<const MomaParam> moma_param_shared_;
             MomaTrajOpt::Ptr traj_opter;
             std::vector<Eigen::MatrixXd> primitives;
 
@@ -204,7 +209,10 @@ namespace nmoma_planner
             std::string scene;
 
         public:
-            void init(ros::NodeHandle& nh);
+            // ################################
+            // C++: Planner initialization with private and global handles
+            // ################################
+            void init(ros::NodeHandle& nh, const ros::NodeHandle& root_nh);
             void planCallBack(const geometry_msgs::PoseStamped msg);
 
             void ablationCallback(const geometry_msgs::PoseStamped msg);
