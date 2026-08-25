@@ -53,6 +53,16 @@ public:
     // C++: Stage C base candidate generator (Task 10) end
     // ################################
 
+    // ################################
+    // C++: Stage C public for Milestone E tests begin
+    // ################################
+    bool runStageC(const Eigen::Matrix<double, 9, 1> &xi0,
+                   const Eigen::Matrix4d &T_goal,
+                   std::vector<WholeBodyGoalCandidate> &out_cands);
+    // ################################
+    // C++: Stage C public for Milestone E tests end
+    // ################################
+
 private:
     MMConfig::Ptr cfg_;
     GridMap::Ptr map_;
@@ -60,10 +70,6 @@ private:
     FixedBaseArmIk arm_ik_;
 
     FixedBaseArmIkParams makeArmIkParams() const;
-
-    bool runStageC(const Eigen::Matrix<double, 9, 1> &xi0,
-                   const Eigen::Matrix4d &T_goal,
-                   std::vector<WholeBodyGoalCandidate> &out_cands);
 };
 
 } // namespace remani_planner

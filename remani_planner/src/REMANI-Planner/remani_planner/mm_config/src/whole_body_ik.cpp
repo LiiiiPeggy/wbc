@@ -465,13 +465,70 @@ bool passesFastPathQuality(const WholeBodyIkParams &p,
 WholeBodyIkResult WholeBodyIkSolver::solve(const Eigen::Matrix<double, 9, 1> &xi_start,
                                            const Eigen::Matrix4d &T_goal)
 {
-    (void)xi_start;
-    (void)T_goal;
-
+    // ################################
+    // C++: WholeBodyIkSolver::solve orchestration begin
+    // ################################
     WholeBodyIkResult result;
     result.success = false;
-    result.fail_reason = "not implemented";
+
+    if(!cfg_ || !map_ || !xi_start.allFinite() || !T_goal.allFinite()){
+        result.fail_reason = "invalid_input";
+        return result;
+    }
+
+    WholeBodyGoalCandidate cand_b;
+    runStageB(xi_start, T_goal, cand_b);
+
+    std::vector<WholeBodyGoalCandidate> pool;
+    if(cand_b.hard_valid && passesFastPathQuality(params_, cand_b)){
+        result.success = true;
+        result.best = cand_b;
+        result.best.cost = computeCandidateCost(params_, cand_b);
+        result.xi_best.head<3>() = cand_b.base_xyyaw;
+        result.xi_best.tail<6>() = cand_b.q;
+        result.fail_reason.clear();
+        return result;
+    }
+
+    if(cand_b.hard_valid){
+        pool.push_back(cand_b);
+    }
+
+    std::vector<WholeBodyGoalCandidate> cands_c;
+    runStageC(xi_start, T_goal, cands_c);
+    for(const auto &c : cands_c){
+        if(c.hard_valid){
+            pool.push_back(c);
+        }
+    }
+
+    if(pool.empty()){
+        result.fail_reason = cand_b.fail_reason.empty()
+            ? "no_hard_valid_candidate"
+            : cand_b.fail_reason;
+        result.best = cand_b;
+        return result;
+    }
+
+    size_t best_i = 0;
+    double best_cost = std::numeric_limits<double>::infinity();
+    for(size_t i = 0; i < pool.size(); ++i){
+        pool[i].cost = computeCandidateCost(params_, pool[i]);
+        if(pool[i].cost < best_cost){
+            best_cost = pool[i].cost;
+            best_i = i;
+        }
+    }
+
+    result.success = true;
+    result.best = pool[best_i];
+    result.xi_best.head<3>() = result.best.base_xyyaw;
+    result.xi_best.tail<6>() = result.best.q;
+    result.fail_reason.clear();
     return result;
+    // ################################
+    // C++: WholeBodyIkSolver::solve orchestration end
+    // ################################
 }
 
 bool WholeBodyIkSolver::runStageB(const Eigen::Matrix<double, 9, 1> &xi0,
@@ -634,6 +691,11 @@ bool WholeBodyIkSolver::runStageB(const Eigen::Matrix<double, 9, 1> &xi0,
         && !cfg_->checkcollision(xi.head<3>(), xi.tail<6>(), true);
 
     out_cand.hard_valid = pose_ok && joints_ok && in_map && no_collision;
+    if(cfg_ && out_cand.q.size() == 6){
+        out_cand.obstacle_clearance =
+            cfg_->getWholeBodyObstacleClearance(out_cand.base_xyyaw, out_cand.q);
+    }
+    out_cand.cost = computeCandidateCost(params_, out_cand);
     if(pose_ok){
         if(!joints_ok){
             out_cand.fail_reason = "joint_limits";
@@ -658,10 +720,91 @@ bool WholeBodyIkSolver::runStageC(const Eigen::Matrix<double, 9, 1> &xi0,
                                   const Eigen::Matrix4d &T_goal,
                                   std::vector<WholeBodyGoalCandidate> &out_cands)
 {
-    (void)xi0;
-    (void)T_goal;
+    // ################################
+    // C++: Stage C arm IK loop begin
+    // ################################
     out_cands.clear();
-    return false;
+    if(!cfg_ || !map_ || !xi0.allFinite() || !T_goal.allFinite()
+       || cfg_->getManiDof() != 6){
+        return false;
+    }
+
+    const Eigen::VectorXd &q_min = cfg_->getManipulatorMinPos();
+    const Eigen::VectorXd &q_max = cfg_->getManipulatorMaxPos();
+    Eigen::VectorXd q_current = xi0.tail<6>();
+    Eigen::VectorXd q_mid = 0.5 * (q_min + q_max);
+    for(int i = 0; i < 6; ++i){
+        q_current(i) = std::max(q_min(i), std::min(q_max(i), q_current(i)));
+        q_mid(i) = std::max(q_min(i), std::min(q_max(i), q_mid(i)));
+    }
+
+    std::vector<Eigen::Vector3d> sorted_bases;
+    generateFilteredBaseCandidates(T_goal, xi0.head<3>(), sorted_bases);
+
+    const FixedBaseArmIkParams arm_params = makeArmIkParams();
+    const ros::WallTime stage_start = ros::WallTime::now();
+    const ros::WallTime stage_deadline =
+        stage_start + ros::WallDuration(params_.c_max_ms / 1000.0);
+
+    for(const auto &base_candidate : sorted_bases){
+        if(ros::WallTime::now() >= stage_deadline){
+            break;
+        }
+        const ros::WallTime now = ros::WallTime::now();
+        const ros::WallTime candidate_deadline = std::min(
+            stage_deadline,
+            now + ros::WallDuration(params_.c_arm_max_ms / 1000.0));
+        if(candidate_deadline <= now){
+            break;
+        }
+
+        FixedBaseArmIkResult arm_result =
+            arm_ik_.solve(base_candidate, T_goal, q_current, arm_params,
+                          candidate_deadline);
+        if(!arm_result.success && ros::WallTime::now() < candidate_deadline){
+            arm_result = arm_ik_.solve(base_candidate, T_goal, q_mid, arm_params,
+                                       candidate_deadline);
+        }
+        if(!arm_result.success || arm_result.q.size() != 6){
+            continue;
+        }
+
+        Eigen::Matrix<double, 6, 1> pose_err;
+        poseError(cfg_->getEePose(base_candidate, arm_result.q), T_goal, pose_err);
+        const double pos_err = pose_err.head<3>().norm();
+        const double rot_err = pose_err.tail<3>().norm();
+        if(!(pos_err <= params_.ik_pos_tol && rot_err <= params_.ik_rot_tol_rad)){
+            continue;
+        }
+        if(cfg_->checkcollision(base_candidate, arm_result.q, true)){
+            continue;
+        }
+        if(!map_->isInMap(Eigen::Vector2d(base_candidate.x(), base_candidate.y()))){
+            continue;
+        }
+
+        WholeBodyGoalCandidate cand;
+        cand.base_xyyaw = base_candidate;
+        cand.q = arm_result.q;
+        cand.pos_err = pos_err;
+        cand.rot_err_rad = rot_err;
+        cand.base_xy_disp =
+            std::hypot(base_candidate.x() - xi0(0), base_candidate.y() - xi0(1));
+        cand.yaw_disp = std::abs(wrapToPi(base_candidate.z() - xi0(2)));
+        cand.q_disp_norm = (arm_result.q - q_current).norm();
+        cand.min_joint_margin = computeJointLimitMargin(*cfg_, arm_result.q);
+        cand.obstacle_clearance =
+            cfg_->getWholeBodyObstacleClearance(base_candidate, arm_result.q);
+        cand.hard_valid = true;
+        cand.source = CandidateSource::C;
+        cand.cost = computeCandidateCost(params_, cand);
+        out_cands.push_back(cand);
+    }
+
+    return !out_cands.empty();
+    // ################################
+    // C++: Stage C arm IK loop end
+    // ################################
 }
 
 // ################################

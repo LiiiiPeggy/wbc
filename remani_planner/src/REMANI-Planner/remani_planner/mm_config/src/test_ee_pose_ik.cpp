@@ -488,14 +488,8 @@ int main(int argc, char **argv)
         solver_params = WholeBodyIkParams{};
     }
     WholeBodyIkSolver whole_body_ik(cfg_ik, grid_map, solver_params);
-    Eigen::Matrix<double, 9, 1> xi_start;
-    xi_start << ik_car.x(), ik_car.y(), ik_car.z(), q_seed(0), q_seed(1),
-                q_seed(2), q_seed(3), q_seed(4), q_seed(5);
-    const auto stub_result = whole_body_ik.solve(xi_start, T_goal);
-    printResult("WholeBodyIkSolver stub solve returns not implemented",
-                !stub_result.success
-                    && stub_result.fail_reason == "not implemented",
-                all_pass);
+    printResult("WholeBodyIkSolver constructs with params",
+                true, all_pass);
     // ################################
     // C++: whole-body IK params and solver scaffold tests end
     // ################################
@@ -721,6 +715,86 @@ int main(int argc, char **argv)
     }
     // ################################
     // C++: Stage C base candidate generation tests end
+    // ################################
+
+    // ################################
+    // C++: Stage C + solve orchestration tests begin
+    // ################################
+    {
+        // poseError rotation gate unit (same position, large rot → fails rot tol)
+        Eigen::Matrix4d T_a = Eigen::Matrix4d::Identity();
+        Eigen::Matrix4d T_b = Eigen::Matrix4d::Identity();
+        T_b.block<3, 3>(0, 0) =
+            Eigen::AngleAxisd(0.5, Eigen::Vector3d::UnitZ()).toRotationMatrix();
+        Eigen::Matrix<double, 6, 1> gate_err;
+        poseError(T_a, T_b, gate_err);
+        const bool rot_gate_pass =
+            gate_err.head<3>().norm() < 1e-9
+            && gate_err.tail<3>().norm() > 0.2;
+        printResult("poseError rotation gate detects orientation mismatch",
+                    rot_gate_pass, all_pass);
+
+        GridMap::Ptr solve_grid = makeInitializedGridMap(nh);
+        MMConfig::Ptr cfg_solve(new MMConfig());
+        cfg_solve->setParam(nh, solve_grid);
+        WholeBodyIkParams solve_params = WholeBodyIkParams::loadFromRosParam(nh);
+        // Give Stage C enough wall time for unit test.
+        solve_params.c_max_ms = 500.0;
+        solve_params.c_arm_max_ms = 40.0;
+        WholeBodyIkSolver solve_solver(cfg_solve, solve_grid, solve_params);
+
+        Eigen::Vector3d goal_car(0.15, -0.05, 0.10);
+        Eigen::VectorXd goal_q(6);
+        goal_q << 0.30, -0.55, 0.85, -0.40, 0.50, -0.20;
+        const Eigen::Matrix4d T_solve_goal = cfg_solve->getEePose(goal_car, goal_q);
+        Eigen::Matrix<double, 9, 1> xi_near = packXi(goal_car, goal_q);
+        xi_near(0) += 0.03;
+        xi_near(1) -= 0.02;
+        xi_near(2) = wrapToPi(xi_near(2) + 0.05);
+        for(int i = 0; i < 6; ++i){
+            xi_near(3 + i) += (i % 2 == 0 ? 0.04 : -0.04);
+        }
+
+        const auto near_solve = solve_solver.solve(xi_near, T_solve_goal);
+        bool near_solve_pass = near_solve.success && near_solve.best.hard_valid
+            && near_solve.best.pos_err <= solve_params.ik_pos_tol
+            && near_solve.best.rot_err_rad <= solve_params.ik_rot_tol_rad;
+        printResult("solve reaches near forward-FK goal",
+                    near_solve_pass, all_pass);
+
+        // Unreachable EE far away → solve fails
+        Eigen::Matrix4d T_far = Eigen::Matrix4d::Identity();
+        T_far.block<3, 1>(0, 3) = Eigen::Vector3d(100.0, 100.0, 100.0);
+        const auto far_solve = solve_solver.solve(xi_near, T_far);
+        printResult("solve rejects unreachable EE goal",
+                    !far_solve.success, all_pass);
+
+        // Stage C forward: known-valid goal, start slightly perturbed
+        std::vector<WholeBodyGoalCandidate> c_cands;
+        const bool c_ok = solve_solver.runStageC(xi_near, T_solve_goal, c_cands);
+        bool c_hard = false;
+        for(const auto &c : c_cands){
+            if(c.hard_valid
+               && c.pos_err <= solve_params.ik_pos_tol
+               && c.rot_err_rad <= solve_params.ik_rot_tol_rad){
+                c_hard = true;
+                break;
+            }
+        }
+        printResult("Stage C finds hard-valid forward-FK solution",
+                    c_ok && c_hard, all_pass);
+
+        // Collision terminal rejected by solve: occupy goal footprint
+        occupyCarFootprint(*solve_grid, goal_car);
+        occupyCarFootprint(*solve_grid, Eigen::Vector3d(xi_near(0), xi_near(1), xi_near(2)));
+        const auto coll_solve = solve_solver.solve(xi_near, T_solve_goal);
+        const bool coll_reject_pass = !coll_solve.success
+            || !coll_solve.best.hard_valid;
+        printResult("solve rejects collision-terminal goal",
+                    coll_reject_pass, all_pass);
+    }
+    // ################################
+    // C++: Stage C + solve orchestration tests end
     // ################################
 
     std::cout << (all_pass ? "ALL TESTS PASSED" : "TESTS FAILED") << std::endl;
