@@ -9,7 +9,6 @@
     <!-- ################################ -->
     <rosparam command="load" file="$(find planner)/params/robot_ranger_cr10.yaml" />
     <rosparam command="load" file="$(find planner)/params/agent.yaml" />
-    <rosparam command="load" file="$(find planner)/params/agent_ranger_cr10_smoke.yaml" />
     <rosparam command="load" file="$(find planner)/params/grid_map.yaml" />
     <rosparam command="load" file="$(find planner)/params/rog_map.yaml" />
     <rosparam command="load" file="$(find planner)/params/birrts.yaml" />
@@ -19,6 +18,10 @@
     <rosparam command="load" file="$(find planner)/params/mpc.yaml" />
     <rosparam command="load" file="$(find planner)/params/ik.yaml" />
     <rosparam command="load" file="$(find planner)/params/map_ranger_cr10_smoke.yaml" />
+    <!-- ################################ -->
+    <!-- XML: Smoke agent overlay last so mcrrts/ompls budgets override defaults -->
+    <!-- ################################ -->
+    <rosparam command="load" file="$(find planner)/params/agent_ranger_cr10_smoke.yaml" />
 
     <node name="fake_moma_node" pkg="fake_moma" type="fake_moma_node" output="screen">
         <remap from="~global_map" to="$(arg map_topic)" />

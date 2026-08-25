@@ -15,6 +15,11 @@ namespace nmoma_planner
         end_node = genNodeFromState(std::make_pair(path.size()-1, end.tail(moma_param->dof_num)));
         end_node->node_state = MCRRTNode::IN_ANTI_TREE;
         end_node->cost = 0.0;
+        // ################################
+        // C++: Seed layer bounds from start/goal so nearest-neighbor search works
+        // ################################
+        updateMinMaxIdx(start_node);
+        updateMinMaxIdx(end_node);
 
         ros::Time time_begin = ros::Time::now();
         int tree_count_ = 1;
@@ -345,6 +350,11 @@ namespace nmoma_planner
         int max_idx = (idx1 > idx2) ? idx1 : idx2;
         for (int i = min_idx; i < max_idx; ++i)
             time += car_path[i].w();
+        // ################################
+        // C++: Avoid /0 when steer stays on one car-path layer
+        // ################################
+        if (time < 1e-6)
+            time = 1e-6;
         Eigen::VectorXd vel = diff / time;
         for (int i = 0; i < state_dim; ++i)
         {

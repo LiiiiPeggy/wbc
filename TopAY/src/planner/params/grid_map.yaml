@@ -7,5 +7,8 @@ planner_node:
     # sim case:
     map_size_x: 20.0
     map_size_y: 20.0
-    map_size_z: 1.6
+    # ################################
+    # YAML: CR10 upright reach exceeds 1.6 m; out-of-map spheres were always colliding
+    # ################################
+    map_size_z: 2.5
     resolution: 0.1

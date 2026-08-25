@@ -1704,9 +1704,9 @@ namespace nmoma_planner
                     gdC.block<6, 1>(i*6, 0) += beta0 * moma_grad(2);
                     gdT(i) += moma_grad(2) * dstate(0) * real_alpha;
                     // ################################
-                    // C++: Project trajectory gradients across the profile arm DOF
+                    // C++: Project arm grads into row 0 (transpose: col vec -> row block)
                     // ################################
-                    gradBeta.block(0, 0, 1, moma_param->dof_num) = moma_grad.tail(moma_param->dof_num);
+                    gradBeta.row(0) = moma_grad.tail(moma_param->dof_num).transpose();
                     gdT(i) += moma_grad.tail(moma_param->dof_num).dot(dstate.segment(2, moma_param->dof_num)) * real_alpha;
                                         
                     // joint vel and acc

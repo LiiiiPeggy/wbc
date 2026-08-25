@@ -189,6 +189,11 @@ namespace nmoma_planner
         int max_idx = (state_1.first > state_2.first) ? state_1.first : state_2.first;
         for (int i = min_idx; i < max_idx; ++i)
             time += car_path[i].w();
+        // ################################
+        // C++: Avoid /0 when two MCRRT nodes share the same car-path layer
+        // ################################
+        if (time < 1e-6)
+            time = 1e-6;
 
         return (state_1.second - state_2.second).lpNorm<1>() / time;
     }
@@ -225,14 +230,32 @@ namespace nmoma_planner
         Eigen::VectorXd full_state(3+state_dim);
         full_state.head(3) = car_path[idx].head(3);
         Eigen::VectorXd sample_state(state_dim);
-        ros::Time time_begin = ros::Time::now();
-        while((ros::Time::now() - time_begin).toSec() < max_time && ros::ok())
+        // ################################
+        // C++: Cap sample attempts; do not consume the whole MCRRT budget
+        // ################################
+        const int max_attempts = 64;
+        bool found_free = false;
+        for (int attempt = 0; attempt < max_attempts; ++attempt)
         {
             for(int i = 0; i < state_dim; ++i)
                 sample_state(i) = sample_min[i] + (sample_max[i] - sample_min[i]) * uniform_sampler(rand_gen);
             full_state.tail(state_dim) = sample_state;
             if (!grid_map->isWholeBodyCollision(full_state))
+            {
+                found_free = true;
                 break;
+            }
+        }
+        if (!found_free)
+        {
+            // Prefer a known-open arm pose over returning a colliding sample.
+            sample_state.setZero();
+            full_state.tail(state_dim) = sample_state;
+            if (grid_map->isWholeBodyCollision(full_state))
+            {
+                // Last resort: keep zeros; steer/connect will reject if needed.
+                sample_state.setZero();
+            }
         }
         
         return std::make_pair(idx, sample_state);

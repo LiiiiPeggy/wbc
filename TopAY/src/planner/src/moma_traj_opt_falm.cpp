@@ -1114,7 +1114,10 @@ namespace nmoma_planner
                     // ################################
                     // C++: Project FALM trajectory gradients across the profile arm DOF
                     // ################################
-                    gradBeta.block(0, 0, 1, moma_param->dof_num) = moma_grad.tail(moma_param->dof_num);
+                    // ################################
+                    // C++: Project arm grads into row 0 (transpose: col vec -> row block)
+                    // ################################
+                    gradBeta.row(0) = moma_grad.tail(moma_param->dof_num).transpose();
                     gdT(i) += moma_grad.tail(moma_param->dof_num).dot(dstate.segment(2, moma_param->dof_num)) * real_alpha;
                                         
                     // joint vel and acc * 14

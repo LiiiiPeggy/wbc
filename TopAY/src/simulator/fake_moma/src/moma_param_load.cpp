@@ -198,6 +198,17 @@ void loadMeshParts(const ros::NodeHandle& root_nh, std::vector<MeshPart>& mesh_p
 
         part.link_T_visual.block<3, 3>(0, 0) = rpyToRotation(xmlVector3(entry["rpy"], name + ".rpy"));
         part.link_T_visual.block<3, 1>(0, 3) = xmlVector3(entry["xyz"], name + ".xyz");
+        // ################################
+        // C++: Optional millimetre-to-metre mesh scale, default 1
+        // ################################
+        if (entry.hasMember("scale"))
+        {
+            part.scale = xmlVector3(entry["scale"], name + ".scale");
+            if (part.scale.minCoeff() <= 0.0)
+            {
+                throw std::runtime_error(name + ".scale must be strictly positive");
+            }
+        }
         mesh_parts.push_back(part);
     }
 }

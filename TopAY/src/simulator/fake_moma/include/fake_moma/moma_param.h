@@ -69,6 +69,10 @@ struct MeshPart
     size_t index = 0;
     std::string file;
     Eigen::Matrix4d link_T_visual = Eigen::Matrix4d::Identity();
+    // ################################
+    // C++: Per-mesh RViz scale (AG95 STL is millimetres)
+    // ################################
+    Eigen::Vector3d scale = Eigen::Vector3d::Ones();
 };
 
 // ################################
@@ -629,6 +633,57 @@ struct MomaParam
 
     visualization_msgs::MarkerArray getColliMarkerArray(Eigen::VectorXd moma_pos)
     {
+        // ################################
+        // C++: CR10 sphere vis from dual-radius proxies (not legacy TopAY chain)
+        // ################################
+        if (kinematics == KinematicsType::Cr10)
+        {
+            visualization_msgs::MarkerArray colli_marker_array;
+            visualization_msgs::Marker chassis_marker;
+            chassis_marker.header.frame_id = "world";
+            chassis_marker.header.stamp = ros::Time::now();
+            chassis_marker.id = 0;
+            chassis_marker.type = visualization_msgs::Marker::CYLINDER;
+            chassis_marker.action = visualization_msgs::Marker::ADD;
+            chassis_marker.scale.x = chassis_colli_radius * 2.0;
+            chassis_marker.scale.y = chassis_colli_radius * 2.0;
+            chassis_marker.scale.z = chassis_height;
+            chassis_marker.pose.position.x = moma_pos[0];
+            chassis_marker.pose.position.y = moma_pos[1];
+            chassis_marker.pose.position.z = chassis_height / 2.0;
+            chassis_marker.pose.orientation.w = 1.0;
+            chassis_marker.color.a = 0.35;
+            chassis_marker.color.r = 0.0;
+            chassis_marker.color.g = 0.4;
+            chassis_marker.color.b = 1.0;
+            colli_marker_array.markers.push_back(chassis_marker);
+
+            const std::vector<Eigen::Vector4d> colli_pts = getColliPts(moma_pos);
+            for (size_t i = 0; i < colli_pts.size(); ++i)
+            {
+                visualization_msgs::Marker sphere;
+                sphere.header.frame_id = "world";
+                sphere.header.stamp = ros::Time::now();
+                sphere.id = static_cast<int>(i) + 1;
+                sphere.type = visualization_msgs::Marker::SPHERE;
+                sphere.action = visualization_msgs::Marker::ADD;
+                const double diameter = 2.0 * colli_pts[i](3);
+                sphere.scale.x = diameter;
+                sphere.scale.y = diameter;
+                sphere.scale.z = diameter;
+                sphere.pose.position.x = colli_pts[i](0);
+                sphere.pose.position.y = colli_pts[i](1);
+                sphere.pose.position.z = colli_pts[i](2);
+                sphere.pose.orientation.w = 1.0;
+                sphere.color.a = 0.45;
+                sphere.color.r = 0.1;
+                sphere.color.g = 0.8;
+                sphere.color.b = 0.2;
+                colli_marker_array.markers.push_back(sphere);
+            }
+            return colli_marker_array;
+        }
+
         visualization_msgs::MarkerArray colli_marker_array;
         visualization_msgs::Marker chassis_marker;
         chassis_marker.header.frame_id = "world";
@@ -702,7 +757,10 @@ struct MomaParam
         return colli_marker_array;
     }
 
-    visualization_msgs::MarkerArray getColliCylinderArray(Eigen::VectorXd moma_pos)
+    // ################################
+    // C++: Const vis helper for shared_ptr<const MomaParam>
+    // ################################
+    visualization_msgs::MarkerArray getColliCylinderArray(Eigen::VectorXd moma_pos) const
     {
         visualization_msgs::MarkerArray colli_marker_array;
         visualization_msgs::Marker chassis_marker;
@@ -883,68 +941,37 @@ struct MomaParam
 
     std::vector<Eigen::VectorXd> getMeshPose(const Eigen::VectorXd& moma_pos) const {
 
+        // ################################
+        // C++: Mesh poses from profile mesh_parts + getLinkTransforms
+        // ################################
         std::vector<Eigen::VectorXd> ret;
+        ret.reserve(mesh_parts.size());
 
-        auto euler2rotation = [](double r, double p, double y) -> Eigen::Quaterniond {
-            return Eigen::AngleAxisd(r, Eigen::Vector3d::UnitX()) 
-                * Eigen::AngleAxisd(p, Eigen::Vector3d::UnitY()) 
-                * Eigen::AngleAxisd(y, Eigen::Vector3d::UnitZ());
+        auto meshLinkTransform = [](const KinematicResult& links, const MeshPart& part) -> Eigen::Matrix4d
+        {
+            switch (part.role)
+            {
+                case MeshRole::Base:
+                    return links.base_T;
+                case MeshRole::ArmBase:
+                    return links.arm_base_T;
+                case MeshRole::ArmLink:
+                    return links.arm_link_T.at(part.index);
+                case MeshRole::Ag95:
+                    return links.ee_T;
+            }
+            throw std::runtime_error("Unknown profile mesh role in getMeshPose");
         };
 
-        auto eulerV2rotation = [](Eigen::Vector3d rpy) -> Eigen::Quaterniond {
-            return Eigen::AngleAxisd(rpy(0), Eigen::Vector3d::UnitX()) 
-                * Eigen::AngleAxisd(rpy(1), Eigen::Vector3d::UnitY()) 
-                * Eigen::AngleAxisd(rpy(2), Eigen::Vector3d::UnitZ());
-        };
-
-        // TODO check height
-        // chassis
-        Eigen::VectorXd chassis_pose;
-        chassis_pose.resize(7);
+        const KinematicResult links = getLinkTransforms(moma_pos);
+        for (const MeshPart& part : mesh_parts)
         {
-            Eigen::Quaterniond q = euler2rotation(M_PI_2, moma_pos(2), 0.0);
-            chassis_pose << moma_pos[0], moma_pos[1], chassis_height/2.0, q.w(), q.x(), q.y(), q.z();
+            const Eigen::Matrix4d T = meshLinkTransform(links, part) * part.link_T_visual;
+            const Eigen::Quaterniond q(T.block<3, 3>(0, 0));
+            Eigen::VectorXd pose(7);
+            pose << T(0, 3), T(1, 3), T(2, 3), q.w(), q.x(), q.y(), q.z();
+            ret.push_back(pose);
         }
-        ret.push_back(chassis_pose);
-        
-        // stump
-        Eigen::Vector3d ap;
-        ap = chassis_pose.head(3);
-        Eigen::Quaterniond aq(cos(moma_pos(2)/2.0), 0.0, 0.0, sin(moma_pos(2)/2.0));
-
-        ap += aq.matrix() * relative_t;
-        aq = aq.matrix() * relative_R;
-
-        Eigen::VectorXd stump_pose;
-        stump_pose.resize(7);
-        {
-            stump_pose << ap.x() , ap.y() , ap.z() , aq.w() , aq.x() , aq.y() , aq.z();
-        }
-        ret.push_back(stump_pose);
-
-        // links
-        for (size_t i = 0; i < dof_num; i++){
-            double q = moma_pos(3+i);
-            q = std::max(joint_pos_limit_min[i], std::min(joint_pos_limit_max[i], q));
-            ap += aq.matrix() * Eigen::Vector3d(0.0, 0.0, link_length[i]);
-            aq = aq.matrix() * eulerV2rotation(joint_offset.row(i))
-                            * eulerV2rotation(joint_dof_axis.row(i)*q);
-            Eigen::VectorXd link_pose(7);
-            link_pose << ap.x() , ap.y() , ap.z() , aq.w() , aq.x() , aq.y() , aq.z();
-            ret.push_back(link_pose);
-        }
-
-        
-        Eigen::VectorXd ee_pose(ret.back());
-        ret.push_back(ee_pose);
-        
-        // ee
-        Eigen::Vector4d ee_pt = getColliPts(moma_pos).back();
-        Eigen::VectorXd ee_colli(7);
-        ee_colli.setZero();
-        ee_colli.head(3) = ee_pt.head(3);
-
-        ret.push_back(ee_colli);
 
         return ret;
     }

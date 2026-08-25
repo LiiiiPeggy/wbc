@@ -46,10 +46,22 @@ moma:
     - {xyz: [0.04, -0.03, 0.10], obstacle_radius: 0.03, self_radius: 0.025}
 
   # ################################
-  # YAML: Ranger CR10 meshes attach directly to typed URDF link transforms
+  # YAML: Ranger CR10 meshes; base Z lifts mesh onto ground (STL zmin≈-0.275)
   # ################################
   mesh_parts:
-    - {role: base, file: "package://fake_moma/meshes/ranger_cr10/ranger_meshes/ranger_base_link.STL", xyz: [0.0, 0.0, 0.0], rpy: [0.0, 0.0, 0.0]}
+    - {role: base, file: "package://fake_moma/meshes/ranger_cr10/ranger_meshes/ranger_base_link.STL", xyz: [0.0, 0.0, 0.275], rpy: [0.0, 0.0, 0.0]}
+    - {role: base, file: "package://fake_moma/meshes/ranger_cr10/ranger_meshes/box_link.STL", xyz: [0.0, 0.0, 0.365], rpy: [0.0, 0.0, 0.0]}
+    # ################################
+    # YAML: Ranger steering + wheels (URDF origins + base visual lift z=0.275)
+    # ################################
+    - {role: base, file: "package://fake_moma/meshes/ranger_cr10/ranger_meshes/fr_steering_link.STL", xyz: [0.445, -0.28, 0.3085], rpy: [0.0, 0.0, 0.0]}
+    - {role: base, file: "package://fake_moma/meshes/ranger_cr10/ranger_meshes/fr_wheel_link.STL", xyz: [0.445, -0.279, 0.0167], rpy: [1.5708, 0.0, 0.0]}
+    - {role: base, file: "package://fake_moma/meshes/ranger_cr10/ranger_meshes/fl_steering_wheel_link.STL", xyz: [0.445, 0.28, 0.3085], rpy: [0.0, 0.0, 0.0]}
+    - {role: base, file: "package://fake_moma/meshes/ranger_cr10/ranger_meshes/fl_wheel_link.STL", xyz: [0.445, 0.279, 0.01505], rpy: [1.5708, 0.0, 0.0]}
+    - {role: base, file: "package://fake_moma/meshes/ranger_cr10/ranger_meshes/rl_steering_wheel_link.STL", xyz: [-0.445, 0.28, 0.3085], rpy: [0.0, 0.0, 0.0]}
+    - {role: base, file: "package://fake_moma/meshes/ranger_cr10/ranger_meshes/rl_wheel_link.STL", xyz: [-0.445, 0.279, 0.01505], rpy: [1.5708, 0.0, 0.0]}
+    - {role: base, file: "package://fake_moma/meshes/ranger_cr10/ranger_meshes/rr_steering_wheel_link.STL", xyz: [-0.445, -0.28, 0.3085], rpy: [0.0, 0.0, 0.0]}
+    - {role: base, file: "package://fake_moma/meshes/ranger_cr10/ranger_meshes/rr_wheel_link.STL", xyz: [-0.445, -0.279, 0.0167], rpy: [1.5708, 0.0, 0.0]}
     - {role: arm_base, file: "package://fake_moma/meshes/ranger_cr10/cr10_meshes/cr10_base_link.STL", xyz: [0.0, 0.0, 0.0], rpy: [0.0, 0.0, 0.0]}
     - {role: arm_link, index: 0, file: "package://fake_moma/meshes/ranger_cr10/cr10_meshes/Link1.STL", xyz: [0.0, 0.0, 0.0], rpy: [0.0, 0.0, 0.0]}
     - {role: arm_link, index: 1, file: "package://fake_moma/meshes/ranger_cr10/cr10_meshes/Link2.STL", xyz: [0.0, 0.0, 0.0], rpy: [0.0, 0.0, 0.0]}
@@ -57,4 +69,4 @@ moma:
     - {role: arm_link, index: 3, file: "package://fake_moma/meshes/ranger_cr10/cr10_meshes/Link4.STL", xyz: [0.0, 0.0, 0.0], rpy: [0.0, 0.0, 0.0]}
     - {role: arm_link, index: 4, file: "package://fake_moma/meshes/ranger_cr10/cr10_meshes/Link5.STL", xyz: [0.0, 0.0, 0.0], rpy: [0.0, 0.0, 0.0]}
     - {role: arm_link, index: 5, file: "package://fake_moma/meshes/ranger_cr10/cr10_meshes/Link6.STL", xyz: [0.0, 0.0, 0.0], rpy: [0.0, 0.0, 0.0]}
-    - {role: ag95, file: "package://fake_moma/meshes/ranger_cr10/ag95_meshes/ag95_base_link.STL", xyz: [0.0, 0.0, 0.0], rpy: [0.0, 0.0, 0.0]}
+    - {role: ag95, file: "package://fake_moma/meshes/ranger_cr10/ag95_meshes/ag95_base_link.STL", xyz: [0.0, 0.0, 0.0], rpy: [0.0, 0.0, 0.0], scale: [0.001, 0.001, 0.001]}

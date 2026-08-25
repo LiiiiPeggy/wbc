@@ -88,7 +88,12 @@ void initParams()
 		marker.action = visualization_msgs::Marker::ADD;
 		marker.color.a = 1.0;
 		marker.color.r = marker.color.g = marker.color.b = 0.5;
-		marker.scale.x = marker.scale.y = marker.scale.z = 1.0;
+		// ################################
+		// C++: Apply YAML mesh scale (AG95 STL is millimetres)
+		// ################################
+		marker.scale.x = moma_param.mesh_parts[index].scale.x();
+		marker.scale.y = moma_param.mesh_parts[index].scale.y();
+		marker.scale.z = moma_param.mesh_parts[index].scale.z();
 		marker.mesh_resource = moma_param.mesh_parts[index].file;
 		moma_marker.markers.push_back(marker);
 	}
