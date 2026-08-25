@@ -37,6 +37,13 @@ include_directories(
 
 add_library( mm_config
     src/mm_config.cpp
+    # ################################
+    # CMake: fixed-base arm IK source begin
+    # ################################
+    src/fixed_base_arm_ik.cpp
+    # ################################
+    # CMake: fixed-base arm IK source end
+    # ################################
     )
 
 target_link_libraries( mm_config

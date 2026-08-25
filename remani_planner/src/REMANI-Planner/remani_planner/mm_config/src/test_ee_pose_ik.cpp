@@ -2,6 +2,7 @@
 // C++: EE pose and Jacobian Milestone A tests begin
 // ################################
 #include <mm_config/ee_kinematics_utils.hpp>
+#include <mm_config/fixed_base_arm_ik.hpp>
 #include <mm_config/mm_config.hpp>
 #include <ros/ros.h>
 
@@ -13,6 +14,9 @@
 #include <vector>
 
 using remani_planner::MMConfig;
+using remani_planner::FixedBaseArmIk;
+using remani_planner::FixedBaseArmIkParams;
+using remani_planner::FixedBaseArmIkResult;
 using remani_planner::poseError;
 using remani_planner::rotationLog;
 
@@ -272,6 +276,83 @@ int main(int argc, char **argv)
              offset_max_abs, offset_max_rel);
     printResult("non-zero TCP pose/linear change and angular FD",
                 tcp_smoke_pass, all_pass);
+
+    // ################################
+    // C++: fixed-base 6-DoF arm IK tests begin
+    // ################################
+    nh.setParam("mm/ee_tcp_xyz_rpy", std::vector<double>{0, 0, 0, 0, 0, 0});
+    MMConfig::Ptr cfg_ik(new MMConfig());
+    cfg_ik->setParam(nh);
+    FixedBaseArmIk arm_ik(cfg_ik);
+
+    FixedBaseArmIkParams arm_p;
+    arm_p.pos_tol = 1e-4;
+    arm_p.rot_tol_rad = 1e-3;
+    arm_p.max_iters = 100;
+    arm_p.task_rot_weight = 0.5;
+    arm_p.joint_weight = 1.0;
+    arm_p.lambda_init = 1e-3;
+    arm_p.lambda_min = 1e-6;
+    arm_p.lambda_max = 1e3;
+    arm_p.lambda_retry_max = 8;
+    arm_p.step_tol = 1e-9;
+    arm_p.stagnation_iters = 8;
+
+    const Eigen::Vector3d ik_car(0.25, -0.15, 0.2);
+    Eigen::VectorXd q_goal(6);
+    q_goal << 0.35, -0.65, 0.95, -0.45, 0.55, -0.25;
+    Eigen::VectorXd q_seed = q_goal;
+    q_seed << q_goal(0) + 0.08, q_goal(1) - 0.06,
+              q_goal(2) + 0.05, q_goal(3) - 0.07,
+              q_goal(4) + 0.04, q_goal(5) - 0.05;
+    for(int i = 0; i < 6; ++i){
+        q_seed(i) = std::max(q_min(i), std::min(q_max(i), q_seed(i)));
+    }
+
+    const Eigen::Matrix4d T_goal = cfg_ik->getEePose(ik_car, q_goal);
+    const FixedBaseArmIkResult ik_result = arm_ik.solve(
+        ik_car, T_goal, q_seed, arm_p,
+        ros::WallTime::now() + ros::WallDuration(1.0));
+    Eigen::Matrix<double, 6, 1> ik_pose_error;
+    poseError(cfg_ik->getEePose(ik_car, ik_result.q), T_goal, ik_pose_error);
+    bool ik_limits_pass = ik_result.q.size() == 6 && ik_result.q.allFinite();
+    for(int i = 0; i < ik_result.q.size() && ik_limits_pass; ++i){
+        ik_limits_pass = ik_result.q(i) >= q_min(i)
+                      && ik_result.q(i) <= q_max(i);
+    }
+    const bool ik_success_pass = ik_result.success
+        && ik_limits_pass
+        && std::isfinite(ik_result.pos_err)
+        && std::isfinite(ik_result.rot_err_rad)
+        && ik_pose_error.head<3>().norm() <= arm_p.pos_tol
+        && ik_pose_error.tail<3>().norm() <= arm_p.rot_tol_rad;
+    printResult("fixed-base arm IK reaches forward-FK goal",
+                ik_success_pass, all_pass);
+
+    Eigen::Matrix4d T_unreachable = Eigen::Matrix4d::Identity();
+    T_unreachable.block<3, 1>(0, 3) = Eigen::Vector3d(100.0, 100.0, 100.0);
+    const ros::WallTime failure_start = ros::WallTime::now();
+    const ros::WallTime failure_deadline =
+        failure_start + ros::WallDuration(0.25);
+    const FixedBaseArmIkResult failure_result = arm_ik.solve(
+        ik_car, T_unreachable, q_seed, arm_p, failure_deadline);
+    bool failure_limits_pass =
+        failure_result.q.size() == 6 && failure_result.q.allFinite();
+    for(int i = 0; i < failure_result.q.size() && failure_limits_pass; ++i){
+        failure_limits_pass = failure_result.q(i) >= q_min(i)
+                           && failure_result.q(i) <= q_max(i);
+    }
+    const bool ik_failure_pass = !failure_result.success
+        && !failure_result.fail_reason.empty()
+        && failure_limits_pass
+        && std::isfinite(failure_result.pos_err)
+        && std::isfinite(failure_result.rot_err_rad)
+        && ros::WallTime::now() <= failure_deadline + ros::WallDuration(0.1);
+    printResult("fixed-base arm IK rejects unreachable position",
+                ik_failure_pass, all_pass);
+    // ################################
+    // C++: fixed-base 6-DoF arm IK tests end
+    // ################################
 
     std::cout << (all_pass ? "ALL TESTS PASSED" : "TESTS FAILED") << std::endl;
     return all_pass ? 0 : 1;
