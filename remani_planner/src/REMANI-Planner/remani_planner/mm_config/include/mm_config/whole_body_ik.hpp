@@ -43,6 +43,16 @@ public:
     // C++: Stage B public for Milestone C tests end
     // ################################
 
+    // ################################
+    // C++: Stage C base candidate generator (Task 10) begin
+    // ################################
+    void generateFilteredBaseCandidates(const Eigen::Matrix4d &T_goal,
+                                        const Eigen::Vector3d &car0,
+                                        std::vector<Eigen::Vector3d> &out_sorted_bases);
+    // ################################
+    // C++: Stage C base candidate generator (Task 10) end
+    // ################################
+
 private:
     MMConfig::Ptr cfg_;
     GridMap::Ptr map_;

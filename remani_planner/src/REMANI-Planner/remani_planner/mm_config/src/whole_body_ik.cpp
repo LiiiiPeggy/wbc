@@ -664,6 +664,87 @@ bool WholeBodyIkSolver::runStageC(const Eigen::Matrix<double, 9, 1> &xi0,
     return false;
 }
 
+// ################################
+// C++: Stage C base candidate generation + cheap filter begin
+// ################################
+void WholeBodyIkSolver::generateFilteredBaseCandidates(
+    const Eigen::Matrix4d &T_goal,
+    const Eigen::Vector3d &car0,
+    std::vector<Eigen::Vector3d> &out_sorted_bases)
+{
+    out_sorted_bases.clear();
+    if(!cfg_ || !map_ || !T_goal.allFinite() || !car0.allFinite()){
+        return;
+    }
+
+    const Eigen::Vector3d p_ee = T_goal.block<3, 1>(0, 3);
+    const double two_pi = 2.0 * 3.14159265358979323846;
+    std::vector<Eigen::Vector3d> raw;
+    raw.reserve(1 + params_.c_radii.size() * static_cast<size_t>(
+        std::max(1, params_.c_yaw_bins)) * params_.c_yaw_offsets_rad.size());
+
+    // Current base first in generation (priority candidate).
+    raw.push_back(Eigen::Vector3d(car0.x(), car0.y(), wrapToPi(car0.z())));
+
+    for(double r : params_.c_radii){
+        if(!(std::isfinite(r) && r > 0.0)){
+            continue;
+        }
+        for(int k = 0; k < params_.c_yaw_bins; ++k){
+            const double theta =
+                (params_.c_yaw_bins > 0)
+                    ? (k * two_pi / static_cast<double>(params_.c_yaw_bins))
+                    : 0.0;
+            for(double yaw_off : params_.c_yaw_offsets_rad){
+                Eigen::Vector3d cand;
+                cand(0) = p_ee.x() - r * std::cos(theta);
+                cand(1) = p_ee.y() - r * std::sin(theta);
+                cand(2) = wrapToPi(theta + yaw_off);
+                raw.push_back(cand);
+            }
+        }
+    }
+
+    struct ScoredBase {
+        Eigen::Vector3d car;
+        double score;
+        bool is_current;
+    };
+    std::vector<ScoredBase> filtered;
+    filtered.reserve(raw.size());
+    for(size_t i = 0; i < raw.size(); ++i){
+        const Eigen::Vector3d &car = raw[i];
+        if(!map_->isInMap(Eigen::Vector2d(car.x(), car.y()))){
+            continue;
+        }
+        double min_dist = 0.0;
+        if(cfg_->checkCarObsCollision(car, /*precise=*/true, /*safe=*/true, min_dist)){
+            continue;
+        }
+        const double dxy = std::hypot(car.x() - car0.x(), car.y() - car0.y());
+        const double dyaw = std::abs(wrapToPi(car.z() - car0.z()));
+        const double score =
+            params_.rank_w_xy * dxy + params_.rank_w_yaw * dyaw;
+        filtered.push_back(ScoredBase{car, score, i == 0});
+    }
+
+    std::sort(filtered.begin(), filtered.end(),
+              [](const ScoredBase &a, const ScoredBase &b) {
+                  if(a.is_current != b.is_current){
+                      return a.is_current;
+                  }
+                  return a.score < b.score;
+              });
+
+    out_sorted_bases.reserve(filtered.size());
+    for(const auto &item : filtered){
+        out_sorted_bases.push_back(item.car);
+    }
+}
+// ################################
+// C++: Stage C base candidate generation + cheap filter end
+// ################################
+
 } // namespace remani_planner
 // ################################
 // C++: whole-body IK solver implementation end

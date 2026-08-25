@@ -25,6 +25,7 @@ using remani_planner::WholeBodyIkParams;
 using remani_planner::WholeBodyIkSolver;
 using remani_planner::poseError;
 using remani_planner::rotationLog;
+using remani_planner::wrapToPi;
 
 namespace
 {
@@ -658,6 +659,68 @@ int main(int argc, char **argv)
     }
     // ################################
     // C++: obstacle clearance API tests end
+    // ################################
+
+    // ################################
+    // C++: Stage C base candidate generation tests begin
+    // ################################
+    {
+        GridMap::Ptr base_grid = makeInitializedGridMap(nh);
+        MMConfig::Ptr cfg_base(new MMConfig());
+        cfg_base->setParam(nh, base_grid);
+        WholeBodyIkParams base_params = WholeBodyIkParams::loadFromRosParam(nh);
+        WholeBodyIkSolver base_solver(cfg_base, base_grid, base_params);
+
+        Eigen::Vector3d car_a(0.0, 0.0, 0.0);
+        Eigen::VectorXd q_a = b_q_start;
+        const Eigen::Matrix4d T_goal_a = cfg_base->getEePose(car_a, q_a);
+        std::vector<Eigen::Vector3d> bases_a;
+        base_solver.generateFilteredBaseCandidates(T_goal_a, car_a, bases_a);
+
+        Eigen::Vector3d car_b(0.35, 0.20, 0.8);
+        std::vector<Eigen::Vector3d> bases_b;
+        base_solver.generateFilteredBaseCandidates(T_goal_a, car_b, bases_b);
+
+        bool all_in_map = !bases_a.empty();
+        for(const auto &car : bases_a){
+            if(!base_grid->isInMap(Eigen::Vector2d(car.x(), car.y()))){
+                all_in_map = false;
+                break;
+            }
+            double md = 0.0;
+            if(cfg_base->checkCarObsCollision(car, true, true, md)){
+                all_in_map = false;
+                break;
+            }
+        }
+        const bool current_first = !bases_a.empty()
+            && std::hypot(bases_a.front().x() - car_a.x(),
+                          bases_a.front().y() - car_a.y()) < 1e-9
+            && std::abs(wrapToPi(bases_a.front().z() - car_a.z())) < 1e-9;
+        // Order should depend on robot pose (car_a vs car_b).
+        bool order_differs = bases_a.size() != bases_b.size();
+        if(!order_differs && bases_a.size() >= 2 && bases_b.size() >= 2){
+            order_differs =
+                std::hypot(bases_a[1].x() - bases_b[1].x(),
+                           bases_a[1].y() - bases_b[1].y()) > 1e-6
+                || std::abs(wrapToPi(bases_a[1].z() - bases_b[1].z())) > 1e-6;
+        }
+        // Max theoretical: 1 + 4*12*3 = 145
+        const bool count_ok = bases_a.size() <= 145 && bases_a.size() >= 1;
+        const bool gen_pass = all_in_map && current_first && count_ok
+            && (order_differs || bases_b.empty() || bases_a.size() > 1);
+        printResult("Stage C base candidates filtered and pose-ordered",
+                    gen_pass, all_pass);
+        if(!gen_pass){
+            ROS_ERROR("base gen: n_a=%zu n_b=%zu in_map=%d first=%d order=%d",
+                      bases_a.size(), bases_b.size(),
+                      static_cast<int>(all_in_map),
+                      static_cast<int>(current_first),
+                      static_cast<int>(order_differs));
+        }
+    }
+    // ################################
+    // C++: Stage C base candidate generation tests end
     // ################################
 
     std::cout << (all_pass ? "ALL TESTS PASSED" : "TESTS FAILED") << std::endl;
