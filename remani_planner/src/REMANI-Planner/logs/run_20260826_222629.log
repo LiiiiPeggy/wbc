@@ -1,0 +1,1259 @@
+... logging to /home/gzz/.ros/log/f1706870-a077-11f1-9e52-fdf66165d635/roslaunch-GZZ-771863.log
+Checking log directory for disk usage. This may take a while.
+Press Ctrl-C to interrupt
+Done checking log file disk usage. Usage is <1GB.
+]2;/home/gzz/Codes/wbc/remani_planner/src/REMANI-Planner/remani_planner/plan_manage/launch/remani_sim.launch
+[1mstarted roslaunch server http://GZZ:33395/[0m
+
+SUMMARY
+========
+
+PARAMETERS
+ * /fake_mm/fake_mm/pub_urdf_joint_states: True
+ * /fake_mm/fsm/init_gripper_close: False
+ * /fake_mm/fsm/init_state: [-5.0, 0.0, 0.0, ...
+ * /fake_mm/fsm/init_yaw: 0.0
+ * /fake_mm/fsm/waypoint0: [0.0, 0.0, 0.0, 0...
+ * /fake_mm/fsm/waypoint0_gripper_close: True
+ * /fake_mm/fsm/waypoint0_yaw: 0.0
+ * /fake_mm/fsm/waypoint1: [5.0, 0.0, 0.0, 0...
+ * /fake_mm/fsm/waypoint1_gripper_close: False
+ * /fake_mm/fsm/waypoint1_yaw: 0.0
+ * /fake_mm/fsm/waypoint_num: 2
+ * /fake_mm/map/map_type: 0
+ * /fake_mm/mm/base_mani_fixed_joint_xyz_ypr: [0.2462, 0.0, 0.1...
+ * /fake_mm/mm/ee_tcp_xyz_rpy: [0.0, 0.0, 0.0, 0...
+ * /fake_mm/mm/manipulator_config: [0.1765, 0.607, 0...
+ * /fake_mm/mm/manipulator_dof: 6
+ * /fake_mm/mm/manipulator_max_acc: 1.57
+ * /fake_mm/mm/manipulator_max_pos: [3.0, 1.5, 2.8, 3...
+ * /fake_mm/mm/manipulator_max_vel: 0.8
+ * /fake_mm/mm/manipulator_min_pos: [-3.0, -1.5, -2.8...
+ * /fake_mm/mm/manipulator_self_thickness: 0.045
+ * /fake_mm/mm/manipulator_thickness: 0.1
+ * /fake_mm/mm/manipulator_type: cr10
+ * /fake_mm/mm/mobile_base_check_radius: 0.1
+ * /fake_mm/mm/mobile_base_dof: 2
+ * /fake_mm/mm/mobile_base_height: 0.15
+ * /fake_mm/mm/mobile_base_length: 1.1
+ * /fake_mm/mm/mobile_base_max_wheel_alpha: 8.0
+ * /fake_mm/mm/mobile_base_max_wheel_omega: 4.0
+ * /fake_mm/mm/mobile_base_non_singul_vel: 0.05
+ * /fake_mm/mm/mobile_base_wheel_base: 0.56
+ * /fake_mm/mm/mobile_base_wheel_radius: 0.125
+ * /fake_mm/mm/mobile_base_width: 0.9
+ * /fsm/target_type: 1
+ * /map_generator/bridges: [[0.0, 0.0, 1.0, ...
+ * /map_generator/clear_centers: [[-5.0, 0.0], [-2...
+ * /map_generator/clear_radius: 3.0
+ * /map_generator/fsm/init_gripper_close: False
+ * /map_generator/fsm/init_state: [-5.0, 0.0, 0.0, ...
+ * /map_generator/fsm/init_yaw: 0.0
+ * /map_generator/fsm/waypoint0: [0.0, 0.0, 0.0, 0...
+ * /map_generator/fsm/waypoint0_gripper_close: True
+ * /map_generator/fsm/waypoint0_yaw: 0.0
+ * /map_generator/fsm/waypoint1: [5.0, 0.0, 0.0, 0...
+ * /map_generator/fsm/waypoint1_gripper_close: False
+ * /map_generator/fsm/waypoint1_yaw: 0.0
+ * /map_generator/fsm/waypoint_num: 2
+ * /map_generator/map/float_obs_num: 2
+ * /map_generator/map/map_type: 0
+ * /map_generator/map/obs_num: 4
+ * /map_generator/map/resolution: 0.05
+ * /map_generator/map/seed: 30
+ * /map_generator/map/x_size: 16
+ * /map_generator/map/y_size: 12
+ * /map_generator/map/z_size: 3
+ * /map_generator/min_distance: 2.5
+ * /map_generator/mm/base_mani_fixed_joint_xyz_ypr: [0.2462, 0.0, 0.1...
+ * /map_generator/mm/ee_tcp_xyz_rpy: [0.0, 0.0, 0.0, 0...
+ * /map_generator/mm/manipulator_config: [0.1765, 0.607, 0...
+ * /map_generator/mm/manipulator_dof: 6
+ * /map_generator/mm/manipulator_max_acc: 1.57
+ * /map_generator/mm/manipulator_max_pos: [3.0, 1.5, 2.8, 3...
+ * /map_generator/mm/manipulator_max_vel: 0.8
+ * /map_generator/mm/manipulator_min_pos: [-3.0, -1.5, -2.8...
+ * /map_generator/mm/manipulator_self_thickness: 0.045
+ * /map_generator/mm/manipulator_thickness: 0.1
+ * /map_generator/mm/manipulator_type: cr10
+ * /map_generator/mm/mobile_base_check_radius: 0.1
+ * /map_generator/mm/mobile_base_dof: 2
+ * /map_generator/mm/mobile_base_height: 0.15
+ * /map_generator/mm/mobile_base_length: 1.1
+ * /map_generator/mm/mobile_base_max_wheel_alpha: 8.0
+ * /map_generator/mm/mobile_base_max_wheel_omega: 4.0
+ * /map_generator/mm/mobile_base_non_singul_vel: 0.05
+ * /map_generator/mm/mobile_base_wheel_base: 0.56
+ * /map_generator/mm/mobile_base_wheel_radius: 0.125
+ * /map_generator/mm/mobile_base_width: 0.9
+ * /map_generator/pub_rate: 1.0
+ * /mm_controller_node/fsm/ee_current_pose_topic: /ee_current_pose
+ * /mm_controller_node/fsm/ee_goal_topic: /ee_goal
+ * /mm_controller_node/fsm/ee_ik_b_accept_clearance: 0.2
+ * /mm_controller_node/fsm/ee_ik_b_accept_joint_margin: 0.15
+ * /mm_controller_node/fsm/ee_ik_b_accept_max_dq: 0.5
+ * /mm_controller_node/fsm/ee_ik_b_accept_max_xy: 0.15
+ * /mm_controller_node/fsm/ee_ik_b_accept_max_yaw_deg: 10.0
+ * /mm_controller_node/fsm/ee_ik_b_max_iters: 60
+ * /mm_controller_node/fsm/ee_ik_b_max_ms: 40.0
+ * /mm_controller_node/fsm/ee_ik_b_weight_joint: 1.0
+ * /mm_controller_node/fsm/ee_ik_b_weight_xy: 5.0
+ * /mm_controller_node/fsm/ee_ik_b_weight_yaw: 2.0
+ * /mm_controller_node/fsm/ee_ik_c_arm_iters: 40
+ * /mm_controller_node/fsm/ee_ik_c_arm_max_ms: 5.0
+ * /mm_controller_node/fsm/ee_ik_c_max_ms: 150.0
+ * /mm_controller_node/fsm/ee_ik_c_radii: [0.5, 0.75, 1.0, ...
+ * /mm_controller_node/fsm/ee_ik_c_yaw_bins: 12
+ * /mm_controller_node/fsm/ee_ik_c_yaw_offsets_deg: [0.0, -15.0, 15.0]
+ * /mm_controller_node/fsm/ee_ik_gap_ref: 0.2
+ * /mm_controller_node/fsm/ee_ik_joint_margin_req: 0.087
+ * /mm_controller_node/fsm/ee_ik_local_xy: 0.4
+ * /mm_controller_node/fsm/ee_ik_local_yaw_deg: 20.0
+ * /mm_controller_node/fsm/ee_ik_pos_tol: 0.01
+ * /mm_controller_node/fsm/ee_ik_rot_tol_deg: 2.0
+ * /mm_controller_node/fsm/ee_ik_w_gap: 2.0
+ * /mm_controller_node/fsm/ee_ik_w_limit: 1.0
+ * /mm_controller_node/fsm/ee_ik_w_q: 0.1
+ * /mm_controller_node/fsm/ee_ik_w_xy: 1.0
+ * /mm_controller_node/fsm/ee_ik_w_yaw: 0.3
+ * /mm_controller_node/fsm/ee_reach_pos_tol: 0.02
+ * /mm_controller_node/fsm/ee_reach_rot_tol_deg: 4.0
+ * /mm_controller_node/fsm/emergency_time: 1.5
+ * /mm_controller_node/fsm/global_plan: True
+ * /mm_controller_node/fsm/init_gripper_close: False
+ * /mm_controller_node/fsm/init_state: [-5.0, 0.0, 0.0, ...
+ * /mm_controller_node/fsm/init_yaw: 0.0
+ * /mm_controller_node/fsm/max_continuous_plan_failures: 20
+ * /mm_controller_node/fsm/planning_horizon: 5.0
+ * /mm_controller_node/fsm/replan_trajectory_time: 1.7
+ * /mm_controller_node/fsm/target_type: 2
+ * /mm_controller_node/fsm/thresh_replan_time: 2.5
+ * /mm_controller_node/fsm/time_for_gripper: 0.05
+ * /mm_controller_node/fsm/waypoint0: [0.0, 0.0, 0.0, 0...
+ * /mm_controller_node/fsm/waypoint0_gripper_close: True
+ * /mm_controller_node/fsm/waypoint0_yaw: 0.0
+ * /mm_controller_node/fsm/waypoint1: [5.0, 0.0, 0.0, 0...
+ * /mm_controller_node/fsm/waypoint1_gripper_close: False
+ * /mm_controller_node/fsm/waypoint1_yaw: 0.0
+ * /mm_controller_node/fsm/waypoint_num: 2
+ * /mm_controller_node/grid_map/use_global_map: False
+ * /mm_controller_node/grid_map/use_load_map: True
+ * /mm_controller_node/map/map_type: 0
+ * /mm_controller_node/mm/base_mani_fixed_joint_xyz_ypr: [0.2462, 0.0, 0.1...
+ * /mm_controller_node/mm/ee_tcp_xyz_rpy: [0.0, 0.0, 0.0, 0...
+ * /mm_controller_node/mm/manipulator_config: [0.1765, 0.607, 0...
+ * /mm_controller_node/mm/manipulator_dof: 6
+ * /mm_controller_node/mm/manipulator_max_acc: 1.57
+ * /mm_controller_node/mm/manipulator_max_pos: [3.0, 1.5, 2.8, 3...
+ * /mm_controller_node/mm/manipulator_max_vel: 0.8
+ * /mm_controller_node/mm/manipulator_min_pos: [-3.0, -1.5, -2.8...
+ * /mm_controller_node/mm/manipulator_self_thickness: 0.045
+ * /mm_controller_node/mm/manipulator_thickness: 0.1
+ * /mm_controller_node/mm/manipulator_type: cr10
+ * /mm_controller_node/mm/mobile_base_check_radius: 0.1
+ * /mm_controller_node/mm/mobile_base_dof: 2
+ * /mm_controller_node/mm/mobile_base_height: 0.15
+ * /mm_controller_node/mm/mobile_base_length: 1.1
+ * /mm_controller_node/mm/mobile_base_max_wheel_alpha: 8.0
+ * /mm_controller_node/mm/mobile_base_max_wheel_omega: 4.0
+ * /mm_controller_node/mm/mobile_base_non_singul_vel: 0.05
+ * /mm_controller_node/mm/mobile_base_wheel_base: 0.56
+ * /mm_controller_node/mm/mobile_base_wheel_radius: 0.125
+ * /mm_controller_node/mm/mobile_base_width: 0.9
+ * /mm_controller_node/optimization/constrain_points_perPiece: 16
+ * /mm_controller_node/optimization/dense_sample_resolution: 16
+ * /mm_controller_node/optimization/enable_dynamic_time_scaling: True
+ * /mm_controller_node/optimization/ground_safe_dis: 0.03
+ * /mm_controller_node/optimization/ground_safe_margin: 0.03
+ * /mm_controller_node/optimization/max_time_scale: 2.0
+ * /mm_controller_node/optimization/max_time_scaling_attempts: 2
+ * /mm_controller_node/optimization/mobile_base_opt_gear: True
+ * /mm_controller_node/optimization/safe_margin: 0.1
+ * /mm_controller_node/optimization/safe_margin_mani: 0.15
+ * /mm_controller_node/optimization/self_safe_margin: 0.1
+ * /mm_controller_node/optimization/weight_base_feasibility: 100.0
+ * /mm_controller_node/optimization/weight_manipulator_feasibility: 100.0
+ * /mm_controller_node/optimization/weight_manipulator_obstacle: 80000.0
+ * /mm_controller_node/optimization/weight_manipulator_self: 1000.0
+ * /mm_controller_node/optimization/weight_obstacle: 50000.0
+ * /mm_controller_node/optimization/weight_time: 1.0
+ * /mm_controller_node/optimization/wheel_limit_ratio: 0.95
+ * /mm_controller_node/search/allocate_num: 100000
+ * /mm_controller_node/search/check_num: 16
+ * /mm_controller_node/search/curvatureDisCoe: 0.4
+ * /mm_controller_node/search/dist_resolution: 0.6
+ * /mm_controller_node/search/goal_rate: 0.4
+ * /mm_controller_node/search/lambda_heu: 1
+ * /mm_controller_node/search/max_arc: 0.4
+ * /mm_controller_node/search/max_loop_num: 5000
+ * /mm_controller_node/search/max_mani_search_time: 0.3
+ * /mm_controller_node/search/max_sample_time: 1.5
+ * /mm_controller_node/search/max_seach_time: 3.0
+ * /mm_controller_node/search/min_turning_radius: 0.2
+ * /mm_controller_node/search/oneshot_check_len: 0.02
+ * /mm_controller_node/search/oneshot_range: 1.0
+ * /mm_controller_node/search/sample_time: 0.1
+ * /mm_controller_node/search/traj_back_penalty: 3.0
+ * /mm_controller_node/search/traj_forward_penalty: 1.0
+ * /mm_controller_node/search/traj_gear_switch_penalty: 10.0
+ * /mm_controller_node/search/traj_steer_change_penalty: 2.0
+ * /mm_controller_node/search/traj_steer_penalty: 5.0
+ * /mm_controller_node/search/try_astar_times: 5
+ * /mm_controller_node/search/yaw_resolution: 0.35
+ * /mm_controller_node/visualization/enable_debug_vis: False
+ * /mm_controller_node/visualization/enable_traj_mesh_vis: True
+ * /mm_controller_node/visualization/his_traj_max_points: 500
+ * /mm_controller_node/visualization/mesh_vis_stride: 3
+ * /mm_controller_node/visualization/tf_rate_hz: 20.0
+ * /mm_controller_node/visualization/vis_rate_hz: 15.0
+ * /model_vis/fsm/ee_current_pose_topic: /ee_current_pose
+ * /model_vis/fsm/ee_goal_topic: /ee_goal
+ * /model_vis/fsm/ee_ik_b_accept_clearance: 0.2
+ * /model_vis/fsm/ee_ik_b_accept_joint_margin: 0.15
+ * /model_vis/fsm/ee_ik_b_accept_max_dq: 0.5
+ * /model_vis/fsm/ee_ik_b_accept_max_xy: 0.15
+ * /model_vis/fsm/ee_ik_b_accept_max_yaw_deg: 10.0
+ * /model_vis/fsm/ee_ik_b_max_iters: 60
+ * /model_vis/fsm/ee_ik_b_max_ms: 40.0
+ * /model_vis/fsm/ee_ik_b_weight_joint: 1.0
+ * /model_vis/fsm/ee_ik_b_weight_xy: 5.0
+ * /model_vis/fsm/ee_ik_b_weight_yaw: 2.0
+ * /model_vis/fsm/ee_ik_c_arm_iters: 40
+ * /model_vis/fsm/ee_ik_c_arm_max_ms: 5.0
+ * /model_vis/fsm/ee_ik_c_max_ms: 150.0
+ * /model_vis/fsm/ee_ik_c_radii: [0.5, 0.75, 1.0, ...
+ * /model_vis/fsm/ee_ik_c_yaw_bins: 12
+ * /model_vis/fsm/ee_ik_c_yaw_offsets_deg: [0.0, -15.0, 15.0]
+ * /model_vis/fsm/ee_ik_gap_ref: 0.2
+ * /model_vis/fsm/ee_ik_joint_margin_req: 0.087
+ * /model_vis/fsm/ee_ik_local_xy: 0.4
+ * /model_vis/fsm/ee_ik_local_yaw_deg: 20.0
+ * /model_vis/fsm/ee_ik_pos_tol: 0.01
+ * /model_vis/fsm/ee_ik_rot_tol_deg: 2.0
+ * /model_vis/fsm/ee_ik_w_gap: 2.0
+ * /model_vis/fsm/ee_ik_w_limit: 1.0
+ * /model_vis/fsm/ee_ik_w_q: 0.1
+ * /model_vis/fsm/ee_ik_w_xy: 1.0
+ * /model_vis/fsm/ee_ik_w_yaw: 0.3
+ * /model_vis/fsm/ee_reach_pos_tol: 0.02
+ * /model_vis/fsm/ee_reach_rot_tol_deg: 4.0
+ * /model_vis/fsm/emergency_time: 1.5
+ * /model_vis/fsm/global_plan: True
+ * /model_vis/fsm/init_gripper_close: False
+ * /model_vis/fsm/init_state: [-5.0, 0.0, 0.0, ...
+ * /model_vis/fsm/init_yaw: 0.0
+ * /model_vis/fsm/max_continuous_plan_failures: 20
+ * /model_vis/fsm/planning_horizon: 5.0
+ * /model_vis/fsm/replan_trajectory_time: 1.7
+ * /model_vis/fsm/target_type: 2
+ * /model_vis/fsm/thresh_replan_time: 2.5
+ * /model_vis/fsm/time_for_gripper: 0.05
+ * /model_vis/fsm/waypoint0: [0.0, 0.0, 0.0, 0...
+ * /model_vis/fsm/waypoint0_gripper_close: True
+ * /model_vis/fsm/waypoint0_yaw: 0.0
+ * /model_vis/fsm/waypoint1: [5.0, 0.0, 0.0, 0...
+ * /model_vis/fsm/waypoint1_gripper_close: False
+ * /model_vis/fsm/waypoint1_yaw: 0.0
+ * /model_vis/fsm/waypoint_num: 2
+ * /model_vis/grid_map/use_global_map: False
+ * /model_vis/grid_map/use_load_map: True
+ * /model_vis/map/map_type: 0
+ * /model_vis/mm/base_mani_fixed_joint_xyz_ypr: [0.2462, 0.0, 0.1...
+ * /model_vis/mm/ee_tcp_xyz_rpy: [0.0, 0.0, 0.0, 0...
+ * /model_vis/mm/manipulator_config: [0.1765, 0.607, 0...
+ * /model_vis/mm/manipulator_dof: 6
+ * /model_vis/mm/manipulator_max_acc: 1.57
+ * /model_vis/mm/manipulator_max_pos: [3.0, 1.5, 2.8, 3...
+ * /model_vis/mm/manipulator_max_vel: 0.8
+ * /model_vis/mm/manipulator_min_pos: [-3.0, -1.5, -2.8...
+ * /model_vis/mm/manipulator_self_thickness: 0.045
+ * /model_vis/mm/manipulator_thickness: 0.1
+ * /model_vis/mm/manipulator_type: cr10
+ * /model_vis/mm/mobile_base_check_radius: 0.1
+ * /model_vis/mm/mobile_base_dof: 2
+ * /model_vis/mm/mobile_base_height: 0.15
+ * /model_vis/mm/mobile_base_length: 1.1
+ * /model_vis/mm/mobile_base_max_wheel_alpha: 8.0
+ * /model_vis/mm/mobile_base_max_wheel_omega: 4.0
+ * /model_vis/mm/mobile_base_non_singul_vel: 0.05
+ * /model_vis/mm/mobile_base_wheel_base: 0.56
+ * /model_vis/mm/mobile_base_wheel_radius: 0.125
+ * /model_vis/mm/mobile_base_width: 0.9
+ * /model_vis/optimization/constrain_points_perPiece: 16
+ * /model_vis/optimization/dense_sample_resolution: 16
+ * /model_vis/optimization/enable_dynamic_time_scaling: True
+ * /model_vis/optimization/ground_safe_dis: 0.03
+ * /model_vis/optimization/ground_safe_margin: 0.03
+ * /model_vis/optimization/max_time_scale: 2.0
+ * /model_vis/optimization/max_time_scaling_attempts: 2
+ * /model_vis/optimization/mobile_base_opt_gear: True
+ * /model_vis/optimization/safe_margin: 0.1
+ * /model_vis/optimization/safe_margin_mani: 0.15
+ * /model_vis/optimization/self_safe_margin: 0.1
+ * /model_vis/optimization/weight_base_feasibility: 100.0
+ * /model_vis/optimization/weight_manipulator_feasibility: 100.0
+ * /model_vis/optimization/weight_manipulator_obstacle: 80000.0
+ * /model_vis/optimization/weight_manipulator_self: 1000.0
+ * /model_vis/optimization/weight_obstacle: 50000.0
+ * /model_vis/optimization/weight_time: 1.0
+ * /model_vis/optimization/wheel_limit_ratio: 0.95
+ * /model_vis/search/allocate_num: 100000
+ * /model_vis/search/check_num: 16
+ * /model_vis/search/curvatureDisCoe: 0.4
+ * /model_vis/search/dist_resolution: 0.6
+ * /model_vis/search/goal_rate: 0.4
+ * /model_vis/search/lambda_heu: 1
+ * /model_vis/search/max_arc: 0.4
+ * /model_vis/search/max_loop_num: 5000
+ * /model_vis/search/max_mani_search_time: 0.3
+ * /model_vis/search/max_sample_time: 1.5
+ * /model_vis/search/max_seach_time: 3.0
+ * /model_vis/search/min_turning_radius: 0.2
+ * /model_vis/search/oneshot_check_len: 0.02
+ * /model_vis/search/oneshot_range: 1.0
+ * /model_vis/search/sample_time: 0.1
+ * /model_vis/search/traj_back_penalty: 3.0
+ * /model_vis/search/traj_forward_penalty: 1.0
+ * /model_vis/search/traj_gear_switch_penalty: 10.0
+ * /model_vis/search/traj_steer_change_penalty: 2.0
+ * /model_vis/search/traj_steer_penalty: 5.0
+ * /model_vis/search/try_astar_times: 5
+ * /model_vis/search/yaw_resolution: 0.35
+ * /model_vis/visualization/enable_debug_vis: False
+ * /model_vis/visualization/enable_traj_mesh_vis: True
+ * /model_vis/visualization/his_traj_max_points: 500
+ * /model_vis/visualization/mesh_vis_stride: 3
+ * /model_vis/visualization/tf_rate_hz: 20.0
+ * /model_vis/visualization/vis_rate_hz: 15.0
+ * /remani_planner_node/fsm/ee_current_pose_topic: /ee_current_pose
+ * /remani_planner_node/fsm/ee_goal_topic: /ee_goal
+ * /remani_planner_node/fsm/ee_ik_b_accept_clearance: 0.2
+ * /remani_planner_node/fsm/ee_ik_b_accept_joint_margin: 0.15
+ * /remani_planner_node/fsm/ee_ik_b_accept_max_dq: 0.5
+ * /remani_planner_node/fsm/ee_ik_b_accept_max_xy: 0.15
+ * /remani_planner_node/fsm/ee_ik_b_accept_max_yaw_deg: 10.0
+ * /remani_planner_node/fsm/ee_ik_b_max_iters: 60
+ * /remani_planner_node/fsm/ee_ik_b_max_ms: 40.0
+ * /remani_planner_node/fsm/ee_ik_b_weight_joint: 1.0
+ * /remani_planner_node/fsm/ee_ik_b_weight_xy: 5.0
+ * /remani_planner_node/fsm/ee_ik_b_weight_yaw: 2.0
+ * /remani_planner_node/fsm/ee_ik_c_arm_iters: 40
+ * /remani_planner_node/fsm/ee_ik_c_arm_max_ms: 5.0
+ * /remani_planner_node/fsm/ee_ik_c_max_ms: 150.0
+ * /remani_planner_node/fsm/ee_ik_c_radii: [0.5, 0.75, 1.0, ...
+ * /remani_planner_node/fsm/ee_ik_c_yaw_bins: 12
+ * /remani_planner_node/fsm/ee_ik_c_yaw_offsets_deg: [0.0, -15.0, 15.0]
+ * /remani_planner_node/fsm/ee_ik_gap_ref: 0.2
+ * /remani_planner_node/fsm/ee_ik_joint_margin_req: 0.087
+ * /remani_planner_node/fsm/ee_ik_local_xy: 0.4
+ * /remani_planner_node/fsm/ee_ik_local_yaw_deg: 20.0
+ * /remani_planner_node/fsm/ee_ik_pos_tol: 0.01
+ * /remani_planner_node/fsm/ee_ik_rot_tol_deg: 2.0
+ * /remani_planner_node/fsm/ee_ik_w_gap: 2.0
+ * /remani_planner_node/fsm/ee_ik_w_limit: 1.0
+ * /remani_planner_node/fsm/ee_ik_w_q: 0.1
+ * /remani_planner_node/fsm/ee_ik_w_xy: 1.0
+ * /remani_planner_node/fsm/ee_ik_w_yaw: 0.3
+ * /remani_planner_node/fsm/ee_reach_pos_tol: 0.02
+ * /remani_planner_node/fsm/ee_reach_rot_tol_deg: 4.0
+ * /remani_planner_node/fsm/emergency_time: 1.5
+ * /remani_planner_node/fsm/fail_safe: True
+ * /remani_planner_node/fsm/global_plan: True
+ * /remani_planner_node/fsm/init_gripper_close: False
+ * /remani_planner_node/fsm/init_state: [-5.0, 0.0, 0.0, ...
+ * /remani_planner_node/fsm/init_yaw: 0.0
+ * /remani_planner_node/fsm/max_continuous_plan_failures: 20
+ * /remani_planner_node/fsm/planning_horizon: 5.0
+ * /remani_planner_node/fsm/replan_trajectory_time: 1.7
+ * /remani_planner_node/fsm/target_type: 1
+ * /remani_planner_node/fsm/thresh_no_replan_meter: 2.5
+ * /remani_planner_node/fsm/thresh_replan_time: 2.5
+ * /remani_planner_node/fsm/time_for_gripper: 0.05
+ * /remani_planner_node/fsm/waypoint0: [0.0, 0.0, 0.0, 0...
+ * /remani_planner_node/fsm/waypoint0_gripper_close: True
+ * /remani_planner_node/fsm/waypoint0_yaw: 0.0
+ * /remani_planner_node/fsm/waypoint1: [5.0, 0.0, 0.0, 0...
+ * /remani_planner_node/fsm/waypoint1_gripper_close: False
+ * /remani_planner_node/fsm/waypoint1_yaw: 0.0
+ * /remani_planner_node/fsm/waypoint_num: 2
+ * /remani_planner_node/grid_map/cx: 321.04638671875
+ * /remani_planner_node/grid_map/cy: 243.44969177246094
+ * /remani_planner_node/grid_map/depth_filter_margin: 2
+ * /remani_planner_node/grid_map/depth_filter_maxdist: 5.0
+ * /remani_planner_node/grid_map/depth_filter_mindist: 0.2
+ * /remani_planner_node/grid_map/depth_filter_tolerance: 0.15
+ * /remani_planner_node/grid_map/esdf_slice_height: -0.1
+ * /remani_planner_node/grid_map/frame_id: world
+ * /remani_planner_node/grid_map/fx: 387.229248046875
+ * /remani_planner_node/grid_map/fy: 387.229248046875
+ * /remani_planner_node/grid_map/ground_height: -0.01
+ * /remani_planner_node/grid_map/k_depth_scaling_factor: 1000.0
+ * /remani_planner_node/grid_map/local_bound_inflate: 0.0
+ * /remani_planner_node/grid_map/local_map_margin: 15
+ * /remani_planner_node/grid_map/local_update_range_x: 17
+ * /remani_planner_node/grid_map/local_update_range_y: 17
+ * /remani_planner_node/grid_map/local_update_range_z: 3.0
+ * /remani_planner_node/grid_map/map_size_x: 16.0
+ * /remani_planner_node/grid_map/map_size_y: 12.0
+ * /remani_planner_node/grid_map/map_size_z: 3.0
+ * /remani_planner_node/grid_map/max_ray_length: 4.5
+ * /remani_planner_node/grid_map/min_ray_length: 0.1
+ * /remani_planner_node/grid_map/obstacles_inflation: 0.08
+ * /remani_planner_node/grid_map/p_hit: 0.65
+ * /remani_planner_node/grid_map/p_max: 0.9
+ * /remani_planner_node/grid_map/p_min: 0.12
+ * /remani_planner_node/grid_map/p_miss: 0.35
+ * /remani_planner_node/grid_map/p_occ: 0.8
+ * /remani_planner_node/grid_map/pose_type: 1
+ * /remani_planner_node/grid_map/resolution: 0.05
+ * /remani_planner_node/grid_map/show_esdf_time: False
+ * /remani_planner_node/grid_map/show_occ_time: False
+ * /remani_planner_node/grid_map/skip_pixel: 2
+ * /remani_planner_node/grid_map/use_depth_filter: True
+ * /remani_planner_node/grid_map/use_global_map: False
+ * /remani_planner_node/grid_map/use_load_map: True
+ * /remani_planner_node/grid_map/virtual_ceil_height: 4.0
+ * /remani_planner_node/grid_map/visualization_truncate_height: 2.8
+ * /remani_planner_node/grid_map/z_length: 0.0
+ * /remani_planner_node/manager/control_points_distance: 0.4
+ * /remani_planner_node/manager/feasibility_tolerance: 0.05
+ * /remani_planner_node/manager/polyTraj_piece_length: 2.0
+ * /remani_planner_node/map/map_type: 0
+ * /remani_planner_node/mm/base_mani_fixed_joint_xyz_ypr: [0.2462, 0.0, 0.1...
+ * /remani_planner_node/mm/ee_tcp_xyz_rpy: [0.0, 0.0, 0.0, 0...
+ * /remani_planner_node/mm/manipulator_config: [0.1765, 0.607, 0...
+ * /remani_planner_node/mm/manipulator_dof: 6
+ * /remani_planner_node/mm/manipulator_max_acc: 1.57
+ * /remani_planner_node/mm/manipulator_max_pos: [3.0, 1.5, 2.8, 3...
+ * /remani_planner_node/mm/manipulator_max_vel: 0.8
+ * /remani_planner_node/mm/manipulator_min_pos: [-3.0, -1.5, -2.8...
+ * /remani_planner_node/mm/manipulator_self_thickness: 0.045
+ * /remani_planner_node/mm/manipulator_thickness: 0.1
+ * /remani_planner_node/mm/manipulator_type: cr10
+ * /remani_planner_node/mm/mobile_base_check_radius: 0.1
+ * /remani_planner_node/mm/mobile_base_dof: 2
+ * /remani_planner_node/mm/mobile_base_height: 0.15
+ * /remani_planner_node/mm/mobile_base_length: 1.1
+ * /remani_planner_node/mm/mobile_base_max_wheel_alpha: 8.0
+ * /remani_planner_node/mm/mobile_base_max_wheel_omega: 4.0
+ * /remani_planner_node/mm/mobile_base_non_singul_vel: 0.05
+ * /remani_planner_node/mm/mobile_base_wheel_base: 0.56
+ * /remani_planner_node/mm/mobile_base_wheel_radius: 0.125
+ * /remani_planner_node/mm/mobile_base_width: 0.9
+ * /remani_planner_node/optimization/constrain_points_perPiece: 16
+ * /remani_planner_node/optimization/dense_sample_resolution: 16
+ * /remani_planner_node/optimization/enable_dynamic_time_scaling: True
+ * /remani_planner_node/optimization/ground_safe_dis: 0.03
+ * /remani_planner_node/optimization/ground_safe_margin: 0.03
+ * /remani_planner_node/optimization/max_time_scale: 2.0
+ * /remani_planner_node/optimization/max_time_scaling_attempts: 2
+ * /remani_planner_node/optimization/mobile_base_opt_gear: True
+ * /remani_planner_node/optimization/safe_margin: 0.1
+ * /remani_planner_node/optimization/safe_margin_mani: 0.15
+ * /remani_planner_node/optimization/self_safe_margin: 0.1
+ * /remani_planner_node/optimization/weight_base_feasibility: 100.0
+ * /remani_planner_node/optimization/weight_manipulator_feasibility: 100.0
+ * /remani_planner_node/optimization/weight_manipulator_obstacle: 80000.0
+ * /remani_planner_node/optimization/weight_manipulator_self: 1000.0
+ * /remani_planner_node/optimization/weight_obstacle: 50000.0
+ * /remani_planner_node/optimization/weight_time: 1.0
+ * /remani_planner_node/optimization/wheel_limit_ratio: 0.95
+ * /remani_planner_node/search/allocate_num: 100000
+ * /remani_planner_node/search/check_num: 16
+ * /remani_planner_node/search/curvatureDisCoe: 0.4
+ * /remani_planner_node/search/dist_resolution: 0.6
+ * /remani_planner_node/search/goal_rate: 0.4
+ * /remani_planner_node/search/lambda_heu: 1
+ * /remani_planner_node/search/max_arc: 0.4
+ * /remani_planner_node/search/max_loop_num: 5000
+ * /remani_planner_node/search/max_mani_search_time: 0.3
+ * /remani_planner_node/search/max_sample_time: 1.5
+ * /remani_planner_node/search/max_seach_time: 3.0
+ * /remani_planner_node/search/min_turning_radius: 0.5
+ * /remani_planner_node/search/oneshot_check_len: 0.02
+ * /remani_planner_node/search/oneshot_range: 1.0
+ * /remani_planner_node/search/sample_time: 0.1
+ * /remani_planner_node/search/traj_back_penalty: 3.0
+ * /remani_planner_node/search/traj_forward_penalty: 1.0
+ * /remani_planner_node/search/traj_gear_switch_penalty: 10.0
+ * /remani_planner_node/search/traj_steer_change_penalty: 2.0
+ * /remani_planner_node/search/traj_steer_penalty: 5.0
+ * /remani_planner_node/search/try_astar_times: 5
+ * /remani_planner_node/search/yaw_resolution: 0.35
+ * /remani_planner_node/visualization/enable_debug_vis: False
+ * /remani_planner_node/visualization/enable_traj_mesh_vis: True
+ * /remani_planner_node/visualization/his_traj_max_points: 500
+ * /remani_planner_node/visualization/mesh_vis_stride: 3
+ * /remani_planner_node/visualization/tf_rate_hz: 20.0
+ * /remani_planner_node/visualization/vis_rate_hz: 15.0
+ * /robot_description: <?xml version='1....
+ * /rosdistro: noetic
+ * /rosversion: 1.17.4
+ * /search/max_seach_time: 3.0
+ * /search/min_turning_radius: 0.5
+
+NODES
+  /
+    ee_goal_marker_node (remani_planner/ee_goal_marker_node)
+    fake_mm (fake_mm/fake_mm)
+    map_generator (map_generator/map_generator)
+    mm_controller_node (mm_controller/mm_controller_node)
+    model_vis (fake_mm/model_vis)
+    remani_planner_node (remani_planner/remani_planner_node)
+    robot_state_publisher (robot_state_publisher/robot_state_publisher)
+    rviz (rviz/rviz)
+[33m[WARN] [1787754390.176170414]: The root link base_link has an inertia specified in the URDF, but KDL does not support a root link with an inertia.  As a workaround, you can add an extra dummy link to your URDF.[0m
+[33m[WARN] [1787754390.228921315]: Finished generate Cuboids Map [0m
+[0m[INFO] [1787754390.299175414]: MMConfig: type=cr10 thickness=0.100 self_thickness=0.045[0m
+[0m[INFO] [1787754390.313595401]: KinoAstar: max_seach_time=3.000 s min_turning_radius=0.500[0m
+[FSM]: from INIT to WAIT_TARGET
+[rospack] Error: failed to parse command-line options: too many positional options have been specified on the command line
+[librospack]: error while executing command
+[rospack] Error: failed to parse command-line options: too many positional options have been specified on the command line
+[librospack]: error while executing command
+[rospack] Error: failed to parse command-line options: too many positional options have been specified on the command line
+[librospack]: error while executing command
+[0m[INFO] [1787754448.308343052]: [EE GOAL] committed EE_POSE terminal (??xy=8.594 ??yaw=15.0deg)[0m
+[FSM]: from WAIT_TARGET to GEN_NEW_TRAJ
+[33m[WARN] [1787754449.673339082]: KinoAstar: frontend path not free (coll=0) at piece 0 idx 12; reject[0m
+[47;30m
+[replan 0]==============================================[0m
+[0m[INFO] [1787754448.318709860]: continous_failures_count: 0[0m
+[PLAN TIME] (frontend failed)
+Hybrid A*       : 979.12 ms
+Manipulator     : 300.17 ms
+Whole-body RRT  : skipped
+Frontend check  : 0.38 ms
+Initialization  : skipped
+Optimization    : skipped
+Safety check    : skipped
+Time scaling    : skipped
+Safety recheck  : skipped
+Total           : 1354.69 ms
+[PLAN TIME] (frontend failed)
+Hybrid A*       : 999.61 ms
+Manipulator     : 300.69 ms
+Whole-body RRT  : skipped
+Frontend check  : 0.33 ms
+Initialization  : skipped
+Optimization    : skipped
+Safety check    : skipped
+Time scaling    : skipped
+Safety recheck  : skipped
+Total           : 1401.43 ms
+[33m[WARN] [1787754452.476150903]: KinoAstar: frontend path not free (coll=0) at piece 0 idx 12; reject[0m
+[47;30m
+[replan 2]==============================================[0m
+[0m[INFO] [1787754451.076315303]: continous_failures_count: 2[0m
+[PLAN TIME] (frontend failed)
+Hybrid A*       : 1001.15 ms
+Manipulator     : 301.19 ms
+Whole-body RRT  : skipped
+Frontend check  : 0.35 ms
+Initialization  : skipped
+Optimization    : skipped
+Safety check    : skipped
+Time scaling    : skipped
+Safety recheck  : skipped
+Total           : 1401.34 ms
+[PLAN TIME] (frontend failed)
+Hybrid A*       : 997.91 ms
+Manipulator     : 301.59 ms
+Whole-body RRT  : skipped
+Frontend check  : 0.32 ms
+Initialization  : skipped
+Optimization    : skipped
+Safety check    : skipped
+Time scaling    : skipped
+Safety recheck  : skipped
+Total           : 1422.06 ms
+[33m[WARN] [1787754455.296274102]: KinoAstar: frontend path not free (coll=0) at piece 0 idx 12; reject[0m
+[47;30m
+[replan 4]==============================================[0m
+[0m[INFO] [1787754453.899712236]: continous_failures_count: 4[0m
+[PLAN TIME] (frontend failed)
+Hybrid A*       : 1002.34 ms
+Manipulator     : 300.28 ms
+Whole-body RRT  : skipped
+Frontend check  : 0.37 ms
+Initialization  : skipped
+Optimization    : skipped
+Safety check    : skipped
+Time scaling    : skipped
+Safety recheck  : skipped
+Total           : 1398.04 ms
+[33m[WARN] [1787754455.297708543]: KinoAstar: switching to whole-body RRT after 5 failures. start=(-5.00,0.00) goal=(3.20,-2.56)[0m
+[RRT TIME] search = 114.905 ms
+[RRT TIME] reconstruction = 1387.5 ms
+[RRT TIME] total = 1502.4 ms
+[PLAN TIME] (frontend failed)
+Hybrid A*       : skipped
+Manipulator     : 0.53 ms
+Whole-body RRT  : 1502.44 ms
+Frontend check  : 0.28 ms
+Initialization  : skipped
+Optimization    : skipped
+Safety check    : skipped
+Time scaling    : skipped
+Safety recheck  : skipped
+Total           : 1505.07 ms
+[47;30m
+[replan 6]==============================================[0m
+[0m[INFO] [1787754456.801428047]: continous_failures_count: 6[0m
+[RRT TIME] search = 154.683 ms
+[RRT TIME] reconstruction = 1346.38 ms
+[RRT TIME] total = 1501.07 ms
+[33m[WARN] [1787754458.303595800]: KinoAstar: frontend path not free (coll=0) at piece 0 idx 19; reject[0m
+[PLAN TIME] (frontend failed)
+Hybrid A*       : skipped
+Manipulator     : 0.38 ms
+Whole-body RRT  : 1501.09 ms
+Frontend check  : 0.55 ms
+Initialization  : skipped
+Optimization    : skipped
+Safety check    : skipped
+Time scaling    : skipped
+Safety recheck  : skipped
+Total           : 1502.23 ms
+[33m[WARN] [1787754458.303791483]: KinoAstar: switching to whole-body RRT after 7 failures. start=(-5.00,0.00) goal=(3.20,-2.56)[0m
+[RRT TIME] search = 112.829 ms
+[RRT TIME] reconstruction = 1388.45 ms
+[RRT TIME] total = 1501.28 ms
+[33m[WARN] [1787754460.654256627]: -46.119647 max left wheel alpha is not feasible at relative time 0.050000! opt failed[0m
+[33m[WARN] [1787754460.654401812]: -3.623446 max left wheel omega is not feasible at relative time 0.100000! opt failed[0m
+[33m[WARN] [1787754460.709228285]: mani collision at time 22.160000![0m
+[0m[INFO] [1787754460.654156799]: The optimization result is : Success: met stopping criteria (delta).[0m
+[BACKEND COLLISION]
+[BACKEND COLLISION] type = mani
+[BACKEND COLLISION] time = 22.16
+[BACKEND COLLISION] traj duration = 28.7898 s
+[BACKEND COLLISION] position base = 4.01214 -1.22171
+[BACKEND COLLISION] arm q = -0.0592511  -0.776787 -0.0335328 -0.0304882 -0.0071563   0.588233
+[PLAN TIME] (opt/safety failed)
+Hybrid A*       : skipped
+Manipulator     : 0.36 ms
+Whole-body RRT  : 1501.31 ms
+Frontend check  : 0.59 ms
+Initialization  : 0.035001 ms
+Optimization    : 847.901 ms
+Safety check    : 55.0523 ms
+Time scaling    : skipped
+Safety recheck  : skipped
+Total           : 2405.65 ms
+[33m[WARN] [1787754460.711945814]: KinoAstar: switching to whole-body RRT after 8 failures. start=(-5.00,0.00) goal=(3.20,-2.56)[0m
+[47;30m
+[replan 8]==============================================[0m
+[0m[INFO] [1787754460.711807909]: continous_failures_count: 8[0m
+[RRT TIME] search = 229.52 ms
+[RRT TIME] reconstruction = 1272.56 ms
+[RRT TIME] total = 1502.08 ms
+[33m[WARN] [1787754463.429586864]: The optimization result is : Line search reaches the maximum try number, assumptions not satisfied or precision not achievable. (candidate traj still checked)[0m
+[33m[WARN] [1787754463.429685819]: -34.473624 max left wheel alpha is not feasible at relative time 0.050000! opt failed[0m
+[33m[WARN] [1787754463.429854732]: -3.209818 max left wheel omega is not feasible at relative time 0.110000! opt failed[0m
+[33m[WARN] [1787754463.510014759]: mani collision at time 32.330000![0m
+[BACKEND COLLISION]
+[BACKEND COLLISION] type = mani
+[BACKEND COLLISION] time = 32.33
+[BACKEND COLLISION] traj duration = 36.358 s
+[BACKEND COLLISION] position base = 4.14611 -2.07376
+[BACKEND COLLISION] arm q =  -1.09797 -0.741087  0.428192  0.438513 -0.195714   1.68518
+[PLAN TIME] (opt/safety failed)
+Hybrid A*       : skipped
+Manipulator     : 0.36 ms
+Whole-body RRT  : 1502.11 ms
+Frontend check  : 0.72 ms
+Initialization  : 0.029283 ms
+Optimization    : 1214.23 ms
+Safety check    : 80.4089 ms
+Time scaling    : skipped
+Safety recheck  : skipped
+Total           : 2798.27 ms
+[33m[WARN] [1787754463.514073145]: KinoAstar: switching to whole-body RRT after 9 failures. start=(-5.00,0.00) goal=(3.20,-2.56)[0m
+[47;30m
+[replan 9]==============================================[0m
+[0m[INFO] [1787754463.513937104]: continous_failures_count: 9[0m
+[RRT TIME] search = 212.181 ms
+[RRT TIME] reconstruction = 1289.74 ms
+[RRT TIME] total = 1501.92 ms
+[33m[WARN] [1787754465.016747329]: KinoAstar: frontend path not free (coll=0) at piece 1 idx 9; reject[0m
+[PLAN TIME] (frontend failed)
+Hybrid A*       : skipped
+Manipulator     : 0.38 ms
+Whole-body RRT  : 1501.95 ms
+Frontend check  : 0.33 ms
+Initialization  : skipped
+Optimization    : skipped
+Safety check    : skipped
+Time scaling    : skipped
+Safety recheck  : skipped
+Total           : 1502.86 ms
+[0m[INFO] [1787754465.016782821]: [FSM]: stay in GEN_NEW_TRAJ (x2)[0m
+[RRT TIME] search = 109.525 ms
+[RRT TIME] reconstruction = 1392.21 ms
+[RRT TIME] total = 1501.73 ms
+[PLAN TIME] (frontend failed)
+Hybrid A*       : skipped
+Manipulator     : 0.39 ms
+Whole-body RRT  : 1501.76 ms
+Frontend check  : 0.25 ms
+Initialization  : skipped
+Optimization    : skipped
+Safety check    : skipped
+Time scaling    : skipped
+Safety recheck  : skipped
+Total           : 1502.59 ms
+[33m[WARN] [1787754466.529917199]: KinoAstar: switching to whole-body RRT after 11 failures. start=(-5.00,0.00) goal=(3.20,-2.56)[0m
+[47;30m
+[replan 11]==============================================[0m
+[0m[INFO] [1787754466.529760229]: continous_failures_count: 11[0m
+[RRT TIME] search = 132.948 ms
+[RRT TIME] reconstruction = 1368.86 ms
+[RRT TIME] total = 1501.81 ms
+[33m[WARN] [1787754468.032789955]: KinoAstar: frontend path not free (coll=0) at piece 2 idx 2; reject[0m
+[PLAN TIME] (frontend failed)
+Hybrid A*       : skipped
+Manipulator     : 0.36 ms
+Whole-body RRT  : 1501.83 ms
+Frontend check  : 0.67 ms
+Initialization  : skipped
+Optimization    : skipped
+Safety check    : skipped
+Time scaling    : skipped
+Safety recheck  : skipped
+Total           : 1503.1 ms
+[RRT TIME] search = 94.9203 ms
+[RRT TIME] reconstruction = 1406 ms
+[RRT TIME] total = 1500.92 ms
+[33m[WARN] [1787754471.233296199]: The optimization result is : Line search reaches the maximum try number, assumptions not satisfied or precision not achievable. (candidate traj still checked)[0m
+[33m[WARN] [1787754471.238158947]: 4.002668 max left wheel omega is not feasible at relative time 1.960000! opt failed[0m
+[33m[WARN] [1787754471.277188814]: car collision at time 17.690000![0m
+[BACKEND COLLISION]
+[BACKEND COLLISION] type = car
+[BACKEND COLLISION] time = 17.69
+[BACKEND COLLISION] traj duration = 40.8084 s
+[BACKEND COLLISION] position base = 1.2433 -1.33887
+[BACKEND COLLISION] arm q =  0.102281  0.125201    0.4041  0.166999 -0.763015 -0.030571
+[PLAN TIME] (opt/safety failed)
+Hybrid A*       : skipped
+Manipulator     : 0.36 ms
+Whole-body RRT  : 1500.95 ms
+Frontend check  : 0.50 ms
+Initialization  : 0.024185 ms
+Optimization    : 1698.37 ms
+Safety check    : 43.8712 ms
+Time scaling    : skipped
+Safety recheck  : skipped
+Total           : 3244.4 ms
+[33m[WARN] [1787754471.280550673]: KinoAstar: switching to whole-body RRT after 13 failures. start=(-5.00,0.00) goal=(3.20,-2.56)[0m
+[47;30m
+[replan 13]==============================================[0m
+[0m[INFO] [1787754471.280413785]: continous_failures_count: 13[0m
+[RRT TIME] search = 224.972 ms
+[RRT TIME] reconstruction = 1277.18 ms
+[RRT TIME] total = 1502.15 ms
+[33m[WARN] [1787754474.953129800]: The optimization result is : Line search reaches the maximum try number, assumptions not satisfied or precision not achievable. (candidate traj still checked)[0m
+[33m[WARN] [1787754474.976120824]: 4.002113 max left wheel omega is not feasible at relative time 9.280000! opt failed[0m
+[33m[WARN] [1787754475.065786042]: car-mani collision at time 45.390000![0m
+[BACKEND COLLISION]
+[BACKEND COLLISION] type = car-mani
+[BACKEND COLLISION] time = 45.39
+[BACKEND COLLISION] traj duration = 54.209 s
+[BACKEND COLLISION] position base = 4.55293 -2.37864
+[BACKEND COLLISION] arm q = -0.635833  -1.38249  0.240068  0.418275  0.528335   1.33436
+[PLAN TIME] (opt/safety failed)
+Hybrid A*       : skipped
+Manipulator     : 0.39 ms
+Whole-body RRT  : 1502.17 ms
+Frontend check  : 0.78 ms
+Initialization  : 0.029895 ms
+Optimization    : 2169.05 ms
+Safety check    : 112.637 ms
+Time scaling    : skipped
+Safety recheck  : skipped
+Total           : 3785.44 ms
+[33m[WARN] [1787754475.071869639]: KinoAstar: switching to whole-body RRT after 14 failures. start=(-5.00,0.00) goal=(3.20,-2.56)[0m
+[47;30m
+[replan 14]==============================================[0m
+[0m[INFO] [1787754475.071734443]: continous_failures_count: 14[0m
+[RRT TIME] search = 211.86 ms
+[RRT TIME] reconstruction = 1289 ms
+[RRT TIME] total = 1500.86 ms
+[33m[WARN] [1787754476.573729688]: KinoAstar: frontend path not free (coll=0) at piece 1 idx 2; reject[0m
+[PLAN TIME] (frontend failed)
+Hybrid A*       : skipped
+Manipulator     : 0.40 ms
+Whole-body RRT  : 1500.89 ms
+Frontend check  : 0.57 ms
+Initialization  : skipped
+Optimization    : skipped
+Safety check    : skipped
+Time scaling    : skipped
+Safety recheck  : skipped
+Total           : 1502.04 ms
+[RRT TIME] search = 95.1601 ms
+[RRT TIME] reconstruction = 1405.83 ms
+[RRT TIME] total = 1500.99 ms
+[33m[WARN] [1787754480.640213533]: 4.000123 max left wheel omega is not feasible at relative time 4.280000! opt failed[0m
+[0m[INFO] [1787754480.629648045]: The optimization result is : Success: met stopping criteria (delta).[0m
+[TIME SCALE] dynamics-only violation detected
+[TIME SCALE] peak wheel omega = 4.00059 rad/s
+[TIME SCALE] wheel omega hard limit = 4 rad/s
+[TIME SCALE] wheel omega target = 3.8 rad/s
+[TIME SCALE] peak wheel alpha = 7.26776 rad/s^2
+[TIME SCALE] wheel alpha hard limit = 8 rad/s^2
+[TIME SCALE] wheel alpha target = 7.6 rad/s^2
+[TIME SCALE] peak joint vel = 0.509839
+[TIME SCALE] peak joint acc = 0.400542
+[TIME SCALE] selected scale = 1.07384
+[TIME SCALE] attempt = 1/2
+[TIME SCALE] cumulative scale = 1.07384
+[TIME SCALE] duration old = 34.3511 s
+[TIME SCALE] duration new = 36.8876 s
+[TIME SCALE] safety recheck passed
+[TIME SCALE] peak wheel omega after scaling = 3.72549 rad/s
+[TIME SCALE] peak wheel alpha after scaling = 6.3026 rad/s^2
+[TIME SCALE] accepted
+[34mtotal time: 4234.09, init: 1502.3, optimize: 2731.78, avg_time: 4234.09, count_success: 1[0m
+[PLAN TIME]
+Hybrid A*       : skipped
+Manipulator     : 0.35 ms
+Whole-body RRT  : 1501.02 ms
+Frontend check  : 0.63 ms
+Initialization  : 0.027053 ms
+Optimization    : 2553.56 ms
+Safety check    : 85.988 ms
+Time scaling    : 0.04 ms
+Safety recheck  : 92.12 ms
+Total           : 4234.09 ms
+[FSM]: from GEN_NEW_TRAJ to EXEC_TRAJ
+[FSM]: from EXEC_TRAJ to WAIT_TARGET
+[0m[INFO] [1787754517.689660570]: [EE GOAL] reached[0m
+[0m[INFO] [1787755421.762384147]: [EE GOAL] committed EE_POSE terminal (??xy=4.114 ??yaw=135.0deg)[0m
+[FSM]: from WAIT_TARGET to GEN_NEW_TRAJ
+[33m[WARN] [1787755422.950299909]: KinoAstar: frontend path not free (coll=0) at piece 0 idx 4; reject[0m
+[47;30m
+[replan 16]==============================================[0m
+[0m[INFO] [1787755421.772657060]: continous_failures_count: 0[0m
+[PLAN TIME] (frontend failed)
+Hybrid A*       : 806.57 ms
+Manipulator     : 300.62 ms
+Whole-body RRT  : skipped
+Frontend check  : 0.15 ms
+Initialization  : skipped
+Optimization    : skipped
+Safety check    : skipped
+Time scaling    : skipped
+Safety recheck  : skipped
+Total           : 1177.72 ms
+[PLAN TIME] (frontend failed)
+Hybrid A*       : 795.45 ms
+Manipulator     : 300.80 ms
+Whole-body RRT  : skipped
+Frontend check  : 0.11 ms
+Initialization  : skipped
+Optimization    : skipped
+Safety check    : skipped
+Time scaling    : skipped
+Safety recheck  : skipped
+Total           : 1150.31 ms
+[33m[WARN] [1787755425.249809151]: KinoAstar: frontend path not free (coll=0) at piece 0 idx 4; reject[0m
+[47;30m
+[replan 18]==============================================[0m
+[0m[INFO] [1787755424.101803986]: continous_failures_count: 2[0m
+[PLAN TIME] (frontend failed)
+Hybrid A*       : 794.32 ms
+Manipulator     : 300.65 ms
+Whole-body RRT  : skipped
+Frontend check  : 0.15 ms
+Initialization  : skipped
+Optimization    : skipped
+Safety check    : skipped
+Time scaling    : skipped
+Safety recheck  : skipped
+Total           : 1149.16 ms
+[PLAN TIME] (frontend failed)
+Hybrid A*       : 792.78 ms
+Manipulator     : 301.79 ms
+Whole-body RRT  : skipped
+Frontend check  : 0.11 ms
+Initialization  : skipped
+Optimization    : skipped
+Safety check    : skipped
+Time scaling    : skipped
+Safety recheck  : skipped
+Total           : 1165.97 ms
+[33m[WARN] [1787755427.567260970]: KinoAstar: frontend path not free (coll=0) at piece 0 idx 4; reject[0m
+[47;30m
+[replan 20]==============================================[0m
+[0m[INFO] [1787755426.416755085]: continous_failures_count: 4[0m
+[PLAN TIME] (frontend failed)
+Hybrid A*       : 793.90 ms
+Manipulator     : 301.02 ms
+Whole-body RRT  : skipped
+Frontend check  : 0.16 ms
+Initialization  : skipped
+Optimization    : skipped
+Safety check    : skipped
+Time scaling    : skipped
+Safety recheck  : skipped
+Total           : 1151.45 ms
+[33m[WARN] [1787755427.568573965]: KinoAstar: switching to whole-body RRT after 5 failures. start=(3.20,-2.56) goal=(1.61,1.23)[0m
+[RRT TIME] search = 22.1925 ms
+[RRT TIME] reconstruction = 187.646 ms
+[RRT TIME] total = 209.839 ms
+[33m[WARN] [1787755429.336821741]: mani collision at time 3.630000![0m
+[0m[INFO] [1787755429.327805475]: The optimization result is : Success: met stopping criteria (delta).[0m
+[BACKEND COLLISION]
+[BACKEND COLLISION] type = mani
+[BACKEND COLLISION] time = 3.63
+[BACKEND COLLISION] traj duration = 21.2412 s
+[BACKEND COLLISION] position base = 3.72954 -2.63708
+[BACKEND COLLISION] arm q = -0.340923 -0.182133  0.903889  0.438649  0.416231   1.88959
+[PLAN TIME] (opt/safety failed)
+Hybrid A*       : skipped
+Manipulator     : 0.42 ms
+Whole-body RRT  : 209.86 ms
+Frontend check  : 0.27 ms
+Initialization  : 0.025743 ms
+Optimization    : 1548.4 ms
+Safety check    : 9.00277 ms
+Time scaling    : skipped
+Safety recheck  : skipped
+Total           : 1769.55 ms
+[47;30m
+[replan 22]==============================================[0m
+[0m[INFO] [1787755429.337668971]: continous_failures_count: 6[0m
+[RRT TIME] search = 31.1032 ms
+[RRT TIME] reconstruction = 144.025 ms
+[RRT TIME] total = 175.128 ms
+[33m[WARN] [1787755430.202395164]: car collision at time 0.890000![0m
+[0m[INFO] [1787755430.200209006]: The optimization result is : Success: met stopping criteria (delta).[0m
+[BACKEND COLLISION]
+[BACKEND COLLISION] type = car
+[BACKEND COLLISION] time = 0.89
+[BACKEND COLLISION] traj duration = 24.2 s
+[BACKEND COLLISION] position base = 3.2564 -2.57064
+[BACKEND COLLISION] arm q = -0.0274688   -1.33971   0.716705   0.685767   0.281968    2.06414
+[PLAN TIME] (opt/safety failed)
+Hybrid A*       : skipped
+Manipulator     : 0.36 ms
+Whole-body RRT  : 175.14 ms
+Frontend check  : 0.25 ms
+Initialization  : 0.021613 ms
+Optimization    : 686.512 ms
+Safety check    : 2.17284 ms
+Time scaling    : skipped
+Safety recheck  : skipped
+Total           : 864.793 ms
+[33m[WARN] [1787755430.203400582]: KinoAstar: switching to whole-body RRT after 7 failures. start=(3.20,-2.56) goal=(1.61,1.23)[0m
+[RRT TIME] search = 25.8357 ms
+[RRT TIME] reconstruction = 193.855 ms
+[RRT TIME] total = 219.691 ms
+[33m[WARN] [1787755430.888340384]: The optimization result is : Line search reaches the maximum try number, assumptions not satisfied or precision not achievable. (candidate traj still checked)[0m
+[BACKEND COLLISION]
+[BACKEND COLLISION] type = car
+[BACKEND COLLISION] time = 0.58
+[BACKEND COLLISION] traj duration = 14.8872 s
+[BACKEND COLLISION] position base = 3.23569 -2.56799
+[BACKEND COLLISION] arm q = -0.0218826   -1.35978   0.730383   0.669956   0.289039    2.06057
+[PLAN TIME] (opt/safety failed)
+Hybrid A*       : skipped
+Manipulator     : 0.36 ms
+Whole-body RRT  : 219.71 ms
+Frontend check  : 0.26 ms
+Initialization  : 0.020447 ms
+Optimization    : 464.47 ms
+Safety check    : 1.35211 ms
+Time scaling    : skipped
+Safety recheck  : skipped
+Total           : 686.497 ms
+[RRT TIME] search = 162.837 ms
+[RRT TIME] reconstruction = 587.39 ms
+[RRT TIME] total = 750.227 ms
+[33m[WARN] [1787755433.959406245]: car collision at time 0.820000![0m
+[0m[INFO] [1787755433.957437754]: The optimization result is : Success: met stopping criteria (delta).[0m
+[BACKEND COLLISION]
+[BACKEND COLLISION] type = car
+[BACKEND COLLISION] time = 0.82
+[BACKEND COLLISION] traj duration = 25.1711 s
+[BACKEND COLLISION] position base = 3.24966 -2.57819
+[BACKEND COLLISION] arm q = -0.0240846   -1.35261   0.712269   0.679197   0.286655    2.06493
+[PLAN TIME] (opt/safety failed)
+Hybrid A*       : skipped
+Manipulator     : 0.35 ms
+Whole-body RRT  : 750.24 ms
+Frontend check  : 0.41 ms
+Initialization  : 0.022394 ms
+Optimization    : 2315.76 ms
+Safety check    : 1.95396 ms
+Time scaling    : skipped
+Safety recheck  : skipped
+Total           : 3069.05 ms
+[33m[WARN] [1787755433.960668887]: KinoAstar: switching to whole-body RRT after 9 failures. start=(3.20,-2.56) goal=(1.61,1.23)[0m
+[47;30m
+[replan 25]==============================================[0m
+[0m[INFO] [1787755433.960532395]: continous_failures_count: 9[0m
+[RRT TIME] search = 24.1101 ms
+[RRT TIME] reconstruction = 144.558 ms
+[RRT TIME] total = 168.668 ms
+[33m[WARN] [1787755434.572262813]: The optimization result is : Line search reaches the maximum try number, assumptions not satisfied or precision not achievable. (candidate traj still checked)[0m
+[BACKEND COLLISION]
+[BACKEND COLLISION] type = car
+[BACKEND COLLISION] time = 0.54
+[BACKEND COLLISION] traj duration = 14.7904 s
+[BACKEND COLLISION] position base = 3.23267 -2.56758
+[BACKEND COLLISION] arm q = -0.0389714   -1.36663   0.708285   0.690857   0.278186    2.05115
+[PLAN TIME] (opt/safety failed)
+Hybrid A*       : skipped
+Manipulator     : 0.39 ms
+Whole-body RRT  : 168.69 ms
+Frontend check  : 0.22 ms
+Initialization  : 0.014684 ms
+Optimization    : 442.173 ms
+Safety check    : 1.25339 ms
+Time scaling    : skipped
+Safety recheck  : skipped
+Total           : 613.058 ms
+[0m[INFO] [1787755434.574185519]: [FSM]: stay in GEN_NEW_TRAJ (x2)[0m
+[RRT TIME] search = 70.4979 ms
+[RRT TIME] reconstruction = 757.908 ms
+[RRT TIME] total = 828.406 ms
+[33m[WARN] [1787755436.118691985]: The optimization result is : Line search reaches the maximum try number, assumptions not satisfied or precision not achievable. (candidate traj still checked)[0m
+[33m[WARN] [1787755436.120065767]: car collision at time 0.560000![0m
+[BACKEND COLLISION]
+[BACKEND COLLISION] type = car
+[BACKEND COLLISION] time = 0.56
+[BACKEND COLLISION] traj duration = 22.7376 s
+[BACKEND COLLISION] position base = 3.23225 -2.56781
+[BACKEND COLLISION] arm q = -0.027944  -1.37398  0.716117  0.684537  0.287153   2.06128
+[PLAN TIME] (opt/safety failed)
+Hybrid A*       : skipped
+Manipulator     : 0.39 ms
+Whole-body RRT  : 828.42 ms
+Frontend check  : 0.26 ms
+Initialization  : 0.020633 ms
+Optimization    : 704.954 ms
+Safety check    : 1.35589 ms
+Time scaling    : skipped
+Safety recheck  : skipped
+Total           : 1535.73 ms
+[33m[WARN] [1787755436.121057992]: KinoAstar: switching to whole-body RRT after 11 failures. start=(3.20,-2.56) goal=(1.61,1.23)[0m
+[47;30m
+[replan 27]==============================================[0m
+[0m[INFO] [1787755436.120920243]: continous_failures_count: 11[0m
+[RRT TIME] search = 20.5041 ms
+[RRT TIME] reconstruction = 186.789 ms
+[RRT TIME] total = 207.294 ms
+[0m[INFO] [1787755437.842912359]: The optimization result is : Success: met stopping criteria (delta).[0m
+[BACKEND COLLISION]
+[BACKEND COLLISION] type = car
+[BACKEND COLLISION] time = 1.29
+[BACKEND COLLISION] traj duration = 21.2548 s
+[BACKEND COLLISION] position base = 3.29578 -2.59744
+[BACKEND COLLISION] arm q = -0.00897882    -1.25962     0.70518    0.657032    0.287997     2.05438
+[PLAN TIME] (opt/safety failed)
+Hybrid A*       : skipped
+Manipulator     : 0.36 ms
+Whole-body RRT  : 207.31 ms
+Frontend check  : 0.25 ms
+Initialization  : 0.02063 ms
+Optimization    : 1513.76 ms
+Safety check    : 3.1201 ms
+Time scaling    : skipped
+Safety recheck  : skipped
+Total           : 1725.19 ms
+[RRT TIME] search = 39.9485 ms
+[RRT TIME] reconstruction = 195.843 ms
+[RRT TIME] total = 235.792 ms
+[33m[WARN] [1787755438.553977454]: The optimization result is : Line search reaches the maximum try number, assumptions not satisfied or precision not achievable. (candidate traj still checked)[0m
+[33m[WARN] [1787755438.555283909]: car collision at time 0.550000![0m
+[BACKEND COLLISION]
+[BACKEND COLLISION] type = car
+[BACKEND COLLISION] time = 0.55
+[BACKEND COLLISION] traj duration = 14.2303 s
+[BACKEND COLLISION] position base = 3.23317 -2.56776
+[BACKEND COLLISION] arm q = -0.0422823    -1.3738   0.700074   0.679835   0.287131    2.04298
+[PLAN TIME] (opt/safety failed)
+Hybrid A*       : skipped
+Manipulator     : 0.36 ms
+Whole-body RRT  : 235.81 ms
+Frontend check  : 0.22 ms
+Initialization  : 0.017835 ms
+Optimization    : 470.548 ms
+Safety check    : 1.29092 ms
+Time scaling    : skipped
+Safety recheck  : skipped
+Total           : 708.547 ms
+[33m[WARN] [1787755438.556105755]: KinoAstar: switching to whole-body RRT after 13 failures. start=(3.20,-2.56) goal=(1.61,1.23)[0m
+[47;30m
+[replan 29]==============================================[0m
+[0m[INFO] [1787755438.555970265]: continous_failures_count: 13[0m
+[RRT TIME] search = 101.267 ms
+[RRT TIME] reconstruction = 559.374 ms
+[RRT TIME] total = 660.641 ms
+[33m[WARN] [1787755440.668487729]: car collision at time 1.190000![0m
+[0m[INFO] [1787755440.665587816]: The optimization result is : Success: met stopping criteria (delta).[0m
+[BACKEND COLLISION]
+[BACKEND COLLISION] type = car
+[BACKEND COLLISION] time = 1.19
+[BACKEND COLLISION] traj duration = 29.6986 s
+[BACKEND COLLISION] position base = 3.32627 -2.57435
+[BACKEND COLLISION] arm q = -0.043576    -1.285  0.697764  0.674551  0.296073   2.04305
+[PLAN TIME] (opt/safety failed)
+Hybrid A*       : skipped
+Manipulator     : 0.36 ms
+Whole-body RRT  : 660.66 ms
+Frontend check  : 0.29 ms
+Initialization  : 0.020499 ms
+Optimization    : 1448.04 ms
+Safety check    : 2.88666 ms
+Time scaling    : skipped
+Safety recheck  : skipped
+Total           : 2112.59 ms
+[33m[WARN] [1787755440.669791138]: KinoAstar: switching to whole-body RRT after 14 failures. start=(3.20,-2.56) goal=(1.61,1.23)[0m
+[47;30m
+[replan 30]==============================================[0m
+[0m[INFO] [1787755440.669633678]: continous_failures_count: 14[0m
+[RRT TIME] search = 45.7128 ms
+[RRT TIME] reconstruction = 298.359 ms
+[RRT TIME] total = 344.072 ms
+[0m[INFO] [1787755442.373548772]: The optimization result is : Success: met stopping criteria (delta).[0m
+[BACKEND COLLISION]
+[BACKEND COLLISION] type = car
+[BACKEND COLLISION] time = 2.44
+[BACKEND COLLISION] traj duration = 21.0658 s
+[BACKEND COLLISION] position base = 3.54329 -2.62201
+[BACKEND COLLISION] arm q = -0.0237345  -0.673896   0.666546   0.553579   0.313166    2.00494
+[PLAN TIME] (opt/safety failed)
+Hybrid A*       : skipped
+Manipulator     : 0.39 ms
+Whole-body RRT  : 344.10 ms
+Frontend check  : 0.26 ms
+Initialization  : 0.021382 ms
+Optimization    : 1358.85 ms
+Safety check    : 5.99791 ms
+Time scaling    : skipped
+Safety recheck  : skipped
+Total           : 1710 ms
+[RRT TIME] search = 44.6888 ms
+[RRT TIME] reconstruction = 177.718 ms
+[RRT TIME] total = 222.407 ms
+[33m[WARN] [1787755443.954858167]: car collision at time 0.850000![0m
+[0m[INFO] [1787755443.952763847]: The optimization result is : Success: met stopping criteria (delta).[0m
+[BACKEND COLLISION]
+[BACKEND COLLISION] type = car
+[BACKEND COLLISION] time = 0.85
+[BACKEND COLLISION] traj duration = 20.9282 s
+[BACKEND COLLISION] position base = 3.25115 -2.57009
+[BACKEND COLLISION] arm q = -0.0250841   -1.34648   0.716238   0.682313   0.282717    2.06418
+[PLAN TIME] (opt/safety failed)
+Hybrid A*       : skipped
+Manipulator     : 0.36 ms
+Whole-body RRT  : 222.43 ms
+Frontend check  : 0.28 ms
+Initialization  : 0.022265 ms
+Optimization    : 1349.11 ms
+Safety check    : 2.08286 ms
+Time scaling    : skipped
+Safety recheck  : skipped
+Total           : 1574.59 ms
+[33m[WARN] [1787755443.955818749]: KinoAstar: switching to whole-body RRT after 16 failures. start=(3.20,-2.56) goal=(1.61,1.23)[0m
+[47;30m
+[replan 32]==============================================[0m
+[0m[INFO] [1787755443.955675187]: continous_failures_count: 16[0m
+[RRT TIME] search = 72.4216 ms
+[RRT TIME] reconstruction = 465.01 ms
+[RRT TIME] total = 537.432 ms
+[33m[WARN] [1787755447.957511931]: car collision at time 0.550000![0m
+[0m[INFO] [1787755447.956197058]: The optimization result is : Success: met stopping criteria (delta).[0m
+[BACKEND COLLISION]
+[BACKEND COLLISION] type = car
+[BACKEND COLLISION] time = 0.55
+[BACKEND COLLISION] traj duration = 36.5923 s
+[BACKEND COLLISION] position base = 3.2325 -2.57226
+[BACKEND COLLISION] arm q = -0.0303496   -1.37104   0.719055   0.687258   0.285734    2.06523
+[PLAN TIME] (opt/safety failed)
+Hybrid A*       : skipped
+Manipulator     : 0.37 ms
+Whole-body RRT  : 537.45 ms
+Frontend check  : 0.37 ms
+Initialization  : 0.022241 ms
+Optimization    : 3462.03 ms
+Safety check    : 1.30371 ms
+Time scaling    : skipped
+Safety recheck  : skipped
+Total           : 4001.91 ms
+[33m[WARN] [1787755447.959232803]: KinoAstar: switching to whole-body RRT after 17 failures. start=(3.20,-2.56) goal=(1.61,1.23)[0m
+[47;30m
+[replan 33]==============================================[0m
+[0m[INFO] [1787755447.959096732]: continous_failures_count: 17[0m
+[RRT TIME] search = 63.9957 ms
+[RRT TIME] reconstruction = 609.853 ms
+[RRT TIME] total = 673.849 ms
+[0m[INFO] [1787755449.826958367]: The optimization result is : Success: met stopping criteria (delta).[0m
+[BACKEND COLLISION]
+[BACKEND COLLISION] type = car
+[BACKEND COLLISION] time = 2.3
+[BACKEND COLLISION] traj duration = 22.0799 s
+[BACKEND COLLISION] position base = 3.57947 -2.64763
+[BACKEND COLLISION] arm q = -0.155192 -0.861023   0.60252   0.57173  0.349139   2.05428
+[PLAN TIME] (opt/safety failed)
+Hybrid A*       : skipped
+Manipulator     : 0.36 ms
+Whole-body RRT  : 673.87 ms
+Frontend check  : 0.29 ms
+Initialization  : 0.020245 ms
+Optimization    : 1193.04 ms
+Safety check    : 5.98009 ms
+Time scaling    : skipped
+Safety recheck  : skipped
+Total           : 1873.95 ms
+[RRT TIME] search = 61.8046 ms
+[RRT TIME] reconstruction = 227.176 ms
+[RRT TIME] total = 288.981 ms
+[33m[WARN] [1787755451.597921582]: The optimization result is : Line search reaches the maximum try number, assumptions not satisfied or precision not achievable. (candidate traj still checked)[0m
+[33m[WARN] [1787755451.600398745]: car collision at time 0.880000![0m
+[BACKEND COLLISION]
+[BACKEND COLLISION] type = car
+[BACKEND COLLISION] time = 0.88
+[BACKEND COLLISION] traj duration = 22.8388 s
+[BACKEND COLLISION] position base = 3.25624 -2.57078
+[BACKEND COLLISION] arm q = -0.0225187    -1.3502   0.709346   0.681599   0.291559    2.05759
+[PLAN TIME] (opt/safety failed)
+Hybrid A*       : skipped
+Manipulator     : 0.37 ms
+Whole-body RRT  : 289.00 ms
+Frontend check  : 0.30 ms
+Initialization  : 0.021244 ms
+Optimization    : 1474.13 ms
+Safety check    : 2.45358 ms
+Time scaling    : skipped
+Safety recheck  : skipped
+Total           : 1766.63 ms
+[33m[WARN] [1787755451.601559330]: KinoAstar: switching to whole-body RRT after 19 failures. start=(3.20,-2.56) goal=(1.61,1.23)[0m
+[47;30m
+[replan 35]==============================================[0m
+[0m[INFO] [1787755451.601392383]: continous_failures_count: 19[0m
+[RRT TIME] search = 71.2371 ms
+[RRT TIME] reconstruction = 539.896 ms
+[RRT TIME] total = 611.134 ms
+[0m[INFO] [1787755453.335995128]: The optimization result is : Success: met stopping criteria (delta).[0m
+[BACKEND COLLISION]
+[BACKEND COLLISION] type = car
+[BACKEND COLLISION] time = 0.95
+[BACKEND COLLISION] traj duration = 22.0464 s
+[BACKEND COLLISION] position base = 3.26211 -2.57086
+[BACKEND COLLISION] arm q = -0.020484  -1.33865  0.710634  0.682151  0.280983   2.05473
+[PLAN TIME] (opt/safety failed)
+Hybrid A*       : skipped
+Manipulator     : 0.42 ms
+Whole-body RRT  : 611.16 ms
+Frontend check  : 0.39 ms
+Initialization  : 0.022144 ms
+Optimization    : 1122.31 ms
+Safety check    : 2.27246 ms
+Time scaling    : skipped
+Safety recheck  : skipped
+Total           : 1736.96 ms
+[31m[ERROR] [1787755453.339149908]: [FSM] abort current goal after 20 consecutive planning failures[0m
+[FSM]: from GEN_NEW_TRAJ to WAIT_TARGET
