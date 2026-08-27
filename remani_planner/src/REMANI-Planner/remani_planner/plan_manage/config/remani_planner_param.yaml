@@ -79,6 +79,49 @@ fsm:
   global_plan: true           # Whether to use global plan
   emergency_time: 1.5         # greater than max replan time
 
+  # ################################
+  # YAML: EE 6D pose goal FSM / IK params begin
+  # ################################
+  ee_goal_topic: /ee_goal
+  ee_current_pose_topic: /ee_current_pose
+
+  ee_ik_pos_tol: 0.01
+  ee_ik_rot_tol_deg: 2.0
+  ee_reach_pos_tol: 0.02
+  ee_reach_rot_tol_deg: 4.0
+
+  ee_ik_local_xy: 0.40
+  ee_ik_local_yaw_deg: 20.0
+  ee_ik_b_max_iters: 60
+  ee_ik_b_max_ms: 40.0
+  ee_ik_b_weight_xy: 5.0
+  ee_ik_b_weight_yaw: 2.0
+  ee_ik_b_weight_joint: 1.0
+
+  ee_ik_b_accept_joint_margin: 0.15
+  ee_ik_b_accept_clearance: 0.20
+  ee_ik_b_accept_max_xy: 0.15
+  ee_ik_b_accept_max_yaw_deg: 10.0
+  ee_ik_b_accept_max_dq: 0.50
+
+  ee_ik_c_radii: [0.50, 0.75, 1.00, 1.25]
+  ee_ik_c_yaw_bins: 12
+  ee_ik_c_yaw_offsets_deg: [0.0, -15.0, 15.0]
+  ee_ik_c_arm_iters: 40
+  ee_ik_c_arm_max_ms: 5.0
+  ee_ik_c_max_ms: 150.0
+
+  ee_ik_w_xy: 1.0
+  ee_ik_w_yaw: 0.3
+  ee_ik_w_q: 0.1
+  ee_ik_w_limit: 1.0
+  ee_ik_w_gap: 2.0
+  ee_ik_gap_ref: 0.20
+  ee_ik_joint_margin_req: 0.087
+  # ################################
+  # YAML: EE 6D pose goal FSM / IK params end
+  # ################################
+
 # ################################
 # YAML: RViz debug visualization (does not affect planning/collision) begin
 # ################################

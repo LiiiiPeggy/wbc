@@ -37,6 +37,20 @@ include_directories(
 
 add_library( mm_config
     src/mm_config.cpp
+    # ################################
+    # CMake: fixed-base arm IK source begin
+    # ################################
+    src/fixed_base_arm_ik.cpp
+    # ################################
+    # CMake: fixed-base arm IK source end
+    # ################################
+    # ################################
+    # CMake: whole-body IK source begin
+    # ################################
+    src/whole_body_ik.cpp
+    # ################################
+    # CMake: whole-body IK source end
+    # ################################
     )
 
 target_link_libraries( mm_config
@@ -50,5 +64,23 @@ add_executable(test_cr10_fk src/test_cr10_fk.cpp)
 target_link_libraries(test_cr10_fk mm_config ${catkin_LIBRARIES})
 # ################################
 # CMake: CR10 FK validation node end
+# ################################
+
+# ################################
+# CMake: EE kinematics API compile check begin
+# ################################
+add_executable(test_ee_kinematics_compile src/test_ee_kinematics_compile.cpp)
+target_link_libraries(test_ee_kinematics_compile mm_config ${catkin_LIBRARIES})
+# ################################
+# CMake: EE kinematics API compile check end
+# ################################
+
+# ################################
+# CMake: EE pose and Jacobian Milestone A tests begin
+# ################################
+add_executable(test_ee_pose_ik src/test_ee_pose_ik.cpp)
+target_link_libraries(test_ee_pose_ik mm_config ${catkin_LIBRARIES})
+# ################################
+# CMake: EE pose and Jacobian Milestone A tests end
 # ################################
 

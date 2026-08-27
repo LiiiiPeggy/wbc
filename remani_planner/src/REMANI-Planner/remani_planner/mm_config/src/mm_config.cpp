@@ -1,6 +1,9 @@
 #include "mm_config/mm_config.hpp"
+#include "mm_config/ee_kinematics_utils.hpp"
 #include <stdexcept>
 #include <algorithm>
+#include <limits>
+#include <cmath>
 
 namespace remani_planner
 {
@@ -105,6 +108,23 @@ void MMConfig::setParam(ros::NodeHandle &nh){
     T_q_0_(0, 3) = base_mani_fixed_joint_xyz_ypr[0];
     T_q_0_(1, 3) = base_mani_fixed_joint_xyz_ypr[1];
     T_q_0_(2, 3) = base_mani_fixed_joint_xyz_ypr[2];
+
+    // ################################
+    // C++: load EE TCP offset mm/ee_tcp_xyz_rpy begin
+    // ################################
+    std::vector<double> ee_tcp_xyz_rpy{0.0, 0.0, 0.0, 0.0, 0.0, 0.0};
+    nh.param<std::vector<double>>("mm/ee_tcp_xyz_rpy", ee_tcp_xyz_rpy,
+                                  std::vector<double>{0.0, 0.0, 0.0, 0.0, 0.0, 0.0});
+    T_tcp_ = Eigen::Matrix4d::Identity();
+    if(ee_tcp_xyz_rpy.size() >= 6){
+        T_tcp_.block(0, 0, 3, 3) = urdfRpyToRotation(ee_tcp_xyz_rpy[3], ee_tcp_xyz_rpy[4], ee_tcp_xyz_rpy[5]);
+        T_tcp_(0, 3) = ee_tcp_xyz_rpy[0];
+        T_tcp_(1, 3) = ee_tcp_xyz_rpy[1];
+        T_tcp_(2, 3) = ee_tcp_xyz_rpy[2];
+    }
+    // ################################
+    // C++: load EE TCP offset mm/ee_tcp_xyz_rpy end
+    // ################################
 
     // ################################
     // C++: manipulator_type (cr10/fast_armer/ur5) begin
@@ -756,6 +776,81 @@ void MMConfig::CarState2T(const Eigen::Vector3d &car_state, Eigen::Matrix4d &T_c
     T_car.block(0, 0, 3, 3) = R;
 }
 
+// ################################
+// C++: full mobile-manipulator EE pose chain begin
+// ################################
+Eigen::Matrix4d MMConfig::getEePose(const Eigen::Vector3d &car_state,
+                                    const Eigen::VectorXd &q){
+    Eigen::Matrix4d T_car;
+    CarState2T(car_state, T_car);
+
+    Eigen::Matrix4d T = T_car * T_q_0_;
+    for(int i = 0; i < manipulator_dof_; ++i){
+        Eigen::Matrix4d T_i, T_grad_unused;
+        getAJointTran(i, q(i), T_i, T_grad_unused);
+        T = T * T_i;
+    }
+
+    T = T * T_tcp_;
+    return T;
+}
+// ################################
+// C++: full mobile-manipulator EE pose chain end
+// ################################
+
+// ################################
+// C++: full mobile-manipulator EE Jacobian begin
+// ################################
+void MMConfig::getEeJacobian(const Eigen::Vector3d &car_state,
+                             const Eigen::VectorXd &q,
+                             Eigen::Matrix<double, 6, 9> &J){
+    J.setZero();
+
+    Eigen::Matrix4d T_car;
+    CarState2T(car_state, T_car);
+
+    Eigen::Matrix4d T_joint[6];
+    Eigen::Matrix4d dT_joint[6];
+    Eigen::Matrix4d prefix[7];
+    Eigen::Matrix4d suffix[7];
+
+    prefix[0] = T_car * T_q_0_;
+    for(int i = 0; i < 6; ++i){
+        getAJointTran(i, q(i), T_joint[i], dT_joint[i]);
+        prefix[i + 1] = prefix[i] * T_joint[i];
+    }
+
+    suffix[6] = T_tcp_;
+    for(int i = 5; i >= 0; --i){
+        suffix[i] = T_joint[i] * suffix[i + 1];
+    }
+
+    const Eigen::Matrix4d T_ee = getEePose(car_state, q);
+    const Eigen::Matrix3d R_ee = T_ee.block<3, 3>(0, 0);
+
+    J.block<3, 1>(0, 0) = Eigen::Vector3d::UnitX();
+    J.block<3, 1>(0, 1) = Eigen::Vector3d::UnitY();
+
+    const Eigen::Vector3d z_world = Eigen::Vector3d::UnitZ();
+    const Eigen::Vector3d p_ee = T_ee.block<3, 1>(0, 3);
+    const Eigen::Vector3d p_base_origin(car_state.x(), car_state.y(), 0.0);
+    J.block<3, 1>(0, 2) = z_world.cross(p_ee - p_base_origin);
+    J.block<3, 1>(3, 2) = z_world;
+
+    for(int i = 0; i < 6; ++i){
+        const Eigen::Matrix4d dT_ee = prefix[i] * dT_joint[i] * suffix[i + 1];
+        J.block<3, 1>(0, i + 3) = dT_ee.block<3, 1>(0, 3);
+
+        const Eigen::Matrix3d Rdot = dT_ee.block<3, 3>(0, 0);
+        Eigen::Matrix3d Omega = Rdot * R_ee.transpose();
+        Omega = 0.5 * (Omega - Omega.transpose());
+        J.block<3, 1>(3, i + 3) = vee(Omega);
+    }
+}
+// ################################
+// C++: full mobile-manipulator EE Jacobian end
+// ################################
+
 void MMConfig::getJointTMat(const Eigen::VectorXd &theta, std::vector<Eigen::Matrix4d> &T_joint){
     T_joint.clear();
     Eigen::Matrix4d T_temp, T_temp_grad_nouse;
@@ -865,6 +960,81 @@ bool MMConfig::checkManiObsCollision(Eigen::Vector3d car_state, Eigen::VectorXd 
     min_dist = safe_dist;
     return false;
 }
+
+// ################################
+// C++: read-only obstacle ESDF clearance scanners begin
+// ################################
+double MMConfig::getCarObstacleClearance(const Eigen::Vector3d &car_state)
+{
+    if(!grid_map_){
+        return 0.0;
+    }
+    std::vector<Eigen::Vector3d> car_pts;
+    getCarPts(car_state, car_pts);
+    if(car_pts.empty()){
+        return 0.0;
+    }
+    double min_dist = std::numeric_limits<double>::infinity();
+    for(unsigned int i = 0; i < car_pts.size(); ++i){
+        const double dist = grid_map_->getPreciseDistance(car_pts[i]);
+        if(std::isfinite(dist)){
+            min_dist = std::min(min_dist, dist);
+        }
+    }
+    return std::isfinite(min_dist) ? min_dist : 0.0;
+}
+
+double MMConfig::getWholeBodyObstacleClearance(const Eigen::Vector3d &car_state,
+                                               const Eigen::VectorXd &q)
+{
+    if(!grid_map_){
+        return 0.0;
+    }
+
+    double min_dist = getCarObstacleClearance(car_state);
+
+    Eigen::Matrix4d T_q = Eigen::Matrix4d::Identity();
+    T_q(0, 0) = cos(car_state(2));
+    T_q(0, 1) = -sin(car_state(2));
+    T_q(0, 3) = car_state(0);
+    T_q(1, 0) = sin(car_state(2));
+    T_q(1, 1) = cos(car_state(2));
+    T_q(1, 3) = car_state(1);
+
+    Eigen::Matrix4d T_now = T_q * T_q_0_;
+    std::vector<Eigen::Matrix4d> T_joint, T_joint_grad_nouse;
+    getJointTrans(q, T_joint, T_joint_grad_nouse);
+
+    if(manipulator_base_link_pts_.cols() > 0){
+        const int base_n = manipulator_base_link_pts_.cols();
+        for(int j = 0; j < base_n; ++j){
+            const Eigen::Vector3d pt_on_link =
+                (T_now * manipulator_base_link_pts_.col(j)).head(3);
+            const double dist = grid_map_->getPreciseDistance(pt_on_link);
+            if(std::isfinite(dist)){
+                min_dist = std::min(min_dist, dist);
+            }
+        }
+    }
+
+    for(int i = 0; i < manipulator_dof_; ++i){
+        T_now = T_now * T_joint[i];
+        const int pts_size = manipulator_link_pts_[i].cols();
+        for(int j = 0; j < pts_size; ++j){
+            const Eigen::Vector3d pt_on_link =
+                (T_now * manipulator_link_pts_[i].col(j)).head(3);
+            const double dist = grid_map_->getPreciseDistance(pt_on_link);
+            if(std::isfinite(dist)){
+                min_dist = std::min(min_dist, dist);
+            }
+        }
+    }
+
+    return std::isfinite(min_dist) ? min_dist : 0.0;
+}
+// ################################
+// C++: read-only obstacle ESDF clearance scanners end
+// ################################
 
 bool MMConfig::checkCarManiCollision(Eigen::VectorXd mani_state, bool safe, double &min_dist){
     // ################################

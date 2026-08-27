@@ -14,6 +14,9 @@
 #include <std_msgs/Int32.h>
 #include <vector>
 #include <visualization_msgs/Marker.h>
+#include <visualization_msgs/MarkerArray.h>
+
+#include <mm_config/whole_body_ik.hpp>
 
 #include <optimizer/poly_traj_optimizer.hpp>
 #include <plan_env/grid_map.h>
@@ -62,6 +65,14 @@ namespace remani_planner
       MANUAL_TARGET = 1,
       PRESET_TARGET = 2
     };
+
+    // ################################
+    // C++: EE pose goal source enum begin
+    // ################################
+    enum class GoalSource { NONE, NAV_2D, EE_POSE };
+    // ################################
+    // C++: EE pose goal source enum end
+    // ################################
     
     /* planning utils */
     MMPlannerManager::Ptr planner_manager_;
@@ -96,6 +107,22 @@ namespace remani_planner
     FSM_EXEC_STATE exec_state_;
     int continously_called_times_{0};
 
+    // ################################
+    // C++: EE pose goal FSM state begin
+    // ################################
+    bool have_joint_state_{false};
+    GoalSource active_goal_source_{GoalSource::NONE};
+    bool pending_ee_goal_{false};
+    bool active_ee_goal_{false};
+    Eigen::Matrix4d T_world_ee_goal_{Eigen::Matrix4d::Identity()};
+    Eigen::Matrix4d T_world_ee_pending_{Eigen::Matrix4d::Identity()};
+    WholeBodyIkSolver::Ptr whole_body_ik_;
+    double ee_reach_pos_tol_{0.02};
+    double ee_reach_rot_tol_rad_{0.06981317007977318};  // 4 deg
+    // ################################
+    // C++: EE pose goal FSM state end
+    // ################################
+
     Eigen::VectorXd mm_state_pos_, mm_state_vel_, mm_state_acc_, init_state_; // odometry state
     bool gripper_state_, rcv_gripper_state_;
     int mm_car_singul_;
@@ -120,6 +147,17 @@ namespace remani_planner
     ros::Publisher replan_pub_, new_pub_, poly_traj_pub_, data_disp_pub_, gripper_cmd_pub_, map_state_pub_;
 
     ros::Publisher reached_pub_, start_pub_;
+
+    // ################################
+    // C++: EE pose goal ROS I/O begin
+    // ################################
+    ros::Subscriber ee_goal_sub_;
+    ros::Publisher ee_current_pose_pub_;
+    ros::Publisher ee_ik_terminal_marker_pub_;  // MarkerArray, topic /ee_ik_terminal_markers
+    ros::Time last_ee_current_pose_pub_;
+    // ################################
+    // C++: EE pose goal ROS I/O end
+    // ################################
 
     ros::Time t_last_Astar_;
 
@@ -147,6 +185,19 @@ namespace remani_planner
     void mmCarOdomCallback(const nav_msgs::OdometryConstPtr &msg);
     void mmManiOdomCallback(const sensor_msgs::JointStateConstPtr &msg);
     void gripperCallback(const std_msgs::Bool::ConstPtr &msg);
+    // ################################
+    // C++: EE pose goal helpers begin
+    // ################################
+    void eeGoalCallback(const geometry_msgs::PoseStamped::ConstPtr &msg);
+    void clearPendingEeGoal();     // pending_ee_goal_=false only
+    void clearActiveEeGoal();      // active_ee_goal_=false; active_goal_source_=NONE; delete ghost
+    void clearEeGoalState();       // both pending + active
+    void publishEeTerminalGhost(const Eigen::Vector3d &car, const Eigen::VectorXd &q);
+    void deleteEeTerminalGhost();
+    void maybePublishEeCurrentPose();
+    // ################################
+    // C++: EE pose goal helpers end
+    // ################################
     void sendPolyTrajROSMsg();
     bool frontEndPathSearching();
     bool checkCollision();

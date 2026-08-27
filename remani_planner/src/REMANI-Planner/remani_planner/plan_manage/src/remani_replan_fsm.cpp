@@ -1,4 +1,33 @@
 #include <plan_manage/remani_replan_fsm.h>
+#include <mm_config/ee_kinematics_utils.hpp>
+#include <cmath>
+
+// ################################
+// C++: EE goal quaternion sanitizer (does not mutate ConstPtr) begin
+// ################################
+namespace {
+bool sanitizePoseQuaternion(const geometry_msgs::Quaternion &msg_q,
+                            Eigen::Quaterniond &q_out) {
+  if (!std::isfinite(msg_q.x) || !std::isfinite(msg_q.y) ||
+      !std::isfinite(msg_q.z) || !std::isfinite(msg_q.w)) {
+    return false;
+  }
+  Eigen::Quaterniond q(msg_q.w, msg_q.x, msg_q.y, msg_q.z);
+  const double n = q.norm();
+  if (n < 1e-12) {
+    return false;
+  }
+  if (std::abs(n - 1.0) > 1e-3) {
+    ROS_WARN("[EE GOAL] quaternion not unit (norm=%.6f), normalizing", n);
+  }
+  q.normalize();
+  q_out = q;
+  return true;
+}
+}  // namespace
+// ################################
+// C++: EE goal quaternion sanitizer (does not mutate ConstPtr) end
+// ################################
 
 namespace remani_planner
 {
@@ -82,6 +111,49 @@ namespace remani_planner
     visualization_.reset(new PlanningVisualization(nh));
     planner_manager_.reset(new MMPlannerManager);
     planner_manager_->initPlanModules(nh, visualization_);
+
+    // ################################
+    // C++: WholeBodyIkSolver + EE I/O init begin
+    // ################################
+    have_joint_state_ = false;
+    active_goal_source_ = GoalSource::NONE;
+    pending_ee_goal_ = false;
+    active_ee_goal_ = false;
+    last_ee_current_pose_pub_ = ros::Time(0);
+
+    nh.param("fsm/ee_reach_pos_tol", ee_reach_pos_tol_, 0.02);
+    double ee_reach_rot_tol_deg = 4.0;
+    nh.param("fsm/ee_reach_rot_tol_deg", ee_reach_rot_tol_deg, 4.0);
+    ee_reach_rot_tol_rad_ = ee_reach_rot_tol_deg * M_PI / 180.0;
+
+    try{
+      WholeBodyIkParams ik_params = WholeBodyIkParams::loadFromRosParam(nh);
+      whole_body_ik_ = std::make_shared<WholeBodyIkSolver>(
+          planner_manager_->mm_config_,
+          planner_manager_->grid_map_,
+          ik_params);
+      if(!ik_params.ee_goal_topic.empty()){
+        ee_goal_sub_ = nh.subscribe(ik_params.ee_goal_topic, 1,
+                                    &REMANIReplanFSM::eeGoalCallback, this);
+      }else{
+        ee_goal_sub_ = nh.subscribe("/ee_goal", 1,
+                                    &REMANIReplanFSM::eeGoalCallback, this);
+      }
+      const std::string ee_cur_topic = ik_params.ee_current_pose_topic.empty()
+          ? "/ee_current_pose"
+          : ik_params.ee_current_pose_topic;
+      ee_current_pose_pub_ =
+          nh.advertise<geometry_msgs::PoseStamped>(ee_cur_topic, 10);
+    }catch(const std::exception &ex){
+      ROS_ERROR("[EE IK] failed to init WholeBodyIkSolver: %s", ex.what());
+      whole_body_ik_.reset();
+    }
+    ee_ik_terminal_marker_pub_ =
+        nh.advertise<visualization_msgs::MarkerArray>("/ee_ik_terminal_markers", 1);
+    // ################################
+    // C++: WholeBodyIkSolver + EE I/O init end
+    // ################################
+
     /* callback */
     exec_timer_ = nh.createTimer(ros::Duration(0.01), &REMANIReplanFSM::execFSMCallback, this);
     safety_timer_ = nh.createTimer(ros::Duration(0.01), &REMANIReplanFSM::checkCollisionCallback, this);
@@ -105,6 +177,14 @@ namespace remani_planner
   void REMANIReplanFSM::execFSMCallback(const ros::TimerEvent &e)
   {
     exec_timer_.stop(); // To avoid blockage
+
+    // ################################
+    // C++: publish /ee_current_pose at ≤20 Hz begin
+    // ################################
+    maybePublishEeCurrentPose();
+    // ################################
+    // C++: publish /ee_current_pose at ≤20 Hz end
+    // ################################
 
     static int fsm_num = 0;
     fsm_num++;
@@ -165,12 +245,30 @@ namespace remani_planner
           ROS_ERROR("[FSM] abort current goal: terminal/start state invalid (kino status=%d)", kino_st);
           have_target_ = false;
           have_trigger_ = false;
+          // ################################
+          // C++: EE metadata cleanup on GEN_NEW_TRAJ abort begin
+          // ################################
+          if(active_goal_source_ == GoalSource::EE_POSE){
+            clearActiveEeGoal();
+          }
+          // ################################
+          // C++: EE metadata cleanup on GEN_NEW_TRAJ abort end
+          // ################################
           changeFSMExecState(WAIT_TARGET, "FSM");
         }else if(planner_manager_->getFailureCount() >= max_continuous_plan_failures_){
           ROS_ERROR("[FSM] abort current goal after %d consecutive planning failures",
                     planner_manager_->getFailureCount());
           have_target_ = false;
           have_trigger_ = false;
+          // ################################
+          // C++: EE metadata cleanup on GEN_NEW_TRAJ abort begin
+          // ################################
+          if(active_goal_source_ == GoalSource::EE_POSE){
+            clearActiveEeGoal();
+          }
+          // ################################
+          // C++: EE metadata cleanup on GEN_NEW_TRAJ abort end
+          // ################################
           changeFSMExecState(WAIT_TARGET, "FSM");
         }else{
           changeFSMExecState(GEN_NEW_TRAJ, "FSM");
@@ -247,12 +345,53 @@ namespace remani_planner
         }
         
       }else if(t_cur > info->duration - 1e-2 && touch_the_goal){
+
+        // ################################
+        // C++: EE-only EXEC_TRAJ completion branch begin
+        // ################################
+        if(active_goal_source_ == GoalSource::EE_POSE){
+          Eigen::Vector3d car_now(mm_state_pos_(0), mm_state_pos_(1), mm_car_yaw_);
+          Eigen::VectorXd q_now = mm_state_pos_.tail(manipulator_dim_);
+          const Eigen::Matrix4d T_actual =
+              planner_manager_->mm_config_->getEePose(car_now, q_now);
+          Eigen::Matrix<double, 6, 1> e;
+          poseError(T_actual, T_world_ee_goal_, e);
+          const double pos_err = e.head<3>().norm();
+          const double rot_err = e.tail<3>().norm();
+
+          have_target_ = false;
+          have_trigger_ = false;
+          clearActiveEeGoal();
+          changeFSMExecState(WAIT_TARGET, "FSM");
+
+          if(pos_err <= ee_reach_pos_tol_ && rot_err <= ee_reach_rot_tol_rad_){
+            ROS_INFO("[EE GOAL] reached");
+            std_msgs::Bool msg;
+            msg.data = true;
+            reached_pub_.publish(msg);
+          }else{
+            ROS_WARN("[EE GOAL] execution finished but pose tolerance not met: "
+                     "pos=%.3f rot=%.1f deg",
+                     pos_err, rot_err * 180.0 / M_PI);
+          }
+          goto force_return;
+        }
+        // ################################
+        // C++: EE-only EXEC_TRAJ completion branch end
+        // ################################
         
         if(target_type_ != TARGET_TYPE::PRESET_TARGET && wpt_id_ >= waypoint_num_ - 1){
           have_target_ = false;
           have_trigger_ = false;
           /* The navigation task completed */
           std::cout << "reach goal\n";
+          // ################################
+          // C++: NAV GoalSource closure begin
+          // ################################
+          active_goal_source_ = GoalSource::NONE;
+          // ################################
+          // C++: NAV GoalSource closure end
+          // ################################
           changeFSMExecState(WAIT_TARGET, "FSM");
 
           std_msgs::Bool msg;
@@ -443,7 +582,20 @@ namespace remani_planner
       planner_manager_->start_flag_ = true;
       start_pub_.publish(flag_msg);
       wpt_id_ = 0;
-      planNextWaypoint(waypoints_[wpt_id_], waypoints_yaw_[wpt_id_]);
+      // ################################
+      // C++: preset two-phase EE metadata commit begin
+      // ################################
+      const bool preset_ok =
+          planNextWaypoint(waypoints_[wpt_id_], waypoints_yaw_[wpt_id_]);
+      if(preset_ok){
+        if(active_goal_source_ == GoalSource::EE_POSE){
+          clearActiveEeGoal();
+        }
+        active_goal_source_ = GoalSource::NAV_2D;
+      }
+      // ################################
+      // C++: preset two-phase EE metadata commit end
+      // ################################
       return;
     }
 
@@ -517,7 +669,19 @@ namespace remani_planner
     // C++: manual goal keeps current arm joints end
     // ################################
 
-    planNextWaypoint(end_pt_, end_yaw_);
+    // ################################
+    // C++: 2D Nav Goal two-phase EE metadata commit begin
+    // ################################
+    const bool ok = planNextWaypoint(end_pt_, end_yaw_);
+    if(ok){
+      if(active_goal_source_ == GoalSource::EE_POSE){
+        clearActiveEeGoal();
+      }
+      active_goal_source_ = GoalSource::NAV_2D;
+    }
+    // ################################
+    // C++: 2D Nav Goal two-phase EE metadata commit end
+    // ################################
   }
 
   void REMANIReplanFSM::mmCarOdomCallback(const nav_msgs::OdometryConstPtr &msg)
@@ -561,6 +725,7 @@ namespace remani_planner
       mm_state_vel_(mobile_base_dim_ + i) = ((int)msg->velocity.size() > i) ? msg->velocity[i] : 0.0;
       mm_state_acc_(mobile_base_dim_ + i) = ((int)msg->effort.size() > i) ? msg->effort[i] : 0.0;
     }
+    have_joint_state_ = true;
     // ################################
     // C++: guard short JointState end
     // ################################
@@ -801,5 +966,151 @@ namespace remani_planner
 
     return true;
   }
+
+  // ################################
+  // C++: EE pose goal FSM helpers begin
+  // ################################
+  void REMANIReplanFSM::clearPendingEeGoal(){
+    pending_ee_goal_ = false;
+  }
+
+  void REMANIReplanFSM::clearActiveEeGoal(){
+    active_ee_goal_ = false;
+    active_goal_source_ = GoalSource::NONE;
+    deleteEeTerminalGhost();
+  }
+
+  void REMANIReplanFSM::clearEeGoalState(){
+    clearPendingEeGoal();
+    clearActiveEeGoal();
+  }
+
+  void REMANIReplanFSM::publishEeTerminalGhost(const Eigen::Vector3d &car,
+                                               const Eigen::VectorXd &q){
+    visualization_msgs::MarkerArray marker_array;
+    planner_manager_->mm_config_->getMMMarkerArray(
+        marker_array, "ee_ik_terminal", 0, 0.5, car, q, gripper_state_);
+    ee_ik_terminal_marker_pub_.publish(marker_array);
+  }
+
+  void REMANIReplanFSM::deleteEeTerminalGhost(){
+    visualization_msgs::MarkerArray arr;
+    visualization_msgs::Marker del;
+    del.action = visualization_msgs::Marker::DELETEALL;
+    arr.markers.push_back(del);
+    ee_ik_terminal_marker_pub_.publish(arr);
+  }
+
+  void REMANIReplanFSM::maybePublishEeCurrentPose(){
+    if(!(have_odom_ && have_joint_state_)){
+      return;
+    }
+    const ros::Time now = ros::Time::now();
+    if((now - last_ee_current_pose_pub_).toSec() < 0.05){
+      return;  // ≤20 Hz
+    }
+    last_ee_current_pose_pub_ = now;
+
+    Eigen::Vector3d car(mm_state_pos_(0), mm_state_pos_(1), mm_car_yaw_);
+    Eigen::VectorXd q = mm_state_pos_.tail(manipulator_dim_);
+    const Eigen::Matrix4d T =
+        planner_manager_->mm_config_->getEePose(car, q);
+
+    geometry_msgs::PoseStamped msg;
+    msg.header.stamp = now;
+    msg.header.frame_id = "world";
+    msg.pose.position.x = T(0, 3);
+    msg.pose.position.y = T(1, 3);
+    msg.pose.position.z = T(2, 3);
+    const Eigen::Quaterniond quat(T.block<3, 3>(0, 0));
+    msg.pose.orientation.w = quat.w();
+    msg.pose.orientation.x = quat.x();
+    msg.pose.orientation.y = quat.y();
+    msg.pose.orientation.z = quat.z();
+    ee_current_pose_pub_.publish(msg);
+  }
+
+  void REMANIReplanFSM::eeGoalCallback(
+      const geometry_msgs::PoseStamped::ConstPtr &msg){
+    if(exec_state_ != WAIT_TARGET || have_target_){
+      ROS_WARN("[EE GOAL] ignored: planner is not idle");
+      return;
+    }
+    if(!(have_odom_ && have_joint_state_)){
+      ROS_WARN("[EE GOAL] robot state not ready");
+      return;
+    }
+    if(msg->header.frame_id != "world" && !msg->header.frame_id.empty()){
+      ROS_WARN("[EE GOAL] rejected: frame_id must be world (got '%s')",
+               msg->header.frame_id.c_str());
+      return;
+    }
+    if(planner_manager_->mm_config_->getManipulatorType()
+       != MMConfig::ManipulatorType::CR10){
+      ROS_WARN("[EE GOAL] rejected: EE goal requires CR10");
+      return;
+    }
+    if(target_type_ == TARGET_TYPE::PRESET_TARGET){
+      ROS_WARN("[EE GOAL] rejected: PRESET mode");
+      return;
+    }
+    if(!whole_body_ik_){
+      ROS_ERROR("[EE GOAL] WholeBodyIkSolver not initialized");
+      return;
+    }
+
+    Eigen::Quaterniond q_goal;
+    if(!sanitizePoseQuaternion(msg->pose.orientation, q_goal)){
+      ROS_WARN("[EE GOAL] invalid quaternion");
+      return;
+    }
+    Eigen::Matrix4d T_goal = Eigen::Matrix4d::Identity();
+    T_goal.block<3, 3>(0, 0) = q_goal.toRotationMatrix();
+    T_goal(0, 3) = msg->pose.position.x;
+    T_goal(1, 3) = msg->pose.position.y;
+    T_goal(2, 3) = msg->pose.position.z;
+
+    pending_ee_goal_ = true;
+    T_world_ee_pending_ = T_goal;
+
+    Eigen::Matrix<double, 9, 1> xi_start;
+    xi_start << mm_state_pos_(0), mm_state_pos_(1), mm_car_yaw_,
+                mm_state_pos_.tail(manipulator_dim_);
+
+    const WholeBodyIkResult result =
+        whole_body_ik_->solve(xi_start, T_world_ee_pending_);
+    if(!result.success || result.best.q.size() != 6){
+      ROS_WARN("[EE GOAL] IK failed: %s", result.fail_reason.c_str());
+      clearPendingEeGoal();
+      deleteEeTerminalGhost();
+      return;
+    }
+
+    Eigen::VectorXd candidate_end_pt = Eigen::VectorXd::Zero(traj_dim_);
+    candidate_end_pt(0) = result.xi_best(0);
+    candidate_end_pt(1) = result.xi_best(1);
+    candidate_end_pt.tail(manipulator_dim_) = result.xi_best.tail(6);
+    const double candidate_end_yaw = result.xi_best(2);
+
+    planner_manager_->resetFailureCount();
+    const bool ok = planNextWaypoint(candidate_end_pt, candidate_end_yaw);
+    if(!ok){
+      ROS_ERROR("[EE GOAL] terminal found but global trajectory generation failed");
+      clearPendingEeGoal();
+      return;
+    }
+
+    active_goal_source_ = GoalSource::EE_POSE;
+    active_ee_goal_ = true;
+    T_world_ee_goal_ = T_world_ee_pending_;
+    pending_ee_goal_ = false;
+    publishEeTerminalGhost(result.best.base_xyyaw, result.best.q);
+    ROS_INFO("[EE GOAL] committed EE_POSE terminal (Δxy=%.3f Δyaw=%.1fdeg)",
+             result.best.base_xy_disp,
+             result.best.yaw_disp * 180.0 / M_PI);
+  }
+  // ################################
+  // C++: EE pose goal FSM helpers end
+  // ################################
 
 } // namespace remani_planner

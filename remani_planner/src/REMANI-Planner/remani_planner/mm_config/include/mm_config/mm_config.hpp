@@ -52,6 +52,25 @@ namespace remani_planner
 
         void getAJointTran(int joint_num, double theta, Eigen::Matrix4d &T, Eigen::Matrix4d &T_grad);
 
+        // ################################
+        // C++: full mobile-manipulator EE pose API begin
+        // ################################
+        Eigen::Matrix4d getEePose(const Eigen::Vector3d &car_state,
+                                  const Eigen::VectorXd &q);
+        // ################################
+        // C++: full mobile-manipulator EE pose API end
+        // ################################
+
+        // ################################
+        // C++: full mobile-manipulator EE Jacobian API begin
+        // ################################
+        void getEeJacobian(const Eigen::Vector3d &car_state,
+                           const Eigen::VectorXd &q,
+                           Eigen::Matrix<double, 6, 9> &J);
+        // ################################
+        // C++: full mobile-manipulator EE Jacobian API end
+        // ################################
+
         void getJointTrans(const Eigen::VectorXd &theta, std::vector<Eigen::Matrix4d> &T_joint, std::vector<Eigen::Matrix4d> &T_joint_grad){
             T_joint.clear();
             T_joint_grad.clear();
@@ -78,6 +97,17 @@ namespace remani_planner
         bool checkManicollision(Eigen::Vector3d car_state, Eigen::VectorXd mani_state, bool safe);
         bool checkcollision(Eigen::Vector3d car_state, Eigen::VectorXd mani_state, bool safe);
         bool checkcollision(Eigen::Vector3d car_state, Eigen::VectorXd mani_state, bool safe, int &coll_type /*0: car, 1: mani, 2: car-mani, 3: mani-mani*/);
+
+        // ################################
+        // C++: read-only obstacle ESDF clearance API begin
+        // ################################
+        double getWholeBodyObstacleClearance(const Eigen::Vector3d &car_state,
+                                             const Eigen::VectorXd &q);
+        double getCarObstacleClearance(const Eigen::Vector3d &car_state);
+        // ################################
+        // C++: read-only obstacle ESDF clearance API end
+        // ################################
+
         void visMM(ros::Publisher &pub, std::string ns, int idx, double alpha, const Eigen::Vector3d &car_state, const Eigen::VectorXd &joint_state, const bool &gripper_close);
         void visMMCheckBall(ros::Publisher &pub, std::string ns, int idx, double alpha, const Eigen::Vector3d &car_state, const Eigen::VectorXd &joint_state);
         void getMMMarkerArray(visualization_msgs::MarkerArray &marker_array, std::string ns, int idx, double alpha, const Eigen::Vector3d &car_state, const Eigen::VectorXd &joint_state, const bool &gripper_close);
@@ -118,6 +148,24 @@ namespace remani_planner
         }
         // ################################
         // C++: manipulator type API end
+        // ################################
+
+        // ################################
+        // C++: EE TCP + joint-limit getters begin
+        // ################################
+        const Eigen::VectorXd& getManipulatorMinPos() const {
+            return manipulator_min_pos_;
+        }
+
+        const Eigen::VectorXd& getManipulatorMaxPos() const {
+            return manipulator_max_pos_;
+        }
+
+        Eigen::Matrix4d getTcpTransform() const {
+            return T_tcp_;
+        }
+        // ################################
+        // C++: EE TCP + joint-limit getters end
         // ################################
         
     private:
@@ -166,6 +214,13 @@ namespace remani_planner
 
         Eigen::Matrix2d B_h_;
         Eigen::Matrix4d T_q_0_;
+        // ################################
+        // C++: flange-to-TCP fixed transform begin
+        // ################################
+        Eigen::Matrix4d T_tcp_;
+        // ################################
+        // C++: flange-to-TCP fixed transform end
+        // ################################
         int vis_idx_size_;
 
         Eigen::VectorXd manipulator_min_pos_, manipulator_max_pos_;
