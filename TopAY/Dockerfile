@@ -9,7 +9,9 @@ FROM osrf/ros:noetic-desktop-full@sha256:7dbfb9576d8e6d226c31e06129a82aaab870269
 ENV QT_X11_NO_MITSHM=1
 ENV NVIDIA_VISIBLE_DEVICES all
 ENV NVIDIA_DRIVER_CAPABILITIES all
-RUN echo "source /opt/ros/noetic/setup.bash" >> /etc/bash.bashrc
+ENV DISABLE_ROS1_EOL_WARNINGS=1
+RUN echo "source /opt/ros/noetic/setup.bash" >> /etc/bash.bashrc && \
+    echo "export DISABLE_ROS1_EOL_WARNINGS=1" >> /etc/bash.bashrc
 
 # Set environment variables ONLY if the build args are not empty
 # This is a shell "or" (||) operation: if $HTTP_PROXY is empty, set http_proxy to empty.

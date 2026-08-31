@@ -1,4 +1,5 @@
 #include "planner/planner.h"
+#include "fake_moma/visual_transform_utils.h"
 
 namespace nmoma_planner
 {
@@ -1742,37 +1743,8 @@ namespace nmoma_planner
         pub.publish(moma_marker);
 
         // ################################
-        // C++: Trajectory ghost uses profile mesh_parts + getLinkTransforms
+        // C++: Trajectory ghost uses shared visual root mesh transforms
         // ################################
-        auto meshLinkTransform = [](const KinematicResult& links, const MeshPart& part) -> Eigen::Matrix4d
-        {
-            switch (part.role)
-            {
-                case MeshRole::Base:
-                    return links.base_T;
-                case MeshRole::ArmBase:
-                    return links.arm_base_T;
-                case MeshRole::ArmLink:
-                    return links.arm_link_T.at(part.index);
-                case MeshRole::Ag95:
-                    return links.ee_T;
-            }
-            throw std::runtime_error("Unknown profile mesh role in vis_path_mesh");
-        };
-        auto poseFromTransform = [](const Eigen::Matrix4d& transform) -> geometry_msgs::Pose
-        {
-            geometry_msgs::Pose pose;
-            const Eigen::Quaterniond orientation(transform.block<3, 3>(0, 0));
-            pose.position.x = transform(0, 3);
-            pose.position.y = transform(1, 3);
-            pose.position.z = transform(2, 3);
-            pose.orientation.w = orientation.w();
-            pose.orientation.x = orientation.x();
-            pose.orientation.y = orientation.y();
-            pose.orientation.z = orientation.z();
-            return pose;
-        };
-
         for (const Eigen::VectorXd& wp : path)
         {
             const KinematicResult links = moma_param.getLinkTransforms(wp);
@@ -1785,7 +1757,8 @@ namespace nmoma_planner
                 marker.type = visualization_msgs::Marker::MESH_RESOURCE;
                 marker.action = visualization_msgs::Marker::ADD;
                 marker.mesh_resource = part.file;
-                marker.pose = poseFromTransform(meshLinkTransform(links, part) * part.link_T_visual);
+                marker.pose = fake_moma_visual::poseFromTransform(
+                    fake_moma_visual::meshWorldVisualTransform(moma_param, links, part));
                 marker.scale.x = part.scale.x();
                 marker.scale.y = part.scale.y();
                 marker.scale.z = part.scale.z();

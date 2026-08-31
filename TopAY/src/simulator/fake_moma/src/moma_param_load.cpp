@@ -290,6 +290,22 @@ MomaParam MomaParam::fromRos(const ros::NodeHandle& root_nh)
     profile.joint_dof_axis = toMatrixX3(values, profile.dof_num, "arm/joint_dof_axis");
     loadMeshParts(root_nh, profile.mesh_parts);
 
+    // ################################
+    // C++: Optional CAD visual root (defaults to identity)
+    // ################################
+    {
+        std::vector<double> visual_xyz = {0.0, 0.0, 0.0};
+        std::vector<double> visual_rpy = {0.0, 0.0, 0.0};
+        root_nh.getParam("moma/visual/base_xyz", visual_xyz);
+        root_nh.getParam("moma/visual/base_rpy", visual_rpy);
+        if (visual_xyz.size() != 3 || visual_rpy.size() != 3)
+        {
+            throw std::runtime_error("Global /moma/visual/base_xyz and base_rpy must contain 3 values");
+        }
+        profile.visual_base_xyz = Eigen::Map<const Eigen::Vector3d>(visual_xyz.data());
+        profile.visual_base_rpy = Eigen::Map<const Eigen::Vector3d>(visual_rpy.data());
+    }
+
     if (profile.kinematics == KinematicsType::Cr10)
     {
         getRequired(root_nh, "obstacle_thickness", profile.obstacle_thickness);
@@ -413,6 +429,15 @@ void MomaParam::finalizeCollision()
 // ################################
 void MomaParam::finalizeVisualization()
 {
+    // ################################
+    // C++: Build T_base_visual from YAML visual/base_xyz + base_rpy
+    // ################################
+    visual_root_T_.setIdentity();
+    visual_root_T_.block<3, 3>(0, 0) =
+        (Eigen::AngleAxisd(visual_base_rpy.z(), Eigen::Vector3d::UnitZ())
+         * Eigen::AngleAxisd(visual_base_rpy.y(), Eigen::Vector3d::UnitY())
+         * Eigen::AngleAxisd(visual_base_rpy.x(), Eigen::Vector3d::UnitX())).toRotationMatrix();
+    visual_root_T_.block<3, 1>(0, 3) = visual_base_xyz;
 }
 
 // ################################

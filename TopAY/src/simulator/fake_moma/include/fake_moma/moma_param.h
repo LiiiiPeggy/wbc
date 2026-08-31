@@ -152,6 +152,13 @@ struct MomaParam
     // ################################
     std::vector<MeshPart> mesh_parts;
 
+    // ################################
+    // C++: CAD visual root relative to planning base (identity for tracer)
+    // ################################
+    Eigen::Vector3d visual_base_xyz = Eigen::Vector3d::Zero();
+    Eigen::Vector3d visual_base_rpy = Eigen::Vector3d::Zero();
+    Eigen::Matrix4d visual_root_T_ = Eigen::Matrix4d::Identity();
+
     MomaParam()
     {
         link_length = joint_pos_limit_min = joint_acc_limit = \
@@ -245,6 +252,16 @@ struct MomaParam
     void validateCollision() const;
     void validateVisualization() const;
     void validateAll() const;
+
+    // ################################
+    // C++: CAD visual root helpers (planning FK unchanged)
+    // ################################
+    Eigen::Matrix4d getVisualRootTransform() const { return visual_root_T_; }
+    Eigen::Matrix4d applyVisualRoot(const Eigen::Matrix4d& base_T,
+                                    const Eigen::Matrix4d& planning_link_T) const
+    {
+        return base_T * visual_root_T_ * base_T.inverse() * planning_link_T;
+    }
 
     // ################################
     // C++: Unified typed kinematics entry points
@@ -942,7 +959,7 @@ struct MomaParam
     std::vector<Eigen::VectorXd> getMeshPose(const Eigen::VectorXd& moma_pos) const {
 
         // ################################
-        // C++: Mesh poses from profile mesh_parts + getLinkTransforms
+        // C++: Mesh poses use shared visual root (planning FK unchanged)
         // ################################
         std::vector<Eigen::VectorXd> ret;
         ret.reserve(mesh_parts.size());
@@ -966,7 +983,8 @@ struct MomaParam
         const KinematicResult links = getLinkTransforms(moma_pos);
         for (const MeshPart& part : mesh_parts)
         {
-            const Eigen::Matrix4d T = meshLinkTransform(links, part) * part.link_T_visual;
+            const Eigen::Matrix4d T =
+                applyVisualRoot(links.base_T, meshLinkTransform(links, part)) * part.link_T_visual;
             const Eigen::Quaterniond q(T.block<3, 3>(0, 0));
             Eigen::VectorXd pose(7);
             pose << T(0, 3), T(1, 3), T(2, 3), q.w(), q.x(), q.y(), q.z();

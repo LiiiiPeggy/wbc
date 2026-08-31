@@ -16,6 +16,7 @@
 #include "fake_moma/MomaState.h"
 #include "fake_moma/MomaCmd.h"
 #include "fake_moma/moma_param.h"
+#include "fake_moma/visual_transform_utils.h"
 
 using namespace std;
 
@@ -59,39 +60,6 @@ Eigen::Vector3d lidar_vec;
 // ################################
 int ag95_marker_index = -1;
 
-// ################################
-// C++: Pose profile meshes from typed links and YAML visual offsets
-// ################################
-Eigen::Matrix4d meshLinkTransform(const KinematicResult& links, const MeshPart& part)
-{
-	switch (part.role)
-	{
-		case MeshRole::Base:
-			return links.base_T;
-		case MeshRole::ArmBase:
-			return links.arm_base_T;
-		case MeshRole::ArmLink:
-			return links.arm_link_T.at(part.index);
-		case MeshRole::Ag95:
-			return links.ee_T;
-	}
-	throw std::runtime_error("Unknown profile mesh role");
-}
-
-geometry_msgs::Pose poseFromTransform(const Eigen::Matrix4d& transform)
-{
-	geometry_msgs::Pose pose;
-	const Eigen::Quaterniond orientation(transform.block<3, 3>(0, 0));
-	pose.position.x = transform(0, 3);
-	pose.position.y = transform(1, 3);
-	pose.position.z = transform(2, 3);
-	pose.orientation.w = orientation.w();
-	pose.orientation.x = orientation.x();
-	pose.orientation.y = orientation.y();
-	pose.orientation.z = orientation.z();
-	return pose;
-}
-
 void updateMeshMarkers(const Eigen::VectorXd& state)
 {
 	const KinematicResult links = moma_param.getLinkTransforms(state);
@@ -99,8 +67,8 @@ void updateMeshMarkers(const Eigen::VectorXd& state)
 	{
 		const MeshPart& part = moma_param.mesh_parts[index];
 		moma_marker.markers[index].header.stamp = ros::Time::now();
-		moma_marker.markers[index].pose =
-			poseFromTransform(meshLinkTransform(links, part) * part.link_T_visual);
+		moma_marker.markers[index].pose = fake_moma_visual::poseFromTransform(
+			fake_moma_visual::meshWorldVisualTransform(moma_param, links, part));
 	}
 }
 
@@ -132,9 +100,11 @@ void initParams(ros::NodeHandle& nh)
 	moma_state.chassis_odom.twist.twist.angular.y = 0.0;
 	moma_state.chassis_odom.twist.twist.angular.z = 0.0;
 
-	// lidar odom
+	// ################################
+	// C++: LiDAR extrinsic relative to planning base_link (no chassis_height / visual root)
+	// ################################
 	Eigen::Quaterniond chasq(cos(init_yaw/2.0), 0.0, 0.0, sin(init_yaw/2.0));
-	Eigen::Vector3d chasv(init_x, init_y, moma_param.chassis_height);
+	Eigen::Vector3d chasv(init_x, init_y, 0.0);
 	Eigen::Vector3d lidar_pos = chasq.matrix() * lidar_vec + chasv;
 	lidar_odom = moma_state.chassis_odom;
 	lidar_odom.pose.pose.position.x = lidar_pos(0);
@@ -253,9 +223,11 @@ void simCallBack(const ros::TimerEvent& event)
 	moma_state.chassis_odom.pose.pose.orientation.z  = sin(now_se2(2)/2);
 	moma_state.chassis_odom.twist.twist.linear.x  = vx;
 	moma_state.chassis_odom.twist.twist.angular.z = wz;
-	// lidar
+	// ################################
+	// C++: LiDAR world pose from planning base SE2 * URDF lidar_joint0
+	// ################################
 	Eigen::Quaterniond chasq(cos(now_se2(2)/2), 0.0, 0.0, sin(now_se2(2)/2));
-	Eigen::Vector3d chasv(now_se2.x(), now_se2.y(), moma_param.chassis_height);
+	Eigen::Vector3d chasv(now_se2.x(), now_se2.y(), 0.0);
 	Eigen::Vector3d lidar_pos = chasq.matrix() * lidar_vec + chasv;
 	lidar_odom = moma_state.chassis_odom;
 	lidar_odom.pose.pose.position.x = lidar_pos(0);
@@ -284,7 +256,7 @@ void simCallBack(const ros::TimerEvent& event)
 	updateMeshMarkers(moma_pos);
 	const KinematicResult links = moma_param.getLinkTransforms(moma_pos);
 	for (size_t i = 0; i < moma_param.dof_num; ++i)
-		moma_state.arm_odom[i].pose.pose = poseFromTransform(links.arm_link_T[i]);
+		moma_state.arm_odom[i].pose.pose = fake_moma_visual::poseFromTransform(links.arm_link_T[i]);
 	if (ag95_marker_index >= 0)
 	{
 		visualization_msgs::Marker& ag95_marker = moma_marker.markers[ag95_marker_index];

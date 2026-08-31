@@ -30,6 +30,12 @@
         <param name="~sim/init_x" value="0.0" />
         <param name="~sim/init_y" value="0.0" />
         <param name="~sim/init_yaw" value="0.0" />
+        <!-- ################################ -->
+        <!-- XML: LiDAR extrinsic vs planning base_link (URDF lidar_joint0) -->
+        <!-- ################################ -->
+        <param name="~sim/lidar_x" value="0.52588" />
+        <param name="~sim/lidar_y" value="0.0" />
+        <param name="~sim/lidar_z" value="0.16587" />
     </node>
 
     <node name="moma_vis_node" pkg="fake_moma" type="moma_vis_node" output="screen">

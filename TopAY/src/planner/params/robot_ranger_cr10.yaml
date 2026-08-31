@@ -46,22 +46,35 @@ moma:
     - {xyz: [0.04, -0.03, 0.10], obstacle_radius: 0.03, self_radius: 0.025}
 
   # ################################
-  # YAML: Ranger CR10 meshes; base Z lifts mesh onto ground (STL zmin≈-0.275)
+  # YAML: Unified CAD visual root (STL zmin≈-0.275); planning base stays z=0
+  # ################################
+  visual:
+    base_xyz: [0.0, 0.0, 0.275]
+    base_rpy: [0.0, 0.0, 0.0]
+
+  # ################################
+  # YAML: mesh_parts xyz/rpy are URDF relative to planning base_link (no per-mesh +0.275)
+  # YAML: AG95 fingers / D455 intentionally not visualized in this patch
   # ################################
   mesh_parts:
-    - {role: base, file: "package://fake_moma/meshes/ranger_cr10/ranger_meshes/ranger_base_link.STL", xyz: [0.0, 0.0, 0.275], rpy: [0.0, 0.0, 0.0]}
-    - {role: base, file: "package://fake_moma/meshes/ranger_cr10/ranger_meshes/box_link.STL", xyz: [0.0, 0.0, 0.365], rpy: [0.0, 0.0, 0.0]}
+    - {role: base, file: "package://fake_moma/meshes/ranger_cr10/ranger_meshes/ranger_base_link.STL", xyz: [0.0, 0.0, 0.0], rpy: [0.0, 0.0, 0.0]}
+    - {role: base, file: "package://fake_moma/meshes/ranger_cr10/ranger_meshes/box_link.STL", xyz: [0.0, 0.0, 0.09], rpy: [0.0, 0.0, 0.0]}
     # ################################
-    # YAML: Ranger steering + wheels (URDF origins + base visual lift z=0.275)
+    # YAML: Ranger steering + wheels from rangercr10lidar.urdf joint chain
     # ################################
-    - {role: base, file: "package://fake_moma/meshes/ranger_cr10/ranger_meshes/fr_steering_link.STL", xyz: [0.445, -0.28, 0.3085], rpy: [0.0, 0.0, 0.0]}
-    - {role: base, file: "package://fake_moma/meshes/ranger_cr10/ranger_meshes/fr_wheel_link.STL", xyz: [0.445, -0.279, 0.0167], rpy: [1.5708, 0.0, 0.0]}
-    - {role: base, file: "package://fake_moma/meshes/ranger_cr10/ranger_meshes/fl_steering_wheel_link.STL", xyz: [0.445, 0.28, 0.3085], rpy: [0.0, 0.0, 0.0]}
-    - {role: base, file: "package://fake_moma/meshes/ranger_cr10/ranger_meshes/fl_wheel_link.STL", xyz: [0.445, 0.279, 0.01505], rpy: [1.5708, 0.0, 0.0]}
-    - {role: base, file: "package://fake_moma/meshes/ranger_cr10/ranger_meshes/rl_steering_wheel_link.STL", xyz: [-0.445, 0.28, 0.3085], rpy: [0.0, 0.0, 0.0]}
-    - {role: base, file: "package://fake_moma/meshes/ranger_cr10/ranger_meshes/rl_wheel_link.STL", xyz: [-0.445, 0.279, 0.01505], rpy: [1.5708, 0.0, 0.0]}
-    - {role: base, file: "package://fake_moma/meshes/ranger_cr10/ranger_meshes/rr_steering_wheel_link.STL", xyz: [-0.445, -0.28, 0.3085], rpy: [0.0, 0.0, 0.0]}
-    - {role: base, file: "package://fake_moma/meshes/ranger_cr10/ranger_meshes/rr_wheel_link.STL", xyz: [-0.445, -0.279, 0.0167], rpy: [1.5708, 0.0, 0.0]}
+    - {role: base, file: "package://fake_moma/meshes/ranger_cr10/ranger_meshes/fr_steering_link.STL", xyz: [0.445, -0.28, 0.0335], rpy: [0.0, 0.0, 0.0]}
+    - {role: base, file: "package://fake_moma/meshes/ranger_cr10/ranger_meshes/fr_wheel_link.STL", xyz: [0.445, -0.279, -0.2583], rpy: [1.5708, 0.0, 0.0]}
+    - {role: base, file: "package://fake_moma/meshes/ranger_cr10/ranger_meshes/fl_steering_wheel_link.STL", xyz: [0.445, 0.28, 0.0335], rpy: [0.0, 0.0, 0.0]}
+    - {role: base, file: "package://fake_moma/meshes/ranger_cr10/ranger_meshes/fl_wheel_link.STL", xyz: [0.445, 0.279, -0.25995], rpy: [1.5708, 0.0, 0.0]}
+    - {role: base, file: "package://fake_moma/meshes/ranger_cr10/ranger_meshes/rl_steering_wheel_link.STL", xyz: [-0.445, 0.28, 0.0335], rpy: [0.0, 0.0, 0.0]}
+    - {role: base, file: "package://fake_moma/meshes/ranger_cr10/ranger_meshes/rl_wheel_link.STL", xyz: [-0.445, 0.279, -0.25995], rpy: [1.5708, 0.0, 0.0]}
+    - {role: base, file: "package://fake_moma/meshes/ranger_cr10/ranger_meshes/rr_steering_wheel_link.STL", xyz: [-0.445, -0.28, 0.0335], rpy: [0.0, 0.0, 0.0]}
+    - {role: base, file: "package://fake_moma/meshes/ranger_cr10/ranger_meshes/rr_wheel_link.STL", xyz: [-0.445, -0.279, -0.2583], rpy: [1.5708, 0.0, 0.0]}
+    # ################################
+    # YAML: LiDAR + D435 from URDF chain (lidar_joint0 / d435_joint / d435_link_joint / visual)
+    # ################################
+    - {role: base, file: "package://fake_moma/meshes/ranger_cr10/sensor_meshes/lidar_link0.STL", xyz: [0.52588, 0.0, 0.16587], rpy: [0.0, 0.0, 0.0]}
+    - {role: base, file: "package://fake_moma/meshes/ranger_cr10/sensor_meshes/d435.stl", xyz: [0.62578, 0.0, 0.23637], rpy: [1.57079632679, 0.0, 1.57079632679], scale: [1.0, 1.0, 1.0]}
     - {role: arm_base, file: "package://fake_moma/meshes/ranger_cr10/cr10_meshes/cr10_base_link.STL", xyz: [0.0, 0.0, 0.0], rpy: [0.0, 0.0, 0.0]}
     - {role: arm_link, index: 0, file: "package://fake_moma/meshes/ranger_cr10/cr10_meshes/Link1.STL", xyz: [0.0, 0.0, 0.0], rpy: [0.0, 0.0, 0.0]}
     - {role: arm_link, index: 1, file: "package://fake_moma/meshes/ranger_cr10/cr10_meshes/Link2.STL", xyz: [0.0, 0.0, 0.0], rpy: [0.0, 0.0, 0.0]}
