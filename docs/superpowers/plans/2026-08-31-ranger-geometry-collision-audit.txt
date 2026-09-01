@@ -1,0 +1,81 @@
+# Ranger Geometry / Collision Audit
+repo_root: /home/gzz/Codes/wbc
+yaml: /home/gzz/Codes/wbc/TopAY/src/planner/params/robot_ranger_cr10.yaml
+visual.base_xyz: [0.0, 0.0, 0.275]
+chassis: length=1.1 width=0.9 height=0.15 collision_radius=0.711
+chassis rectangle circumradius (theoretical): 0.710634
+
+=== Ranger base STL ===
+mesh: package://fake_moma/meshes/ranger_cr10/ranger_meshes/ranger_base_link.STL
+path: /home/gzz/Codes/wbc/TopAY/src/simulator/fake_moma/meshes/ranger_cr10/ranger_meshes/ranger_base_link.STL
+format: binary | vertex_count: 1910466
+mesh xyz: [0.0, 0.0, 0.0] | rpy: [0.0, 0.0, 0.0] | visual_root_applied: True
+local_bounds min: [-0.651000, -0.438000, -0.274950] max: [0.651000, 0.438000, 0.160000]
+world_bounds min: [-0.651000, -0.438000, 0.000050] max: [0.651000, 0.438000, 0.435000]
+ground_clearance: 0.000050 | penetration_depth: 0.000000 | recommended_delta_z: 0.000000
+
+=== Box STL (planning frame) ===
+mesh: package://fake_moma/meshes/ranger_cr10/ranger_meshes/box_link.STL
+path: /home/gzz/Codes/wbc/TopAY/src/simulator/fake_moma/meshes/ranger_cr10/ranger_meshes/box_link.STL
+format: binary | vertex_count: 79881
+mesh xyz: [0.0, 0.0, 0.09] | rpy: [0.0, 0.0, 0.0] | visual_root_applied: False
+local_bounds min: [-0.606275, -0.400000, -0.017000] max: [0.600000, 0.410000, 0.382106]
+world_bounds min: [-0.606275, -0.400000, 0.073000] max: [0.600000, 0.410000, 0.472106]
+ground_clearance: 0.073000 | penetration_depth: 0.000000 | recommended_delta_z: -0.073000
+
+=== Box STL (visual frame) ===
+mesh: package://fake_moma/meshes/ranger_cr10/ranger_meshes/box_link.STL
+path: /home/gzz/Codes/wbc/TopAY/src/simulator/fake_moma/meshes/ranger_cr10/ranger_meshes/box_link.STL
+format: binary | vertex_count: 79881
+mesh xyz: [0.0, 0.0, 0.09] | rpy: [0.0, 0.0, 0.0] | visual_root_applied: True
+local_bounds min: [-0.606275, -0.400000, -0.017000] max: [0.600000, 0.410000, 0.382106]
+world_bounds min: [-0.606275, -0.400000, 0.348000] max: [0.600000, 0.410000, 0.747106]
+ground_clearance: 0.348000 | penetration_depth: 0.000000 | recommended_delta_z: -0.348000
+
+=== Wheel STL ===
+mesh: package://fake_moma/meshes/ranger_cr10/ranger_meshes/fr_wheel_link.STL
+path: /home/gzz/Codes/wbc/TopAY/src/simulator/fake_moma/meshes/ranger_cr10/ranger_meshes/fr_wheel_link.STL
+format: binary | vertex_count: 107286
+mesh xyz: [0.445, -0.279, -0.2583] | rpy: [1.5708, 0.0, 0.0] | visual_root_applied: True
+local_bounds min: [-0.154486, -0.152997, -0.099500] max: [0.151483, 0.152999, 0.119500]
+world_bounds min: [0.290514, -0.398500, -0.136297] max: [0.596483, -0.179500, 0.169699]
+ground_clearance: -0.136297 | penetration_depth: 0.136297 | recommended_delta_z: 0.136297
+
+=== Wheel STL ===
+mesh: package://fake_moma/meshes/ranger_cr10/ranger_meshes/fl_wheel_link.STL
+path: /home/gzz/Codes/wbc/TopAY/src/simulator/fake_moma/meshes/ranger_cr10/ranger_meshes/fl_wheel_link.STL
+format: binary | vertex_count: 107298
+mesh xyz: [0.445, 0.279, -0.25995] | rpy: [1.5708, 0.0, 0.0] | visual_root_applied: True
+local_bounds min: [-0.151503, -0.152997, -0.119500] max: [0.154466, 0.152999, 0.099500]
+world_bounds min: [0.293497, 0.179500, -0.137947] max: [0.599466, 0.398500, 0.168049]
+ground_clearance: -0.137947 | penetration_depth: 0.137947 | recommended_delta_z: 0.137947
+
+=== Wheel STL ===
+mesh: package://fake_moma/meshes/ranger_cr10/ranger_meshes/rl_wheel_link.STL
+path: /home/gzz/Codes/wbc/TopAY/src/simulator/fake_moma/meshes/ranger_cr10/ranger_meshes/rl_wheel_link.STL
+format: binary | vertex_count: 107298
+mesh xyz: [-0.445, 0.279, -0.25995] | rpy: [1.5708, 0.0, 0.0] | visual_root_applied: True
+local_bounds min: [-0.151503, -0.152997, -0.119500] max: [0.154466, 0.152999, 0.099500]
+world_bounds min: [-0.596503, 0.179500, -0.137947] max: [-0.290534, 0.398500, 0.168049]
+ground_clearance: -0.137947 | penetration_depth: 0.137947 | recommended_delta_z: 0.137947
+
+=== Wheel STL ===
+mesh: package://fake_moma/meshes/ranger_cr10/ranger_meshes/rr_wheel_link.STL
+path: /home/gzz/Codes/wbc/TopAY/src/simulator/fake_moma/meshes/ranger_cr10/ranger_meshes/rr_wheel_link.STL
+format: binary | vertex_count: 107286
+mesh xyz: [-0.445, -0.279, -0.2583] | rpy: [1.5708, 0.0, 0.0] | visual_root_applied: True
+local_bounds min: [-0.154486, -0.152997, -0.099500] max: [0.151483, 0.152999, 0.119500]
+world_bounds min: [-0.599486, -0.398500, -0.136297] max: [-0.293517, -0.179500, 0.169699]
+ground_clearance: -0.136297 | penetration_depth: 0.136297 | recommended_delta_z: 0.136297
+
+=== Box vs chassis collision model ===
+box planning XY half-extent (approx): 0.606275
+chassis collision_radius: 0.711000
+note: GridMap chassis 2D layer only ingests obstacle points with z < chassis_height (0.15); upper box has no dedicated 3D envelope yet.
+
+=== CR10 collision proxies ===
+deferred to Task 2A (test_topay_cr10_colli_frame / getColliPtsCr10 numeric dump)
+
+=== Box smoke false negative (observed pattern) ===
+When obstacle z > chassis_height but XY overlaps box, RViz box mesh may intersect obstacle while GridMap::isWholeBodyCollision() returns false (chassis 2D + low-Z filtering only).
+box planning z-range: [0.0730, 0.4721]
