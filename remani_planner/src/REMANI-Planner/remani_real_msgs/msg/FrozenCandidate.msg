@@ -1,0 +1,8 @@
+std_msgs/Header header
+uint64 candidate_id
+bool complete
+bool valid
+float64 duration
+quadrotor_msgs/PolynomialTraj[] segments
+string validation_code
+string validation_message

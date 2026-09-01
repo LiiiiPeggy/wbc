@@ -1,0 +1,4 @@
+uint64 candidate_id
+---
+bool accepted
+string message
