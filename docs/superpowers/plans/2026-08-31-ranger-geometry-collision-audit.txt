@@ -76,6 +76,12 @@ note: GridMap chassis 2D layer only ingests obstacle points with z < chassis_hei
 === CR10 collision proxies ===
 deferred to Task 2A (test_topay_cr10_colli_frame / getColliPtsCr10 numeric dump)
 
+=== CR10 collision proxies (Task 2A update) ===
+getColliPtsCr10() matches T_owner * local_offset for all proxies (state0/state1).
+max planning truth err = 0.0 (gate PASSED).
+RViz /sphere displays obstacle_radius=0.10 (not self_radius=0.045).
+Green sphere vs CAD offset is planning/visual frame split (+0.275 visual root) — fix via Task 2B overlay, not FK.
+
 === Box smoke false negative (observed pattern) ===
 When obstacle z > chassis_height but XY overlaps box, RViz box mesh may intersect obstacle while GridMap::isWholeBodyCollision() returns false (chassis 2D + low-Z filtering only).
 box planning z-range: [0.0730, 0.4721]
