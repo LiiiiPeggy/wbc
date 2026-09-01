@@ -49,12 +49,19 @@ target_link_libraries( vis_utils
     ${catkin_LIBRARIES} 
     )  
 
+add_library(candidate_transaction_builder
+  src/candidate_transaction_builder.cpp)
+target_link_libraries(candidate_transaction_builder
+  ${catkin_LIBRARIES})
+add_dependencies(candidate_transaction_builder ${catkin_EXPORTED_TARGETS})
+
 add_executable(remani_planner_node
   src/remani_planner_node.cpp 
   src/remani_replan_fsm.cpp
   src/planner_manager.cpp
   )
 target_link_libraries(remani_planner_node 
+  candidate_transaction_builder
   ${catkin_LIBRARIES}
   vis_utils
   )
@@ -76,5 +83,12 @@ if(CATKIN_ENABLE_TESTING)
   catkin_add_gtest(test_execution_policy test/test_execution_policy.cpp)
   if(TARGET test_execution_policy)
     target_link_libraries(test_execution_policy ${catkin_LIBRARIES})
+  endif()
+
+  catkin_add_gtest(test_candidate_transaction_builder
+    test/test_candidate_transaction_builder.cpp)
+  if(TARGET test_candidate_transaction_builder)
+    target_link_libraries(test_candidate_transaction_builder
+      candidate_transaction_builder ${catkin_LIBRARIES})
   endif()
 endif()
