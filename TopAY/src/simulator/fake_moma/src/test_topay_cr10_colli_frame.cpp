@@ -35,6 +35,10 @@ MomaParam makeCr10Profile()
     profile.initCr10FixedTransforms();
     profile.buildCollisionProxies();
     profile.buildCollisionIgnoreMatrix();
+    profile.visual_base_xyz << 0.0, 0.0, 0.275;
+    profile.visual_base_rpy.setZero();
+    profile.visual_root_T_.setIdentity();
+    profile.visual_root_T_.block<3, 1>(0, 3) = profile.visual_base_xyz;
     return profile;
 }
 
@@ -82,6 +86,48 @@ bool dumpAndVerifyPlanningTruth(const MomaParam& profile, const Eigen::VectorXd&
     }
     return true;
 }
+
+bool verifyVisualOverlay(const MomaParam& profile, const Eigen::VectorXd& state,
+                         const char* label, double tol)
+{
+    const KinematicResult links = profile.getLinkTransformsCr10(state);
+    const visualization_msgs::MarkerArray visual_markers = profile.getColliVisualMarkerArray(state);
+
+    if (visual_markers.markers.size() != profile.collision_proxies_.size())
+    {
+        std::cerr << "visual marker count mismatch for " << label << "\n";
+        return false;
+    }
+
+    std::cout << "\n=== CR10 visual collision overlay report: " << label << " ===\n";
+    double max_err = 0.0;
+    for (size_t i = 0; i < profile.collision_proxies_.size(); ++i)
+    {
+        const CollisionSphere& proxy = profile.collision_proxies_[i];
+        const Eigen::Matrix4d owner_T = profile.cr10OwnerLinkTransform(links, proxy.link_id);
+        const Eigen::Matrix4d visual_owner_T = profile.applyVisualRoot(links.base_T, owner_T);
+        const Eigen::Vector4d local = (Eigen::Vector4d() << proxy.local_offset, 1.0).finished();
+        const Eigen::Vector3d expected = (visual_owner_T * local).head<3>();
+        const Eigen::Vector3d actual(visual_markers.markers[i].pose.position.x,
+                                     visual_markers.markers[i].pose.position.y,
+                                     visual_markers.markers[i].pose.position.z);
+        const double err = (actual - expected).norm();
+        max_err = std::max(max_err, err);
+
+        std::cout << "idx=" << i
+                  << " expected_visual=" << expected.transpose()
+                  << " actual_visual=" << actual.transpose()
+                  << " err=" << err << "\n";
+    }
+
+    std::cout << "max visual overlay err=" << max_err << "\n";
+    if (max_err > tol)
+    {
+        std::cerr << "CR10 visual collision overlay gate FAILED: " << label << "\n";
+        return false;
+    }
+    return true;
+}
 }  // namespace
 
 int main()
@@ -96,6 +142,8 @@ int main()
     bool ok = true;
     ok = dumpAndVerifyPlanningTruth(profile, state0, "state0 (x=0,y=0,yaw=0,q=0)", 1e-9) && ok;
     ok = dumpAndVerifyPlanningTruth(profile, state1, "state1 (x=1,y=-0.5,yaw=0.6,q!=0)", 1e-9) && ok;
+    ok = verifyVisualOverlay(profile, state0, "state0 overlay", 1e-6) && ok;
+    ok = verifyVisualOverlay(profile, state1, "state1 overlay", 1e-6) && ok;
 
     std::cout << "\n=== Diagnosis notes ===\n";
     std::cout << "RViz /sphere uses obstacle_radius (0.10), not self_radius (0.045).\n";
@@ -107,5 +155,6 @@ int main()
     }
 
     std::cout << "CR10 planning sphere numeric truth gate PASSED\n";
+    std::cout << "CR10 visual collision overlay exact local-offset transform gate PASSED\n";
     return 0;
 }

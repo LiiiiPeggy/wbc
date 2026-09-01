@@ -776,6 +776,48 @@ struct MomaParam
     }
 
     // ################################
+    // C++: CR10 visual-aligned collision overlay (debug only, not planner truth)
+    // ################################
+    visualization_msgs::MarkerArray getColliVisualMarkerArray(const Eigen::VectorXd& moma_pos) const
+    {
+        visualization_msgs::MarkerArray colli_marker_array;
+        if (kinematics != KinematicsType::Cr10)
+        {
+            return colli_marker_array;
+        }
+
+        const KinematicResult links = getLinkTransformsCr10(moma_pos);
+        for (size_t i = 0; i < collision_proxies_.size(); ++i)
+        {
+            const CollisionSphere& proxy = collision_proxies_[i];
+            const Eigen::Matrix4d owner_T = cr10OwnerLinkTransform(links, proxy.link_id);
+            const Eigen::Matrix4d visual_owner_T = applyVisualRoot(links.base_T, owner_T);
+            const Eigen::Vector4d local = (Eigen::Vector4d() << proxy.local_offset, 1.0).finished();
+            const Eigen::Vector3d visual_center = (visual_owner_T * local).head<3>();
+
+            visualization_msgs::Marker sphere;
+            sphere.header.frame_id = "world";
+            sphere.id = static_cast<int>(i);
+            sphere.type = visualization_msgs::Marker::SPHERE;
+            sphere.action = visualization_msgs::Marker::ADD;
+            const double diameter = 2.0 * proxy.obstacle_radius;
+            sphere.scale.x = diameter;
+            sphere.scale.y = diameter;
+            sphere.scale.z = diameter;
+            sphere.pose.position.x = visual_center.x();
+            sphere.pose.position.y = visual_center.y();
+            sphere.pose.position.z = visual_center.z();
+            sphere.pose.orientation.w = 1.0;
+            sphere.color.a = 0.45;
+            sphere.color.r = 0.2;
+            sphere.color.g = 0.6;
+            sphere.color.b = 0.95;
+            colli_marker_array.markers.push_back(sphere);
+        }
+        return colli_marker_array;
+    }
+
+    // ################################
     // C++: Const vis helper for shared_ptr<const MomaParam>
     // ################################
     visualization_msgs::MarkerArray getColliCylinderArray(Eigen::VectorXd moma_pos) const

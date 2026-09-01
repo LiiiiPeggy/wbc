@@ -21,7 +21,7 @@
 using namespace std;
 
 ros::Subscriber cmd_sub, map_sub;
-ros::Publisher  state_pub, marker_pub, cylinder_pub, sphere_pub, lidar_odom_pub;
+ros::Publisher  state_pub, marker_pub, cylinder_pub, sphere_pub, sphere_visual_pub, lidar_odom_pub;
 
 fake_moma::MomaCmd moma_cmd;
 fake_moma::MomaState moma_state;
@@ -205,6 +205,10 @@ void simCallBack(const ros::TimerEvent& event)
 		for (size_t i=0; i<cma.markers.size(); i++)
 			cma.markers[i].header.stamp = ros::Time::now();
 		sphere_pub.publish(cma);
+		auto visual_cma = moma_param.getColliVisualMarkerArray(moma_pos);
+		for (size_t i = 0; i < visual_cma.markers.size(); ++i)
+			visual_cma.markers[i].header.stamp = ros::Time::now();
+		sphere_visual_pub.publish(visual_cma);
 		return;
 	}
 
@@ -330,6 +334,10 @@ void simCallBack(const ros::TimerEvent& event)
 	for (size_t i=0; i<cma.markers.size(); i++)
 		cma.markers[i].header.stamp = ros::Time::now();
 	sphere_pub.publish(cma);
+	auto visual_cma = moma_param.getColliVisualMarkerArray(moma_pos);
+	for (size_t i = 0; i < visual_cma.markers.size(); ++i)
+		visual_cma.markers[i].header.stamp = ros::Time::now();
+	sphere_visual_pub.publish(visual_cma);
 }
 
 int main (int argc, char** argv) 
@@ -353,6 +361,7 @@ int main (int argc, char** argv)
 	marker_pub = nh.advertise<visualization_msgs::MarkerArray>("marker", 1);
 	cylinder_pub = nh.advertise<visualization_msgs::MarkerArray>("cylinder", 1);
 	sphere_pub = nh.advertise<visualization_msgs::MarkerArray>("sphere", 1);
+	sphere_visual_pub = nh.advertise<visualization_msgs::MarkerArray>("sphere_visual", 1);
 	lidar_odom_pub = nh.advertise<nav_msgs::Odometry>("/Odometry", 1);
 	ros::Timer odom_timer = nh.createTimer(ros::Duration(time_resolution), simCallBack);
 

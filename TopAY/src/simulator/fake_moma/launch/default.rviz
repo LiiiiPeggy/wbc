@@ -86,6 +86,14 @@ Visualization Manager:
             "": true
           Queue Size: 100
           Value: true
+        - Class: rviz/MarkerArray
+          Enabled: true
+          Marker Topic: /fake_moma_node/sphere_visual
+          Name: sphere_visual
+          Namespaces:
+            "": true
+          Queue Size: 100
+          Value: true
         - Angle Tolerance: 0
           Class: rviz/Odometry
           Covariance:
@@ -302,6 +310,14 @@ Visualization Manager:
           Enabled: true
           Marker Topic: /moma_vis_node/sphere
           Name: sphere
+          Namespaces:
+            {}
+          Queue Size: 100
+          Value: true
+        - Class: rviz/MarkerArray
+          Enabled: true
+          Marker Topic: /moma_vis_node/sphere_visual
+          Name: sphere_visual
           Namespaces:
             {}
           Queue Size: 100
