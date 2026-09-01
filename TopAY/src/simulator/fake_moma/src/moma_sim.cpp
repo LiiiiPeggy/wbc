@@ -278,6 +278,9 @@ void simCallBack(const ros::TimerEvent& event)
 	Eigen::VectorXi collision_link;
 	moma_param.isSelfCollision(moma_pos, collision_link);
 
+	// ################################
+	// C++: Debug cylinder KD-tree scan is sim-only; not GridMap planning truth
+	// ################################
 	visualization_msgs::MarkerArray cylinder_msg = moma_param.getColliCylinderArray(moma_pos);
 	for (size_t i=0; i<cylinder_msg.markers.size(); i++)
 	{

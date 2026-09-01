@@ -540,3 +540,89 @@ bool MomaParam::isChassisArmCollisionIgnored(int link_id) const
     }
     return false;
 }
+
+// ################################
+// C++: CR10 debug collision cylinders from exact link transform chain
+// ################################
+Eigen::Quaterniond quatFromUnitZTo(const Eigen::Vector3d& direction)
+{
+    const Eigen::Vector3d unit_z = Eigen::Vector3d::UnitZ();
+    const Eigen::Vector3d dir = direction.normalized();
+    if (dir.dot(unit_z) > 0.999999)
+    {
+        return Eigen::Quaterniond::Identity();
+    }
+    if (dir.dot(unit_z) < -0.999999)
+    {
+        return Eigen::Quaterniond(Eigen::AngleAxisd(M_PI, Eigen::Vector3d::UnitX()));
+    }
+    return Eigen::Quaterniond::FromTwoVectors(unit_z, dir);
+}
+
+visualization_msgs::MarkerArray MomaParam::getColliCylinderArrayCr10(
+    const Eigen::VectorXd& moma_pos) const
+{
+    visualization_msgs::MarkerArray colli_marker_array;
+
+    visualization_msgs::Marker chassis_marker;
+    chassis_marker.header.frame_id = "world";
+    chassis_marker.id = 0;
+    chassis_marker.type = visualization_msgs::Marker::CYLINDER;
+    chassis_marker.action = visualization_msgs::Marker::ADD;
+    chassis_marker.scale.x = chassis_colli_radius * 2.0;
+    chassis_marker.scale.y = chassis_colli_radius * 2.0;
+    chassis_marker.scale.z = chassis_height;
+    chassis_marker.pose.position.x = moma_pos[0];
+    chassis_marker.pose.position.y = moma_pos[1];
+    chassis_marker.pose.position.z = chassis_height / 2.0;
+    chassis_marker.pose.orientation.w = 1.0;
+    chassis_marker.color.a = 0.5;
+    chassis_marker.color.r = 0.0;
+    chassis_marker.color.g = 0.0;
+    chassis_marker.color.b = 1.0;
+    colli_marker_array.markers.push_back(chassis_marker);
+
+    const KinematicResult links = getLinkTransformsCr10(moma_pos);
+    int marker_id = 1;
+    for (size_t joint = 0; joint < dof_num; ++joint)
+    {
+        const Eigen::Vector3d segment = cr10_joint_fixed_[joint].block<3, 1>(0, 3);
+        const double segment_length = segment.norm();
+        if (segment_length <= 1e-6)
+        {
+            continue;
+        }
+
+        const int link_id = static_cast<int>(1 + joint);
+        const Eigen::Matrix4d link_T = cr10LinkTransformAt(links, link_id, dof_num);
+        const Eigen::Vector4d local_mid =
+            (Eigen::Vector4d() << 0.5 * segment.x(), 0.5 * segment.y(), 0.5 * segment.z(), 1.0)
+                .finished();
+        const Eigen::Vector3d center = (link_T * local_mid).head<3>();
+        const Eigen::Vector3d axis_world = link_T.block<3, 3>(0, 0) * segment;
+        const Eigen::Quaterniond orientation = quatFromUnitZTo(axis_world);
+
+        visualization_msgs::Marker colli_marker;
+        colli_marker.header.frame_id = "world";
+        colli_marker.id = marker_id++;
+        colli_marker.type = visualization_msgs::Marker::CYLINDER;
+        colli_marker.action = visualization_msgs::Marker::ADD;
+        colli_marker.scale.x = cylinder_radius * 2.0;
+        colli_marker.scale.y = cylinder_radius * 2.0;
+        colli_marker.scale.z = segment_length;
+        colli_marker.pose.position.x = center.x();
+        colli_marker.pose.position.y = center.y();
+        colli_marker.pose.position.z = center.z();
+        colli_marker.pose.orientation.w = orientation.w();
+        colli_marker.pose.orientation.x = orientation.x();
+        colli_marker.pose.orientation.y = orientation.y();
+        colli_marker.pose.orientation.z = orientation.z();
+        colli_marker.color.a = 0.5;
+        colli_marker.color.r = 0.0;
+        colli_marker.color.g = 0.0;
+        colli_marker.color.b = 1.0;
+        colli_marker_array.markers.push_back(colli_marker);
+    }
+
+    return colli_marker_array;
+}

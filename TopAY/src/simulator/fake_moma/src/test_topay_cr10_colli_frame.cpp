@@ -128,6 +128,64 @@ bool verifyVisualOverlay(const MomaParam& profile, const Eigen::VectorXd& state,
     }
     return true;
 }
+
+bool verifyCr10CylinderExactChain(const MomaParam& profile)
+{
+    Eigen::VectorXd state = Eigen::VectorXd::Zero(9);
+    state(3) = 0.3;
+    state(4) = -0.4;
+
+    const visualization_msgs::MarkerArray cylinders = profile.getColliCylinderArray(state);
+    if (cylinders.markers.empty())
+    {
+        std::cerr << "CR10 cylinder debug visualization FAILED: empty marker array\n";
+        return false;
+    }
+
+    const KinematicResult links = profile.getLinkTransformsCr10(state);
+    size_t marker_idx = 1;
+    double max_err = 0.0;
+    for (size_t joint = 0; joint < profile.dof_num; ++joint)
+    {
+        const Eigen::Vector3d segment = profile.cr10_joint_fixed_[joint].block<3, 1>(0, 3);
+        if (segment.norm() <= 1e-6)
+        {
+            continue;
+        }
+        if (marker_idx >= cylinders.markers.size())
+        {
+            std::cerr << "CR10 cylinder debug visualization FAILED: missing link marker\n";
+            return false;
+        }
+
+        const int link_id = static_cast<int>(1 + joint);
+        const Eigen::Matrix4d link_T = profile.cr10OwnerLinkTransform(links, link_id);
+        const Eigen::Vector4d local_mid =
+            (Eigen::Vector4d() << 0.5 * segment.x(), 0.5 * segment.y(), 0.5 * segment.z(), 1.0)
+                .finished();
+        const Eigen::Vector3d expected_center = (link_T * local_mid).head<3>();
+        const Eigen::Vector3d actual(cylinders.markers[marker_idx].pose.position.x,
+                                     cylinders.markers[marker_idx].pose.position.y,
+                                     cylinders.markers[marker_idx].pose.position.z);
+        max_err = std::max(max_err, (actual - expected_center).norm());
+        if (std::abs(cylinders.markers[marker_idx].scale.z - segment.norm()) > 1e-6)
+        {
+            std::cerr << "CR10 cylinder debug visualization FAILED: segment length mismatch\n";
+            return false;
+        }
+        ++marker_idx;
+    }
+
+    if (max_err > 1e-6)
+    {
+        std::cerr << "CR10 cylinder debug visualization FAILED: max center err=" << max_err << "\n";
+        return false;
+    }
+
+    std::cout << "CR10 cylinder exact-chain debug visualization PASSED (markers="
+              << cylinders.markers.size() << ", max_center_err=" << max_err << ")\n";
+    return true;
+}
 }  // namespace
 
 int main()
@@ -144,6 +202,7 @@ int main()
     ok = dumpAndVerifyPlanningTruth(profile, state1, "state1 (x=1,y=-0.5,yaw=0.6,q!=0)", 1e-9) && ok;
     ok = verifyVisualOverlay(profile, state0, "state0 overlay", 1e-6) && ok;
     ok = verifyVisualOverlay(profile, state1, "state1 overlay", 1e-6) && ok;
+    ok = verifyCr10CylinderExactChain(profile) && ok;
 
     std::cout << "\n=== Diagnosis notes ===\n";
     std::cout << "RViz /sphere uses obstacle_radius (0.10), not self_radius (0.045).\n";

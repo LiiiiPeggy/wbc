@@ -279,6 +279,7 @@ struct MomaParam
     std::vector<Eigen::Vector4d> getColliPtsCr10(const Eigen::VectorXd& moma_pos) const;
     Eigen::VectorXd getColliGradsCr10(const Eigen::VectorXd& moma_pos,
                                       const std::vector<Eigen::Vector3d>& pos_grads) const;
+    visualization_msgs::MarkerArray getColliCylinderArrayCr10(const Eigen::VectorXd& moma_pos) const;
     double getColliSelfRadius(size_t idx) const;
     bool isChassisArmCollisionIgnored(int link_id) const;
 
@@ -822,6 +823,14 @@ struct MomaParam
     // ################################
     visualization_msgs::MarkerArray getColliCylinderArray(Eigen::VectorXd moma_pos) const
     {
+        // ################################
+        // C++: CR10 debug cylinders use exact transform chain (not legacy colli_length)
+        // ################################
+        if (kinematics == KinematicsType::Cr10)
+        {
+            return getColliCylinderArrayCr10(moma_pos);
+        }
+
         visualization_msgs::MarkerArray colli_marker_array;
         visualization_msgs::Marker chassis_marker;
         chassis_marker.header.frame_id = "world";
