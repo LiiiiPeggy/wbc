@@ -52,7 +52,7 @@ TEST(CandidateTransactionBuilder, ExternalWrapsContiguousAdds) {
 
 TEST(CandidateTransactionBuilder, InternalRemainsAddOnly) {
   const auto msgs = CandidateTransactionBuilder::buildInternalAdds(
-      oneSegmentTrajectory(), ros::Time(10.0));
+      oneSegmentTrajectory(), ros::Time(42.0));
 
   ASSERT_EQ(1u, msgs.size());
   EXPECT_EQ(quadrotor_msgs::PolynomialTraj::ACTION_ADD, msgs[0].action);

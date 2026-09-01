@@ -59,8 +59,8 @@ CandidateTransactionBuilder::buildExternal(const SingulTrajData& data,
 
 std::vector<quadrotor_msgs::PolynomialTraj>
 CandidateTransactionBuilder::buildInternalAdds(const SingulTrajData& data,
-                                               const ros::Time& transaction_stamp) {
-  return buildAdds(data, transaction_stamp, false);
+                                               const ros::Time&) {
+  return buildAdds(data, ros::Time(data.start_time), false);
 }
 
 quadrotor_msgs::PolynomialTraj CandidateTransactionBuilder::buildControl(
