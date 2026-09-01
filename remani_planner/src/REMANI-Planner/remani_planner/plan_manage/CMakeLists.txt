@@ -72,3 +72,9 @@ target_link_libraries(ee_goal_marker_node
 # CMake: EE interactive marker node end
 # ################################
 
+if(CATKIN_ENABLE_TESTING)
+  catkin_add_gtest(test_execution_policy test/test_execution_policy.cpp)
+  if(TARGET test_execution_policy)
+    target_link_libraries(test_execution_policy ${catkin_LIBRARIES})
+  endif()
+endif()
