@@ -269,6 +269,7 @@ struct MomaParam
     KinematicResult getLinkTransforms(const Eigen::VectorXd& state) const;
     void initCr10FixedTransforms();
     KinematicResult getLinkTransformsCr10(const Eigen::VectorXd& state) const;
+    Eigen::Matrix4d cr10OwnerLinkTransform(const KinematicResult& transforms, int link_id) const;
     KinematicResult getLinkTransformsTopayAlt(const Eigen::VectorXd& state) const;
     Eigen::VectorXd getFKPoseCr10(const Eigen::VectorXd& moma_pos) const;
     Eigen::VectorXd getEEGradsCr10(const Eigen::VectorXd& moma_pos,

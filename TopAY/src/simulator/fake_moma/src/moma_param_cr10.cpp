@@ -303,6 +303,11 @@ Eigen::Matrix4d cr10LinkTransformAt(const KinematicResult& transforms, int link_
     return transforms.ee_T;
 }
 
+Eigen::Matrix4d MomaParam::cr10OwnerLinkTransform(const KinematicResult& transforms, int link_id) const
+{
+    return cr10LinkTransformAt(transforms, link_id, dof_num);
+}
+
 // ################################
 // C++: Sample CR10 link segments and AG95 envelope into collision proxies
 // ################################

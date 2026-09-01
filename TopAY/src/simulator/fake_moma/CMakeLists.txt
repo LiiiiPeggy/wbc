@@ -74,6 +74,16 @@ target_link_libraries(test_topay_cr10_fk
 )
 
 # ################################
+# CMake: CR10 collision sphere frame diagnosis gate
+# ################################
+add_executable(test_topay_cr10_colli_frame src/test_topay_cr10_colli_frame.cpp)
+add_dependencies(test_topay_cr10_colli_frame fake_moma_gencpp)
+target_link_libraries(test_topay_cr10_colli_frame
+  fake_moma
+  ${catkin_LIBRARIES}
+)
+
+# ################################
 # CMake: Ranger visual-root / sensor mesh numeric gate
 # ################################
 add_executable(test_topay_ranger_visual src/test_topay_ranger_visual.cpp)
