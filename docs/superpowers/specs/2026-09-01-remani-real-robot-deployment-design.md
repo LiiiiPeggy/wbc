@@ -1,172 +1,328 @@
 # REMANI Ranger+CR10 实机部署与人工确认执行设计
 
 **Date:** 2026-09-01
-**Status:** Draft — awaiting user review before implementation planning
+**Revised:** 2026-09-01（final design polish：transaction semantics、two-level candidate interface、split state spaces）
+**Status:** Implementation-plan ready — source-consistency review blockers closed
 **Chosen approach:** 方案 1，规划器与实机执行器分离
-**Scope:** 保留现有 REMANI 仿真模式，新增可选择的 Ranger+CR10 实机模式；在 RViz 中设置末端目标、仅规划并预览全身轨迹，待操作者确认后再执行；执行期间支持 Pause、Resume 和 Abort。
+**Scope:** 保留现有 REMANI 仿真模式，新增 Ranger+CR10 实机模式；在 RViz 中设置末端目标、仅规划并预览全身轨迹，待操作者确认后再执行；执行期间支持 Pause、Resume 和 Abort。
 
-## 1. 背景与现状
+## 0. 本轮修订结论
 
-当前仓库已经具备以下基础：
+本设计使用一个且仅一个 execution owner：
 
-- REMANI 接收 Ranger 里程计和 CR10 六轴关节状态，以底盘平面状态和六关节状态规划全身轨迹。
-- `ee_goal_marker_node` 已实现显式 `Plan` 语义：拖动末端 Marker 只缓存目标，执行 Plan 操作后才发布 `/ee_goal`。
-- 规划器发布 `quadrotor_msgs/PolynomialTraj` 到 `planning/trajectory`。
-- 当前仿真中的 `mm_controller` 会立即消费该轨迹并执行，不存在实机所需的人工确认门。
-- Ranger 驱动接收 `geometry_msgs/Twist`，发布 `/odom`，并可发布 `odom_frame -> base_link` TF。
-- CR10 驱动发布名为 `joint1 ... joint6` 的 `/joint_states`，并提供 `/cr10_robot/joint_controller/follow_joint_trajectory` Action。
-- CR10 已验证过通过 MoveIt 设置末端目标后运动，但尚未完成 REMANI 全身轨迹、Action 取消、暂停保持和底盘同步的实机验证。
-- 当前 CR10 Action 的轨迹回调在单线程 callback queue 中阻塞执行整条轨迹；现有 cancel 仅停止 ROS timer 并返回 `SUCCEEDED`，不能证明可在运动中及时抢占。该问题必须在启用 Pause 前修复。
+| 启动模式 | execution_owner | 执行生命周期所有者 |
+|---|---|---|
+| sim | internal | REMANI 原 FSM，保留 EXEC_TRAJ、现有 mm_controller 和现有完成逻辑 |
+| real | external | Trajectory Gate + Real Executor；REMANI 严格 PLAN-ONLY |
 
-当前仿真会根据模拟 `/odom` 和模拟关节状态更新 RViz。仓库还没有本设计中的统一实机 launch，因此**现状不能保证实机启动时 RViz 已按实际姿态初始化**。本设计将实际状态同步列为实机进入 `READY` 的硬门槛，详见第 6 节。
+实机模式不允许 REMANI 的 EXEC_TRAJ 与 Real Executor 的 EXECUTING 同时推进。real 下 REMANI 只读取实际状态、规划、发布候选事务，然后退出该候选的执行生命周期。
 
-## 2. 目标与非目标
+本轮已根据源码确认并修正以下事实：
 
-### 2.1 目标
+- 当前 GEN_NEW_TRAJ 成功后直接进入 EXEC_TRAJ，并用 ros::Time::now() 减 trajectory.start_time 推进虚拟执行时间。
+- 当前 checkCollisionCallback() 在非 WAIT_TARGET 状态下使用同一虚拟时间做未来碰撞检查、局部重规划和 EMERGENCY_STOP。
+- 当前 sendPolyTrajROSMsg() 只发布 ACTION_ADD；START / FINAL 虽已定义在消息中，但 planner 尚未使用。
+- PolynomialTraj.trajectory_id 是同一 SingulTraj 内的 segment 序号，不是用户 Plan 的候选版本。
+- 当前 planner 机械臂回调直接读取 position[0..5]，不按 JointState.name 重排。
+- 当前 Ranger 驱动直接订阅绝对话题 /cmd_vel，且没有 ROS 侧命令超时保护。
+- 当前 CR10 Action callback 会阻塞执行整条轨迹，单线程 spinner 下 cancel 不能保证及时执行。
+- 当前 dobot_v4_bringup/RobotStatus.msg 只包含 is_enable 和 is_connected；虽然驱动实时数据已有 ErrorStatus 和 robot_mode，但尚未通过该状态消息暴露，不能把现有 RobotStatus 直接当作完整 fault 信号。
+
+## 1. 目标、固定决策与非目标
+
+### 1.1 目标
 
 - 使用一个启动参数选择现有仿真模式或新增实机模式。
-- `mode:=sim` 保持当前仿真入口和执行语义，不因实机功能发生行为回归。
-- `mode:=real` 一次启动 Ranger 驱动、CR10 bringup、REMANI、RViz 和实机执行链路。
-- 实机启动后，RViz 中的底盘和机械臂模型由当前实际反馈初始化并持续更新。
-- 在 RViz 设置末端目标后，`Plan` 只生成和显示候选全身轨迹，绝不驱动硬件。
-- 操作者确认轨迹后点击 `Execute`，才允许向 Ranger 和 CR10 输出运动指令。
-- 执行中可随时 `Pause`，确认停稳后可在容差内 `Resume`；也可 `Abort` 并清除轨迹。
-- 实机执行默认使用保守、参数化的速度与误差限制。
-- 第一阶段在清空场地中运行，不依赖 D435 或激光雷达在线更新碰撞环境。
+- mode:=sim 保持当前仿真入口、内部执行状态机和自动执行语义。
+- mode:=real 一次启动 Ranger、CR10、REMANI plan-only、Trajectory Gate、Real Executor、RViz 和状态桥。
+- 实机启动后，RViz RobotModel 由当前实际 odom 和 CR10 关节反馈初始化并持续更新。
+- RViz 的 Plan 只生成候选全身轨迹；只有人工 Execute 才能进入实机执行。
+- real 模式由外部执行层统一拥有 PLANNED、EXECUTING、PAUSED、SUCCEEDED 和 ERROR。
+- 执行中支持 Pause、严格容差内 Resume，以及使旧候选失效的 Abort。
+- dry_run 完整运行规划、验证、采样、时序和状态机，但在硬件 ownership 边界阻断运动输出。
+- 第一阶段使用显式 static-empty GridMap，不使用 D435 或 LiDAR 在线感知。
 
-### 2.2 非目标
+### 1.2 固定决策
 
-- 第一阶段不提供动态障碍物检测、在线避障或执行中重规划。
-- 不改 REMANI 的 Hybrid A*、RRT、多项式优化和 whole-body terminal 求解算法。
-- 不把 CR10 改成笛卡尔伺服或阻抗控制。
-- 不实现跨 Pause 状态的大偏差自动纠偏；偏差超限时必须重新规划。
+- 默认 mode:=sim。
+- real 必须 execution_owner:=external；sim 必须 execution_owner:=internal。
+- 非法组合，例如 mode:=real + execution_owner:=internal，启动时直接拒绝。
+- 第一阶段 global_plan:=true，不做执行期 periodic replan。
+- 不引入 MoveIt 执行层；CR10 由 Real Executor 直接调用 FollowJointTrajectory。
+- 当前启动位置定义为 world 原点，不引入外部定位。
+- 实机使用保守且可参数化的速度和误差限制。
+- 物理急停是实机运行前置条件。
+
+### 1.3 非目标
+
+- 不提供动态障碍物检测、在线避障或执行中动态重规划。
+- 不改 REMANI 的 Hybrid A*、RRT、多项式优化和 whole-body terminal 算法。
+- 不增加笛卡尔伺服、阻抗控制、MPC 或新的 whole-body planner。
+- 不实现执行中的新目标抢占。
+- V1 不自动生成 Pause 到剩余轨迹之间的 whole-body connector。
 - 不用软件按钮替代物理急停。
-- 第一阶段不引入外部定位。启动时 Ranger 当前物理位置被定义为 `world` 原点，之后由轮式里程计积分。
 
-## 3. 已确认的使用方式
+## 2. 启动方式与 execution ownership
 
 统一入口：
 
-```bash
-# 保持当前仿真行为
+~~~bash
+# 现有仿真行为
 ./remani_planner/run_remani.sh mode:=sim
 
-# 连接实机、检查反馈和完整执行链路，但屏蔽运动输出
+# 连接实机并运行完整 dry-run
 ./remani_planner/run_remani.sh \
   mode:=real \
   dry_run:=true \
   robot_ip:=192.168.5.1 \
   can_interface:=can0
 
-# 正式向实机输出命令
+# 正式实机输出
 ./remani_planner/run_remani.sh \
   mode:=real \
   dry_run:=false \
   robot_ip:=192.168.5.1 \
   can_interface:=can0
-```
+~~~
 
-`mode` 默认值为 `sim`。`mode:=sim` 继续启动现有 `remani_sim.launch`，不强制经过实机 Trajectory Gate。`mode:=real` 启动新的 `remani_real.launch`。
+launch 内部锁死：
 
-操作者工作流：
+~~~text
+mode=sim
+  execution_owner=internal
+  environment_mode=simulated
 
-```text
-启动实机系统
-  -> 等待真实状态同步，面板显示 READY
-  -> 在 RViz 拖动末端目标 Marker
-  -> 点击 Plan
-  -> 查看候选全身轨迹动画、路径、时长和限制检查
-  -> 人工确认轨迹正确
-  -> 点击 Execute
-  -> 执行中可 Pause / Resume / Abort
-```
+mode=real
+  execution_owner=external
+  environment_mode=static_empty
+~~~
 
-拖动 Marker 只更新目标，不发布运动命令，也不自动触发规划。
+### 2.1 sim：REMANI owns execution lifecycle
 
-## 4. 总体架构
+保持现有行为：
 
-采用规划器和实机执行器分离的结构：
+~~~text
+actual simulated state
+  -> planning
+  -> planning success
+  -> REMANI EXEC_TRAJ
+  -> mm_controller automatic execution
+  -> existing periodic replan / emergency / completion behavior
+~~~
 
-```text
-RViz EE Marker
-      │ cached target
-      ▼
-RViz Panel: Plan
-      │ /ee_goal
-      ▼
+sim 继续保留：
+
+- GEN_NEW_TRAJ -> EXEC_TRAJ。
+- planner trajectory.start_time 与 ros::Time::now() 的内部时间推进。
+- mm_controller 对现有 ACTION_ADD 的消费。
+- planner 的 REPLAN_TRAJ、EMERGENCY_STOP、planning/finish 和 EE actual-FK completion。
+
+实机功能不得改变上述语义或默认启动路径。
+
+### 2.2 real：external layer owns execution lifecycle
+
+real 下 REMANI 严格 PLAN-ONLY：
+
+~~~text
+actual current state
+  -> planning
+  -> START / ADD... / FINAL candidate transaction
+  -> candidate handoff
+  -> planner returns to planning idle
+~~~
+
+real 的执行生命周期为：
+
+~~~text
+Trajectory Gate
+  -> PLANNED
+  -> explicit Execute
+  -> Real Executor EXECUTING
+  -> PAUSED / SUCCEEDED / ERROR
+~~~
+
+禁止增加一个继续驱动内部轨迹时间的 WAIT_EXTERNAL_EXECUTE，然后再与外部 Executor 双向同步。real 下 planner 不拥有任何执行时钟。
+
+## 3. 三层架构与数据流
+
+~~~text
+================================================
+UI / Human
+================================================
+
+EE Marker
+  -> cached EE target
+
+RViz Panel
+  |- Plan
+  |- Execute(candidate_id)
+  |- Pause
+  |- Resume
+  '- Abort
+
+
+================================================
+Planning layer
+================================================
+
 REMANI Planner
-      │ candidate PolynomialTraj transaction
-      ▼
-Trajectory Gate ───────────────► RViz candidate preview
-      │ cached and validated
-      │
-      └── Execute confirmed ───► Real Executor
-                                   ├──► Ranger velocity command
-                                   └──► CR10 FollowJointTrajectory
 
-Actual /odom + CR10 joint feedback
-      ├──► State Bridge / readiness monitor
-      ├──► REMANI initial and current state
-      ├──► Real Executor feedback control
-      └──► TF + RobotModel actual pose in RViz
-```
+mode=sim:
+  owns normal EXEC_TRAJ lifecycle
 
-### 4.1 REMANI Planner
+mode=real:
+  PLAN ONLY
+  -> /remani/planner_candidate
+     ACTION_WARN_START
+     ACTION_ADD trajectory_id=1..N
+     ACTION_WARN_FINAL
 
-保留规划器的核心职责：根据当前实际底盘、机械臂状态和末端目标生成完整的 current-to-goal 全身轨迹。
 
-实机 launch 将规划器原 `planning/trajectory` 输出重映射为候选轨迹话题，防止现有 `mm_controller` 或其他消费者直接执行。第一阶段保持 `global_plan:=true`，一条获批轨迹代表从当前状态到目标的完整轨迹；执行期间不做周期性重规划。
+================================================
+Real execution layer
+================================================
 
-### 4.2 Trajectory Gate
+Trajectory Gate
+  -> assemble and validate
+  -> assign monotonic candidate_id
+  -> freeze candidate
+  -> /remani/frozen_candidate
+  -> publish isolated preview
+  -> explicit Execute(candidate_id)
 
-Gate 是规划与硬件之间的人工确认边界，职责为：
+Real Executor
+  |- /remani/hardware/ranger/cmd_vel -> Ranger driver
+  '- /cr10_robot/joint_controller/follow_joint_trajectory
 
-- 按一次规划事务接收并组装候选多项式轨迹。
-- 使用 `ACTION_WARN_START`、一个或多个轨迹数据消息以及 `ACTION_WARN_FINAL` 确认事务完整。
-- 校验维数、时间单调性、数值有限性、连续性、起点和速度/加速度限制。
-- 缓存候选轨迹并发布独立预览数据。
-- 只有收到显式 `Execute` 且所有 readiness 条件仍然满足时，才把冻结轨迹交给 Real Executor。
-- 空闲时新 `Plan` 会替换旧候选；执行中不接受新轨迹覆盖。
+actual /odom + actual CR10 q
+  -> State Bridge
+  -> readiness / tracking / completion
 
-候选轨迹不得直接连接硬件控制话题。
+Real Executor
+  -> final base/joint checks
+  -> actual EE FK verification
+  -> SUCCEEDED or ERROR
+~~~
 
-### 4.3 Real Executor
+Planner、Gate 与 Executor 使用两级接口，不共享一条“candidate trajectory”通道：
 
-Executor 负责：
+~~~text
+REMANI Planner
+  -> /remani/planner_candidate
+  -> raw START / ADD... / FINAL transaction
 
-- 从同一条冻结轨迹和同一单调时间轴生成 Ranger 与 CR10 指令。
-- 用实际 `/odom` 对底盘做闭环跟踪。
-- 生成并提交 CR10 `JointTrajectory`。
-- 执行运行期限制、反馈超时和跟踪误差检查。
-- 实现 Pause、Resume、Abort 和异常停机。
-- 在 `dry_run:=true` 时运行完整状态机和采样逻辑，但禁止输出硬件运动指令。
+Trajectory Gate
+  -> assemble / validate / safety and speed checks
+  -> assign candidate_id / manage version
+  -> freeze immutable candidate
+  -> /remani/frozen_candidate
 
-### 4.4 State Bridge
+Real Executor
+  -> consume frozen candidate only
+~~~
 
-State Bridge 隔离驱动接口差异：
+Trajectory Gate 是 planning ownership 与 execution ownership 的边界。Real Executor 永远不得订阅或直接消费 `/remani/planner_candidate`；所有 validation、speed check、safety filtering、freeze 和 version management 必须先在 Gate 完成。
 
-- 按 `JointState.name` 抽取 `joint1 ... joint6`，映射为模型需要的 `cr10_joint1 ... cr10_joint6`。
-- 输出给 REMANI 的六轴状态顺序固定且经过完整性检查，不能依赖输入数组顺序。
-- 为 `robot_state_publisher` 提供组合 `/joint_states`。CR10 六轴使用实际反馈；当前没有反馈的转向、车轮和夹爪显示关节使用明确的静态默认值，不得冒充实际测量值。
-- 转发时间戳和健康状态，检测缺关节、重复关节、NaN 和超时。
+实际 RobotModel 和候选预览使用不同数据通路。预览不得发布到真实 /joint_states，也不得发布 world -> base_link。
 
-### 4.5 Ranger command watchdog
+## 4. REMANI real PLAN-ONLY 语义
 
-现有 Ranger ROS 驱动没有可见的 `/cmd_vel` 超时停机逻辑，而且全零 Twist 会经过 `linear/angular = 0/0` 的转弯半径计算路径。实机部署前必须在驱动边界补齐：
+### 4.1 planner-side 抽象生命周期
 
-- 全零或近零 Twist 走显式停止分支，不计算半径，不得向 SDK 传入 NaN。
-- 纯直线命令 `angular.z == 0` 显式使用零转角，不做除零。
-- 增加可配置 `cmd_vel_timeout`，默认 `0.20 s`。超过时限未收到新命令时，驱动主动发送零运动命令。
-- 启动时、退出时和通讯异常时发送一次显式停止命令。
-- 单元测试覆盖零速度、纯直线、纯旋转和超时；实机单独验证底盘确实停下。
+real 下 planner 使用独立的 planner_state：
 
-该驱动看门狗保护 Executor 进程崩溃或 ROS 指令流中断的情况，但不替代 Ranger 自身固件保护和物理急停。
+~~~text
+IDLE
+PLANNING
+HANDOFF
+~~~
 
-## 5. 执行状态机
+语义：
 
-状态定义：
+- IDLE：没有正在进行的规划或 handoff；外部 Executor 可以同时处于 PLANNED、EXECUTING、PAUSED、SUCCEEDED 或 ERROR。
+- PLANNING：正在根据最新实际状态生成 raw candidate transaction。
+- HANDOFF：START / ADD... / FINAL 已发布，等待 Gate 对完整事务给出 commit success / failure 和 candidate_id correlation；这是短暂的接口交接状态，不是等待执行状态。
 
-```text
+这三个是独立于 REMANI 原 FSM 的设计语义，不要求把 real 执行重新塞入原 FSM，也不允许 HANDOFF 演变成 WAIT_EXTERNAL_EXECUTE。
+
+### 4.2 成功 Plan
+
+~~~text
+planner_state=IDLE
+  -> accept one permitted Plan
+  -> planner_state=PLANNING
+  -> candidate finalized
+  -> publish /remani/planner_candidate START / ADD... / FINAL
+  -> planner_state=HANDOFF
+  -> Gate commit acknowledgement supplies candidate_id or failure
+  -> release planner execution ownership
+  -> planner_state=IDLE
+~~~
+
+candidate handoff 后，planner：
+
+- 清除 active trajectory ownership。
+- 清除任何内部 EXEC_TRAJ state / latch；该 candidate 不得进入原 EXEC_TRAJ。
+- 清除 planner execution timer state，包括 trajectory.start_time 对该 candidate 的执行期语义。
+- 保留 Gate 返回的 candidate_id、external execution metadata 和 execution-result correlation information，用于日志与结果关联。
+- 不进入当前基于 wall-clock 的 EXEC_TRAJ。
+- 不继续按 candidate duration 推进时间。
+- 不执行 real 的 EE completion。
+- 不发布 planning/finish。
+- 不启动 periodic local replan。
+- 不因 candidate duration 到期而切回 WAIT_TARGET。
+- 不认为机器人已运动或已到达目标。
+- 不拥有 PLANNED、EXECUTING、PAUSED、SUCCEEDED 或 ERROR。
+
+保留 correlation metadata 不代表保留 execution ownership。candidate handoff 后，该 candidate 的执行状态只存在于 Gate / Real Executor；planner 不得据此重启内部时钟或重新进入 EXEC_TRAJ。
+
+### 4.3 失败 Plan
+
+- 普通 IK failure、无可行路径或 optimizer failure：发布明确的 planning failure / ACTION_WARN_IMPOSSIBLE，Real Deployment State Machine 从 PLANNING 回到 READY。
+- malformed transaction、内部协议损坏或实际反馈安全故障：进入 ERROR。
+- 失败不得让 planner 进入 EXEC_TRAJ 或按虚拟轨迹时间做完成判断。
+
+### 4.4 execution result / reset
+
+Real Executor 在 Success、Abort 或 Error 后发布显式 execution result，至少包含 candidate_id、result code 和终点误差。
+
+planner 可以订阅该结果用于清理日志或任务元数据，但该接口：
+
+- 不启动内部 EXEC_TRAJ。
+- 不恢复 planner wall-clock。
+- 不驱动 REPLAN_TRAJ 或 EMERGENCY_STOP。
+- 不改变外部层对执行结果的所有权。
+
+V1 的下一次 Plan 由 Real Deployment State Machine 的 READY / PLANNED 权限控制，而不是通过内部执行状态机解锁。
+
+### 4.5 real 下 planner safety timer
+
+execution_owner=external 时，现有 checkCollisionCallback() 的执行期逻辑整体短路，不允许使用一个未真实执行的 t_cur。
+
+real candidate handoff 后，下列 planner 执行态不参与硬件控制：
+
+- EXEC_TRAJ
+- REPLAN_TRAJ
+- EMERGENCY_STOP
+- dynamic trajectory collision scan
+- depth/cloud loss 引起的执行期 replan 或 emergency transition
+
+仍保留规划阶段的：
+
+- terminal collision check
+- whole-body self collision
+- car-arm 和 arm-arm collision
+- static-empty map boundary collision
+- optimizer collision and feasibility checks
+- Gate 对完整 candidate 的离线验证
+
+real 执行后的反馈超时、跟踪误差、停止和完成判定全部归 Real Executor。
+
+## 5. Real Deployment State Machine
+
+以下状态属于外部实机部署状态机，不是 REMANI 原 FSM：
+
+~~~text
 NOT_READY
 READY
 PLANNING
@@ -175,372 +331,1090 @@ EXECUTING
 PAUSED
 SUCCEEDED
 ERROR
-```
+~~~
 
 主要转换：
 
-```text
-NOT_READY --all feedback synchronized--> READY
-READY --Plan--> PLANNING
-PLANNING --valid complete candidate--> PLANNED
-PLANNING --no feasible path/Abort--> READY
-PLANNING --malformed transaction or safety fault--> ERROR
-PLANNED --Plan--> PLANNING       # 替换旧候选
-PLANNED --Execute--> EXECUTING
-EXECUTING --Pause and stop confirmed--> PAUSED
-PAUSED --Resume and tolerance passed--> EXECUTING
-EXECUTING --completed--> SUCCEEDED
-PLANNED/EXECUTING/PAUSED --Abort--> READY
-any active state --safety fault--> ERROR
-ERROR --health restored and Abort--> READY
-```
+~~~text
+NOT_READY --actual feedback synchronized--> READY
 
-普通规划无解不是硬件故障：显示规划失败原因并返回 `READY`。轨迹事务损坏、反馈故障或其他安全异常进入 `ERROR`。`Abort` 清除候选与剩余轨迹，之后必须重新 Plan；`ERROR` 中旧轨迹同样不可恢复。
+READY --Panel Plan--> PLANNING
+PLANNED --Panel Plan--> PLANNING
+
+PLANNING --complete START/ADD/FINAL + Gate validation pass--> PLANNED
+PLANNING --IK/no-path/optimizer failure--> READY
+PLANNING --protocol corruption or feedback safety fault--> ERROR
+
+PLANNED --Execute(candidate_id) + readiness recheck--> EXECUTING
+
+EXECUTING --Pause + both devices confirmed stopped--> PAUSED
+PAUSED --strict tolerance pass--> EXECUTING
+PAUSED --strict tolerance fail--> PAUSED, Resume rejected
+
+EXECUTING --trajectory complete + final checks pass--> SUCCEEDED
+EXECUTING --tracking/safety/completion fail--> ERROR
+
+PLANNED/EXECUTING/PAUSED --Abort--> READY
+ERROR --health restored + Abort reset--> READY
+~~~
+
+### 5.1 planner_state 与 executor_state
+
+ExecutionState 必须分别报告两个正交状态空间：
+
+~~~text
+planner_state:
+  IDLE
+  PLANNING
+  HANDOFF
+
+executor_state:
+  NONE
+  PLANNED
+  EXECUTING
+  PAUSED
+  SUCCEEDED
+  ERROR
+~~~
+
+典型合法组合：
+
+| Real Deployment State | planner_state | executor_state |
+|---|---|---|
+| NOT_READY / READY | IDLE | NONE |
+| PLANNING，planner 计算中 | PLANNING | NONE |
+| PLANNING，等待 Gate commit | HANDOFF | NONE |
+| PLANNED | IDLE | PLANNED |
+| EXECUTING | IDLE | EXECUTING |
+| PAUSED | IDLE | PAUSED |
+| SUCCEEDED | IDLE | SUCCEEDED |
+| ERROR | IDLE | ERROR |
+
+其中 `planner_state=IDLE + executor_state=EXECUTING` 是 real 模式的正常执行状态，明确表示 planner 已完成 handoff 且没有执行 ownership。Panel 不得使用 planner_busy、planner 是否空闲或 planner wall-clock 推断 executor_state。HANDOFF 只等待 Gate commit acknowledgement，不等待人工 Execute 或硬件完成。
 
 按钮权限：
 
-| 状态 | 可用操作 |
+| 外部状态 | 可用操作 |
 |---|---|
-| `NOT_READY` | 无 |
-| `READY` | Plan |
-| `PLANNING` | Abort |
-| `PLANNED` | Plan、Execute、Abort |
-| `EXECUTING` | Pause、Abort |
-| `PAUSED` | Resume、Abort |
-| `SUCCEEDED` | Plan |
-| `ERROR` | Abort，仅用于健康恢复后的安全复位 |
+| NOT_READY | 无 |
+| READY | Plan |
+| PLANNING | Abort |
+| PLANNED | Plan、Execute、Abort |
+| EXECUTING | Pause、Abort |
+| PAUSED | Resume、Abort |
+| SUCCEEDED | Plan |
+| ERROR | Abort，仅用于健康恢复后的安全复位 |
 
-## 6. 启动时按实际姿态初始化 RViz
+## 6. Candidate Transaction Protocol
 
-### 6.1 明确结论
+### 6.1 当前事实与新增要求
 
-实机模式必须根据启动时收到的实际反馈初始化 RViz，而不是使用 YAML 中的仿真初值或全零关节角。
+PolynomialTraj.msg 已定义 ACTION_WARN_START 和 ACTION_WARN_FINAL，但当前 planner 只发送 ACTION_ADD。START / FINAL 是 real external-execution mode 必须新增的正式协议，不得描述成现有行为。
 
-对底盘而言，Ranger 驱动提供的是相对轮式里程计，不是房间中的绝对定位。因此第一阶段采用：
+不修改 PolynomialTraj.msg 定义；action 的解释由 mode 和接收边界决定：
 
-```text
-启动瞬间的实际 Ranger 位姿 := world 原点 (0, 0, 0)
-之后的实际相对运动 := Ranger /odom 积分结果
-```
+| 模式 | 接收者 | action 语义 |
+|---|---|---|
+| sim / internal | 现有 mm_controller | 保持原 PolynomialTraj 语义和 ACTION_ADD-only 行为，不引入 transaction control |
+| real / external | Trajectory Gate | ACTION_WARN_START = begin transaction |
+| real / external | Trajectory Gate | ACTION_ADD = append one ordered segment |
+| real / external | Trajectory Gate | ACTION_WARN_FINAL = commit transaction；只有 commit 后才可成为 complete candidate |
+| real / external | Trajectory Gate | ACTION_ABORT = invalidate assembling/cached transaction |
+| real / external | Trajectory Gate | ACTION_WARN_IMPOSSIBLE = planning failure notification；不得 commit |
 
-这表示 RViz 中底盘的**当前相对姿态**是实际反馈，但不表示已知道机器人在房间地图中的绝对坐标。未来接入 SLAM/定位时，再增加 `map -> odom`，本阶段不引入。
+real/external 的 raw transaction 只发布在 `/remani/planner_candidate`：
 
-对 CR10 而言，RViz 必须使用驱动读回的实际 `joint1 ... joint6`，经名称映射后显示，不使用预设 home pose。
+~~~text
+ACTION_WARN_START
+  -> ACTION_ADD trajectory_id=1
+  -> ACTION_ADD trajectory_id=2
+  -> ...
+  -> ACTION_ADD trajectory_id=N
+  -> ACTION_WARN_FINAL
+~~~
 
-### 6.2 TF 与 JointState 链路
+控制消息 START、FINAL、ABORT 和 IMPOSSIBLE 的 trajectory_id 固定为 0，trajectory 数组为空；只有 ADD 携带 segment 数据。
 
-实机 launch 配置：
+### 6.2 START
 
-- Ranger 驱动：`odom_frame:=world`、`base_frame:=base_link`、`publish_odom_tf:=true`。
-- Ranger 驱动发布 `world -> base_link`，其数值来自 `/odom`。
-- `robot_state_publisher` 加载组合 Ranger+CR10 URDF。
-- State Bridge 发布映射后的 `/joint_states`，从而产生 `base_link -> ... -> cr10_Link6` 的整机 TF。
-- RViz Fixed Frame 设为 `world`。
+当一个 Plan 被外部状态机从 READY 或 PLANNED 合法启动后，状态进入 PLANNING，并允许该 planning session 接收一个 START。
 
-禁止并存第二个 `world/odom -> base_link` 发布者，避免 TF 跳变。
+Gate 接受 START 时：
 
-### 6.3 首帧同步门控
+- 立即使旧的未完成 assembly 失效。
+- 如果原来存在未执行的 PLANNED candidate，立即使其失效；新 Plan 失败时不恢复旧 candidate。
+- 清空 assembly buffer。
+- 分配新的 uint64 单调 candidate_id。
+- 将 expected next trajectory_id 设为 1。
+- 启动 assembly timeout。
 
-实机启动保持 `NOT_READY`，直到同时满足：
+未经合法 Plan session 的 START 被拒绝。EXECUTING 或 PAUSED 时收到任何新 START 都拒绝且不得影响正在执行的 frozen candidate。
 
-1. Ranger `/odom` 已收到连续有效样本，时间戳新鲜，位置和四元数有限。
-2. TF 中存在新鲜的 `world -> base_link`。
-3. Dobot RobotStatus 表示已连接；正式执行还要求机械臂已使能。
-4. 已收到至少三个连续、完整且有限的 CR10 六轴实际关节样本。
-5. State Bridge 完成名称映射，六个模型关节均可更新。
-6. `robot_state_publisher` 已形成从 `world` 到 CR10 末端的完整 TF 链。
-7. CR10 FollowJointTrajectory Action Server 可用；`dry_run` 仍检查其可用性，但不提交运动目标。
+### 6.3 ADD
 
-在上述条件满足前：
+每个 ACTION_ADD：
 
-- Panel 明确显示等待项和反馈年龄。
-- `Plan`、`Execute`、`Resume` 全部禁用。
-- 末端目标 Marker 不使用猜测姿态；在同步完成前隐藏。
-- 候选轨迹不能生成。
+- 必须属于当前唯一 assembling transaction。
+- trajectory_id 从 1 开始严格连续。
+- 不允许 duplicate、回退或跳号。
+- PolynomialMatrix 数量必须非零。
+- 每个 piece 的维数、阶数和 duration 必须合法。
+- coefficient、duration 和所有数值必须 finite。
+- segment 间维数、时间和状态连续性必须满足 Gate 参数。
 
-状态同步完成后：
+任一 ADD 非法，整个 assembling transaction 失效并进入 protocol ERROR。
 
-- RViz RobotModel 立即显示实际底盘相对位姿和 CR10 实际关节姿态。
-- REMANI 用同一份实际状态初始化 `mm_state_pos_` 和 `mm_car_yaw_`。
-- 规划器计算并发布实际 `/ee_current_pose`。
-- 目标 Marker 首次放置在实际末端位姿，而不是固定默认点。
-- Panel 才进入 `READY`。
+### 6.4 FINAL
 
-### 6.4 实际模型与候选预览隔离
+只有收到 FINAL 后，candidate 才是 complete。Gate 随后执行完整验证：
 
-实际 RobotModel 始终由真实 `/odom`、TF 和 `/joint_states` 驱动。候选轨迹预览使用 `visualization_msgs/MarkerArray` 的独立 namespace 播放采样后的全身模型，同时使用两条 `nav_msgs/Path` 显示底盘和末端路径；不得向真实 `/joint_states` 或 `world -> base_link` 写入预览状态。
+- segment 序号完整。
+- 总 duration 有限且大于零。
+- position、velocity、acceleration 连续性。
+- 轨迹维数与 Ranger+CR10 模型一致。
+- 起点与 Plan 时实际状态一致。
+- 底盘、关节速度和加速度限制。
+- self collision、car-arm、arm-arm 和 static-empty boundary。
 
-因此在 RViz 中应能同时区分：
+验证通过后：
 
-- 不透明或固定配色的当前实际机器人；
-- 半透明的候选轨迹动画/稀疏全身姿态；
-- 底盘路径和末端路径。
+- 缓存 immutable frozen candidate。
+- 计算候选终点 base、joint 和 expected EE FK。
+- 生成实际状态隔离的 RViz preview。
+- candidate_complete=true。
+- candidate_valid=true。
+- 外部状态进入 PLANNED。
+- Enable Execute(candidate_id)。
 
-在点击 Execute 前，再次比较最新实际状态和候选轨迹起点；超过配置容差即使画面曾经正确，也必须拒绝执行并要求重新 Plan。
+FINAL 之前 Execute 始终禁用。
 
-## 7. RViz 交互与候选轨迹检查
+### 6.5 ABORT、IMPOSSIBLE、timeout 与新 Plan
 
-新增专用 RViz Panel，显示：
+- ACTION_ABORT：当前 assembling 和 cached candidate 都失效。
+- ACTION_WARN_IMPOSSIBLE：当前 assembling 和 cached candidate 都失效；普通规划失败返回 READY。
+- assembly timeout：视为内部 transaction failure，candidate 失效并进入 ERROR。默认 timeout 为 60 s，可参数化。
+- Plan 只允许从 READY 或 PLANNED 发起。
+- EXECUTING / PAUSED 禁止新 planning transaction 覆盖 frozen executing candidate。
 
-- 模式：`SIM`、`REAL-DRY-RUN` 或 `REAL`。
-- 当前状态机状态。
-- Ranger odom/TF、CR10 joint/status/action、planner 和 executor readiness。
-- 当前反馈年龄和最后错误。
-- 候选轨迹总时长、最大底盘线速度、最大底盘角速度、最大关节速度。
-- 候选起点与最新实际状态的差值。
-- 执行进度和暂停点。
-- `Plan / Execute / Pause / Resume / Abort` 按钮。
+### 6.6 candidate_id 与 trajectory_id
 
-点击 `Plan` 后，RViz 自动显示：
+两者语义严格分离：
 
-- 底盘路径、航向和正向/倒车分段。
-- 末端执行器路径。
-- CR10 关节运动动画。
-- 采样后的稀疏全身姿态。
-- 起点、终点和轨迹时长。
-- Gate 检查结果。无效或超限部分显示红色，且 `Execute` 禁用。
+| 字段 | 类型 | 所有者 | 语义 |
+|---|---|---|---|
+| PolynomialTraj.trajectory_id | uint32 | planner | 当前 transaction 内 SingulTraj segment 序号，1..N |
+| Gate candidate_id | uint64 | Trajectory Gate | 每个接受 START 分配的全局单调候选版本 |
 
-轨迹完整且通过检查后进入 `PLANNED`。操作者可以反复查看预览；只有显式点击 `Execute` 才视为确认。设计不要求 Marker 移动后自动重规划，也不要求执行前再弹第二个确认框。
+trajectory_id 在每个 transaction 中从 1 重新开始。candidate_id 在 Gate 进程生命周期内单调递增，不因失败回退或复用。
 
-## 8. 实机执行与时间同步
+Execute 不再使用 std_srvs/Trigger，而使用带 uint64 candidate_id 的 ExecuteCandidate 服务。请求中的 candidate_id 必须等于当前 PLANNED frozen candidate；旧 UI 请求、延迟请求或已失效 ID 全部拒绝。
 
-### 8.1 共享时间轴
+### 6.7 Planner -> Gate -> Executor 两级接口
 
-Gate 冻结获批轨迹后，Executor 从同一条多项式轨迹生成底盘和机械臂指令。
+| 接口 | 唯一 publisher | 唯一 consumer | 内容与 ownership |
+|---|---|---|---|
+| /remani/planner_candidate | REMANI real plan-only planner | Trajectory Gate | 未验证的 PolynomialTraj START/ADD/FINAL transaction；仍属于 planning side |
+| /remani/frozen_candidate | Trajectory Gate | Real Executor | 含 Gate candidate_id、完整已验证 segment 集、duration 和 validation result 的 immutable frozen candidate；属于 external execution side；preview 由 Gate 从同一 frozen cache 独立生成 |
 
-CR10 `JointTrajectory` 开头增加可配置静止前导时间。Executor 先提交机械臂 Action；Action 进入活动状态后确定共同起始时刻。前导时间结束前底盘持续发送零速度，结束时底盘与机械臂共同进入轨迹 `t=0`。后续使用单调时钟计算经过时间，避免 ROS 时间跳变造成错位。
+Gate 在 START 时分配 candidate_id，在 FINAL 验证成功后随 `/remani/frozen_candidate` 发布 commit acknowledgement；planner 由该 acknowledgement 保留 candidate_id correlation 后回到 IDLE。验证失败只发布 failure/result，不得产生 frozen candidate。
 
-不得让底盘先启动后再等待机械臂 Action。
+Real Executor：
 
-### 8.2 Ranger 跟踪
+- 永远不订阅 `/remani/planner_candidate`。
+- 只缓存 Gate 发布的 `/remani/frozen_candidate`。
+- Execute(candidate_id) 只可选择当前缓存且未失效的 frozen version。
+- 不自行补齐缺段、跳过 Gate validation 或重新解释 raw PolynomialTraj action。
 
-Executor 以默认 50 Hz 采样底盘轨迹：
+## 7. State Bridge 与启动实际姿态
 
-- 从轨迹得到期望世界系位置、速度、加速度、航向和奇异方向。
-- 根据 `singul` 正确处理正向与倒车，不能只根据瞬时速度符号猜测。
-- 结合实际 `/odom` 做位置和航向反馈修正。
-- 转换为 Ranger 可接受的 `linear.x` 和 `angular.z`。
-- 在线监视反馈年龄、跟踪误差、命令速度和实际速度。
-- 以高于驱动 `cmd_vel_timeout` 要求的固定频率持续刷新指令；退出 `EXECUTING` 后持续刷新全零命令，直到驱动确认停止。
+### 7.1 驱动原始输入
 
-Real Executor 是本 launch 中唯一运动命令拥有者。启动或运行中检测到未授权 `/cmd_vel` 发布源时，保持零速度并进入 `ERROR`。
+CR10 驱动原始 /joint_states 在 real launch 中先重映射为：
 
-### 8.3 CR10 跟踪
+~~~text
+/remani/cr10_joint_states_raw
+~~~
 
-Executor 按可配置周期采样六关节位置和速度，构造名称为 `joint1 ... joint6` 的 `trajectory_msgs/JointTrajectory`，提交到：
+launch 语义等价于：
 
-```text
-/cr10_robot/joint_controller/follow_joint_trajectory
-```
+~~~xml
+<remap from="/joint_states" to="/remani/cr10_joint_states_raw"/>
+~~~
 
-现有 CR10 驱动内部 `ServoJ` 调度周期存在硬编码值，且 `moveHandle()` 在一个 callback 中循环和 sleep 完成整条轨迹。节点只运行一个 spinner 线程，因此运动期间 cancel callback 不能保证及时执行。实现阶段必须先把它重构为可抢占的非阻塞 Action 状态机：
+State Bridge 按 name 查找且只接受：
 
-- Goal callback 只校验并缓存轨迹、记录起始时间，然后返回。
-- 高频 timer 每次 callback 只采样和发送一个 `ServoJ` 点，然后立即返回。
-- `servoj_period` 参数默认 `0.10 s`，真实启用前必须通过 CR10 单机测试；禁止保留隐藏的 `0.40 s` 常量。
-- Cancel callback 设置抢占标志、停止后续采样、调用 Dobot `/dobot_v4_bringup/srv/Stop`，并把 Action 置为 `CANCELED/PREEMPTED`，不能伪报 `SUCCEEDED`。
-- Resume 不调用 Dobot `Continue` 服务，而是由 Executor 从当前反馈重新提交带平滑衔接段的剩余 FollowJointTrajectory。
+~~~text
+joint1
+joint2
+joint3
+joint4
+joint5
+joint6
+~~~
 
-完成上述重构后，在 CR10 单机低速测试中验证：
+输入数组顺序不可信。缺失、重复、NaN、Inf 或陈旧样本均无效。
 
-- 时间戳是否按预期执行；
-- cancel 是否能在一个 `servoj_period` 加 ROS 调度裕量内停止继续发送轨迹点；
-- 机械臂是否实际减速并保持；
-- Action 返回状态是否与实际关节速度一致。
+CR10 原始消息若没有 velocity，State Bridge 使用带时间戳的位置差分和限幅滤波生成 qd_estimated，并单独发布 velocity_valid。停止与完成判定只有在估计窗口有效后才允许进行；不得把缺失 velocity 静默当作零速度。
 
-不能只根据 Action 返回 `SUCCEEDED` 或 cancel 已接受来判断机械臂已停稳。
+当前 CR10 驱动的 RobotStatus 只有 connected / enabled 两个布尔量，而驱动内部实时数据另有 ErrorStatus 和 robot_mode。real V1 必须通过只读 telemetry 扩展或独立适配器输出统一状态：
 
-## 9. 速度、起点和运行时限制
+~~~text
+/remani/cr10_status
+  connected
+  enabled
+  error_status
+  robot_mode
+  stamp / feedback_age
+~~~
+
+readiness 和运行时 fault 检查只消费这个规范化状态。不得用“Action Server 存在”“connected=true”或“enabled=true”推断无报警。error_status 非零、robot_mode 不在配置的可执行集合、字段未知或状态超时都视为 not ready；执行中出现则进入 ERROR。具体复用现有实时数据还是扩展驱动消息属于实现落点，但完整只读 fault telemetry 是正式实机输出的硬前置条件。
+
+### 7.2 A：RobotModel JointState
+
+输出：
+
+~~~text
+/joint_states
+~~~
+
+消费者：
+
+- robot_state_publisher
+- RViz RobotModel
+
+可以包含：
+
+- CR10 六轴实际反馈，名字为 cr10_joint1..cr10_joint6。
+- Ranger steering / wheel display joints。
+- gripper display joints。
+- URDF 显示需要的其他关节。
+
+没有真实反馈的显示关节必须标注为 static display default / not measured。它们不能参与 planner、tracking、Pause、Resume 或完成判定。
+
+### 7.3 B：REMANI planning JointState
+
+输出：
+
+~~~text
+/remani/cr10_joint_states
+~~~
+
+该消息只包含六个关节，固定顺序为：
+
+~~~text
+position[0] = cr10_joint1 = raw joint1
+position[1] = cr10_joint2 = raw joint2
+position[2] = cr10_joint3 = raw joint3
+position[3] = cr10_joint4 = raw joint4
+position[4] = cr10_joint5 = raw joint5
+position[5] = cr10_joint6 = raw joint6
+~~~
+
+name 数组同样固定为 cr10_joint1..cr10_joint6。planner 即使仍按 position[0..5] 读取，也能得到正确六轴顺序。
+
+禁止把完整 /joint_states 直接 remap 给 planner 的 joint_state 输入。
+
+### 7.4 启动同步与 RViz 初始化
+
+real 启动保持 NOT_READY，直到：
+
+1. Ranger /odom 有连续、时间新鲜且数值有限的样本；消息 frame_id 固定为 world，child_frame_id 固定为 base_link。
+2. world -> base_link TF 新鲜且唯一。real launch 固定 Ranger driver 的 publish_odom_tf=false，由 State Bridge 独占根据同一份 /odom 发布该动态 TF；State Bridge 不对 /odom 再积分、归零或重标定。
+3. /remani/cr10_status 新鲜、connected=true、error_status=0 且 robot_mode 合法；正式 Execute 还要求 enabled=true。
+4. 至少三个连续完整的 CR10 六轴实际样本已通过名称映射。
+5. CR10 velocity estimate 已建立有效窗口。
+6. robot_state_publisher 已形成 world 到 CR10 末端的完整 TF。
+7. CR10 FollowJointTrajectory Action Server 存在。
+8. static-empty GridMap 与 ESDF 已 ready。
+
+同步前：
+
+- Plan、Execute、Resume 禁用。
+- 末端目标 Marker 隐藏。
+- 不允许 candidate transaction。
+
+同步后：
+
+- Ranger driver 的内部 odom 积分状态在进程启动时为 x=0、y=0、yaw=0，因此启动瞬间实际位置定义为 world 原点；后续只使用该 /odom，不建立第二套原点或积分器。
+- RViz RobotModel 使用实际底盘相对位姿和实际 CR10 q。
+- REMANI 使用同一份 /odom 和 /remani/cr10_joint_states 初始化。
+- planner 发布实际 /ee_current_pose。
+- EE Marker 首次放置在实际 FK 末端位姿。
+- 外部状态进入 READY。
+
+### 7.5 实际状态与 preview 隔离
+
+- 实际 RobotModel 只由 /odom、TF 和 /joint_states 驱动。
+- candidate 全身动画使用独立 visualization_msgs/MarkerArray namespace。
+- 底盘和 EE 路径使用独立 nav_msgs/Path。
+- preview 不得覆盖 /joint_states、/odom 或 world -> base_link。
+
+## 8. remani_real.launch 的强制 remap 与 topic ownership
+
+### 8.1 planner 实际状态输入
+
+real launch 锁死：
+
+~~~xml
+<remap from="~odom_world" to="/odom"/>
+<remap from="~joint_state" to="/remani/cr10_joint_states"/>
+~~~
+
+语义：
+
+| 话题 | 语义 |
+|---|---|
+| /odom | Ranger 实际相对里程计；planner、Executor 和 readiness 使用 |
+| /remani/cr10_joint_states_raw | CR10 驱动原始 joint1..joint6 |
+| /remani/cr10_joint_states | 固定顺序六轴规划/执行反馈 |
+| /joint_states | 完整 RobotModel 显示状态，不直接给 planner |
+
+grid_map 的 odom 输入同样 remap 到 /odom。
+
+同一 launch 还锁死 Ranger odom_frame=world、base_frame=base_link、publish_odom_tf=false。world -> base_link 只由 State Bridge 发布，避免 Ranger driver 与 State Bridge 双重广播。
+
+### 8.2 Ranger 硬件 command topic 隔离
+
+所有通过 ROS topic 进入真实 hardware driver 的 command topic，必须由 real launch 放入 `/remani/hardware/<device>/...` 隔离 namespace。不得让通用控制 namespace 直接连接真实硬件。
+
+当前 Ranger 驱动直接订阅绝对 /cmd_vel。real launch 必须将该订阅 remap 为唯一规范硬件接口：
+
+~~~text
+/remani/hardware/ranger/cmd_vel
+~~~
+
+launch 语义等价于：
+
+~~~xml
+<remap from="/cmd_vel" to="/remani/hardware/ranger/cmd_vel"/>
+~~~
+
+最终链路：
+
+~~~text
+Real Executor
+  -> /remani/hardware/ranger/cmd_vel
+  -> Ranger driver remapped /cmd_vel subscription
+~~~
+
+普通 /cmd_vel 不连接真实 Ranger。teleop、navigation 或其他节点即使发布 /cmd_vel，也不能直接驱动实机。
+
+Real Executor 是 `/remani/hardware/ranger/cmd_vel` 的唯一合法 publisher。若硬件 topic 出现第二个 publisher，进入 ERROR。publisher ownership check 只是第二层保护；real launch namespace / topic isolation 才是第一层保护。设计中不提供旧 shorthand 的并行别名，避免形成第二条可达硬件路径。
+
+### 8.3 Ranger command watchdog
+
+Ranger 驱动边界必须补齐：
+
+- 全零或近零 Twist 走显式停止分支，禁止 0/0 半径和 NaN。
+- angular.z 为零的直线命令显式使用零转角。
+- cmd_vel_timeout 默认 0.20 s；超时主动发送零运动命令。
+- 启动、正常退出和通讯异常发送显式停止命令。
+- watchdog 订阅的是 remap 后硬件 topic。
+- ExecutionState 暴露 watchdog ready / timed_out。
+
+watchdog 状态语义锁定为：
+
+- ranger_watchdog_ready 表示驱动侧 watchdog 已启用、参数合法且健康状态可观测，不表示当前必须收到运动命令。
+- READY / PLANNED 的 timed_out=true 是“无命令且保持停止”的正常安全空闲，不阻止 Plan。
+- dry_run 不创建硬件 command publisher，timed_out 只作为诊断显示，不能为消除 timeout 而发布零命令，也不能因此使 dry-run 失败。
+- dry_run=false 的 Execute readiness 通过后，Executor 先以唯一 publisher 连续发送零命令；只有 driver 报告 command channel fresh 后才接受 Execute、建立 T0 并发送 CR10 goal。
+- 从 Execute 被接受、pre-start hold、EXECUTING 到受控停止完成，timed_out=true 都是执行安全故障，立即停止并进入 ERROR。
+
+watchdog 不替代 Ranger 固件保护和物理急停。
+
+## 9. dry_run 的硬件输出边界
+
+dry_run:=true 允许完整执行：
+
+- candidate sampling
+- Gate assembly / validation
+- readiness 和反馈监控
+- Real Deployment State Machine
+- monotonic timing 和 requested T0
+- Ranger desired command calculation
+- CR10 JointTrajectory generation
+- limit / tracking calculation
+- preview
+- Pause / Resume / Abort 的 dry simulation
+
+dry_run:=true 禁止：
+
+- 向 /remani/hardware/ranger/cmd_vel 发布任何消息，包括“测试零命令”。
+- 发送任何 CR10 FollowJointTrajectory goal，包括零轨迹或 hold 测试。
+- 调用 ServoJ、Stop、Pause、Continue、EmergencyStop、EnableRobot、DisableRobot。
+- 调用任何其他会改变机械臂运动或使能状态的服务。
+
+只读操作允许：
+
+- 检查 Action Server 是否存在。
+- 读取 RobotStatus、connected、enabled。
+- 读取规范化 CR10 error_status、robot_mode 和 feedback age。
+- 读取 joint feedback、odom 和 TF。
+- 发布 diagnostics、ExecutionState 和 preview。
+- 将计算出的 Ranger 命令发布到 diagnostics-only 的 /remani/dry_run/ranger_cmd_vel_preview。
+- 将生成的 CR10 trajectory 发布为 preview/diagnostics，但不发送 Action goal。
+
+hardware_output_enabled 在 launch 和 Executor 输出适配层由 dry_run 锁死。dry-run 不能依靠“业务逻辑应该不会调用”来保证安全。
+
+## 10. environment_mode=static_empty
+
+real V1 固定：
+
+~~~text
+environment_mode=static_empty
+~~~
+
+`static_empty` 的范围与分辨率必须参数化，不允许在实现中 hard-code：
+
+~~~text
+environment/static_empty/size_x:     16.0   # m, V1 default
+environment/static_empty/size_y:     12.0   # m, V1 default
+environment/static_empty/size_z:      3.0   # m, V1 default
+environment/static_empty/resolution:  0.05  # m, V1 default
+~~~
+
+所有值必须 finite 且大于零，并在初始化 GridMap 前完成参数校验。修改参数只改变 empty map 的边界和离散精度，不改变 static-empty / no-online-sensing 的安全语义。
+
+该模式必须：
+
+- 按上述配置创建范围明确的 free GridMap；V1 默认范围为 16 m × 12 m × 3 m、默认分辨率为 0.05 m，中心为启动 world 原点。
+- 将范围内体素明确初始化为 free，而不是 unknown。
+- 初始化完成后至少计算一次可查询 ESDF，并发布 map ready。
+- 将地图范围外视为 hard-invalid，保留 map boundary。
+- 不启动在线 depth/cloud fusion。
+- 不等待 D435/LiDAR topic。
+- 不产生 odom/depth timeout。
+- 不因没有深度传感器进入 planner EMERGENCY_STOP。
+- 保留 whole-body self collision、car-arm、arm-arm 和静态边界检查。
+
+该模式不检测现实环境中的桌椅、墙、人或移动物体。RViz Panel 必须持续显示：
+
+~~~text
+ENVIRONMENT: STATIC EMPTY / NO ONLINE OBSTACLE SENSING
+~~~
+
+没有 D435/LiDAR 不等于忽略 GridMap；它表示使用显式初始化、可查询且有硬边界的 empty GridMap。
+
+## 11. RViz Panel 与候选预览
+
+Panel 显示：
+
+- mode、execution_owner 和 dry_run。
+- planner_state 和 executor_state，分别按第 5.1 节显示。
+- Real Deployment State。
+- transaction assembly 状态。
+- candidate_id、candidate_complete、candidate_valid。
+- environment_mode 和醒目的 static-empty 警告。
+- odom、CR10 joint、TF、RobotStatus、Action、GridMap 和 watchdog readiness。
+- 反馈年龄和最后错误。
+- candidate duration、最大底盘线/角速度、最大关节速度。
+- candidate 起点与最新实际状态误差。
+- execution progress、pause_param_time 和 start skew。
+- final base / joint / EE errors。
+- Plan、Execute、Pause、Resume、Abort。
+
+Plan：
+
+- Marker 拖动只缓存目标。
+- Panel Plan 复用 /ee_goal_plan，使 Marker 发布缓存的 /ee_goal。
+- 只有 READY / PLANNED 可触发。
+- 进入 PLANNING 后等待正式 candidate transaction。
+
+Preview：
+
+- 底盘路径、航向和正向/倒车 singul 分段。
+- EE 路径。
+- CR10 关节动画。
+- 稀疏全身姿态。
+- 起点、终点、时长和 Gate 检查结果。
+- 无效段显示红色且 Execute 禁用。
+
+Execute 必须携带当前 candidate_id，不增加隐式自动执行。
+
+## 12. Real Executor 的唯一安全职责
+
+execution_owner=external 时，Real Executor 是唯一 real execution safety controller，负责：
+
+- odom timeout。
+- CR10 joint feedback / velocity estimate timeout。
+- TF 和 RobotStatus fault。
+- 规范化 CR10 error_status、robot_mode 与状态 timeout。
+- Action availability 和 Action state。
+- Ranger command watchdog health。
+- candidate 起点 recheck。
+- base / joint tracking error。
+- Ranger command limit 和实际速度 limit。
+- CR10 joint velocity limit。
+- shared T0 与 start skew。
+- Pause、Resume 和 Abort。
+- execution completion。
+- actual whole-body / EE final verification。
+
+planner 在 candidate handoff 后不再充当执行安全控制器。
+
+## 13. 执行前与运行时限制
 
 第一阶段默认限制：
 
 | 项目 | 默认值 |
 |---|---:|
-| Ranger 最大线速度 | `0.10 m/s` |
-| Ranger 最大角速度 | `0.15 rad/s` |
-| CR10 各关节最大速度 | `0.10 rad/s` |
-| Resume 底盘位置容差 | `0.05 m` |
-| Resume 底盘航向容差 | `5 deg` |
-| Resume 各关节容差 | `3 deg` |
+| Ranger 最大线速度 | 0.10 m/s |
+| Ranger 最大角速度 | 0.15 rad/s |
+| CR10 各关节最大速度 | 0.10 rad/s |
+| Execute 起点底盘位置容差 | 0.05 m |
+| Execute 起点底盘航向容差 | 5 deg |
+| Execute 起点各关节容差 | 3 deg |
+| Resume 底盘位置容差 | 0.02 m |
+| Resume 底盘航向容差 | 2 deg |
+| Resume 各关节容差 | 1 deg |
 
-加速度、跟踪误差、反馈超时、停止确认速度和停止超时同样参数化。
+加速度、tracking error、feedback timeout、stop velocity、completion tolerance 和 stop timeout 全部参数化。
 
-限制执行两次：
+Gate 在 PLANNED 前检查整条 candidate。Executor 在 Execute 前和运行时再次检查。
 
-1. Gate 在 `PLANNED` 前检查整条候选轨迹。
-2. Executor 在运行中监控命令和反馈。
+超限 candidate 必须拒绝，不允许独立 clamp 底盘或机械臂速度，因为独立截断会破坏全身同步；需要调整 planner/time-scaling 后重新 Plan。
 
-轨迹超限时必须拒绝执行，不能简单截断单个底盘或关节速度，因为独立截断会破坏全身轨迹的时间同步。需要降低规划/time-scaling 参数后重新规划。
+Execute(candidate_id) 前必须重新确认：
 
-每次 Execute 前重新检查：
+- 请求 candidate_id 等于当前 frozen candidate。
+- candidate complete 且 valid。
+- feedback、TF、规范化 CR10 status、Action、watchdog capability 和 GridMap ready。
+- 最新实际状态仍在 candidate 起点容差内。
+- 没有第二个硬件 command publisher。
+- dry_run 与 hardware_output_enabled 一致。
 
-- 反馈仍然新鲜；
-- Action Server 和 RobotStatus 正常；
-- 候选轨迹起点与当前实机状态在容差内；
-- 没有未授权命令发布者；
-- 轨迹仍是当前 Gate 缓存的版本。
+对于 dry_run=false，以上静态 readiness 通过后还必须完成 Ranger 零命令 freshness handshake；handshake 未完成时 Execute 请求不被接受、CR10 goal 不发送、T0 不建立。dry_run=true 只模拟同一状态转换，不创建硬件 publisher，也不要求硬件 command age 变 fresh。
 
-## 10. Pause、Resume、Abort 与异常停机
+## 14. Shared monotonic T0
 
-### 10.1 Pause
+Real Executor 拥有唯一单调执行时钟。点击 Execute、通过 readiness，并在 non-dry-run 完成 Ranger 零命令 freshness handshake 后，Execute 才被接受；接受瞬间：
 
-点击 Pause 后立即：
+~~~text
+T_request = steady_now
+T0 = T_request + start_lead_time
+~~~
 
-1. Ranger 连续发布零速度。
-2. 取消 CR10 当前 FollowJointTrajectory goal，停止继续下发轨迹点，并调用已单机验证的 Dobot `Stop()` 受控停止。
-3. 通过 `/odom` 和关节状态确认底盘、机械臂速度均低于停止阈值。
-4. 保存暂停时刻、剩余轨迹和实际停止状态。
-5. 两部分均确认停止后才进入 `PAUSED`。
+start_lead_time 可参数化，V1 默认 1.0 s。
 
-普通 Pause 使用受控停止，不把 EmergencyStop 当作日常暂停接口。
+### 14.1 Ranger
 
-### 10.2 Resume
+以下硬件 publish 仅在 dry_run=false 时启用；dry_run=true 只计算并发布 diagnostics preview。
 
-Resume 比较实际停止状态和原轨迹暂停点：
+~~~text
+steady_now < T0
+  -> continuously command zero
 
-- 底盘位置误差不超过 `0.05 m`；
-- 航向误差不超过 `5 deg`；
-- 每个机械臂关节误差不超过 `3 deg`。
+steady_now >= T0
+  -> t_remani = steady_now - T0
+  -> sample base trajectory(t_remani)
+  -> closed-loop /odom correction
+  -> publish /remani/hardware/ranger/cmd_vel
+~~~
 
-满足容差时：
+### 14.2 CR10
 
-- 截取暂停点之后的剩余轨迹；
-- 从当前实机状态加入短暂、限速限加速度的平滑衔接段；
-- 对剩余轨迹重新计时；
-- 按第 8 节重新建立底盘与机械臂共同时间轴。
+dry_run=false 时，Executor 在计算 T0 后立即提交 JointTrajectory；dry_run=true 时只生成相同轨迹用于检查和 preview，不发送 Action goal。轨迹包含：
 
-不满足容差时拒绝 Resume，清楚显示偏差，并要求 Abort 后重新 Plan。Resume 不能从原轨迹起点重放。
+~~~text
+point time_from_start=0:
+  current actual q
+  zero velocity
 
-### 10.3 Abort
+hold until start_lead_time:
+  current actual q
+  zero velocity
+
+for every original REMANI arm sample:
+  time_from_start = start_lead_time + t_remani
+~~~
+
+以上是逻辑时间段，不允许在 time_from_start=start_lead_time 生成两个同时间戳的 JointTrajectoryPoint。序列化与 driver 执行规则锁定为：
+
+- time_from_start=0 的首点保存 Execute 时的 current actual q，driver 在 pre-start hold 状态持续发送该 q。
+- start_lead_time 之前不在首点与原轨迹起点之间做插值。
+- 原 REMANI t=0 的点是 time_from_start=start_lead_time 的唯一一点；其后所有时间戳严格递增。
+- Execute 时 current actual q 与原 REMANI q(0) 的最大关节误差必须小于 arm_hold_handoff_tol，V1 默认 0.02 rad；超限拒绝 Execute 并要求重新 Plan，不能用 hold 区间偷偷生成 connector。
+
+Ranger 的 T0 对应 REMANI t=0；CR10 的第一个 non-hold 点同样对应 REMANI t=0。pre-start hold 是 CR10 driver 的明确状态，不依赖通用 JointTrajectory 插值器猜测其语义。
+
+Action 必须在 T0 前被接受。arm_accept_guard 默认 0.20 s；若在 T0 - arm_accept_guard 前仍未接受，则保持 Ranger 为零、取消 goal 并进入 ERROR，不允许底盘单独启动。
+
+### 14.3 时间记录与验收
+
+Executor / driver 记录：
+
+- requested T0。
+- Action goal send 和 accept timestamp。
+- first post-T0 Ranger trajectory-sampling timestamp。
+- first non-zero Ranger command timestamp。
+- first non-hold CR10 ServoJ send timestamp。
+- ranger_start_error。
+- cr10_start_error。
+- cross-device start_skew。
+
+cross-device start_skew 使用 first post-T0 Ranger trajectory-sampling timestamp 与 first non-hold CR10 ServoJ send timestamp 计算。first non-zero Ranger command 仍单独记录；如果 candidate 的底盘起始段或整段为零速度，该字段明确为 unavailable，不能把“没有非零命令”误判为同步失败。
+
+初始同步验收目标为 absolute start_skew <= 100 ms，目标优化区间为 50–100 ms。最终收紧值依据 CR10 单机测试结果配置，但不能删除记录和验收。
+
+不再使用“Action active 后再确定共同起始时刻”的模糊语义。
+
+## 15. CR10 FollowJointTrajectory V1
+
+### 15.1 严格 goal validation
+
+Goal callback 在 accept 前必须检查：
+
+- trajectory.points.size() >= 2。
+- joint_names 恰好包含且只包含 joint1..joint6，每个名字唯一。
+- 允许输入 joint_names 重排，但 driver 必须按名字转换为内部固定 q1..q6。
+- 每个 point.positions.size() == 6。
+- 每个 point.velocities.size() == 6；V1 对缺失 velocity 直接 reject。
+- positions 和 velocities 全部 finite。
+- 每个 time_from_start finite 且 >= 0。
+- time_from_start 严格递增。
+- 如果 accelerations 非空，size 必须为 6 且 finite；V1 不依赖 accelerations。
+- 同时只允许一个 active goal；未完成时的新 goal 拒绝。
+
+任一非法 goal 使用 Action REJECTED，不能发送任何 ServoJ。
+
+### 15.2 非阻塞可抢占状态机
+
+Goal callback：
+
+~~~text
+validate
+-> reorder/cache
+-> record steady receive time
+-> accept
+-> return
+~~~
+
+Timer callback 每次只允许：
+
+~~~text
+read steady elapsed time
+-> locate one segment
+-> sample one q/qd
+-> send one ServoJ
+-> update/publish feedback
+-> return
+~~~
+
+禁止在 timer callback 内出现：
+
+- 遍历整条轨迹的 for。
+- 覆盖整个 segment 的 while。
+- ros::Rate.sleep()。
+
+servoj_period 参数化，V1 初始值 0.10 s；dry-run 和单机测试通过前不能用于组合实机运动。禁止保留隐藏的 0.40 s 常量。
+
+### 15.3 Cancel
+
+Cancel callback：
+
+1. 设置 cancel/preempt flag。
+2. 立即停止未来 timer sampling。
+3. 调用已单机验证的 Dobot Stop()。
+4. 通过实际 q 变化率确认机械臂停稳。
+5. Action 返回 CANCELED / PREEMPTED，不能返回 SUCCEEDED。
+
+Stop() 失败、cancel 未及时处理或停止超时进入 ERROR；受控停止失败后才能调用配置的 EmergencyStop 升级路径。
+
+Resume 不调用当前 Continue 服务，而是重新提交剩余 JointTrajectory。
+
+### 15.4 Completion
+
+不能只按 elapsed >= trajectory duration 返回 SUCCEEDED。至少要求：
+
+- elapsed 已到轨迹终点。
+- final max joint position error <= cr10_goal_joint_tol。
+- estimated max joint velocity <= cr10_stop_velocity_tol。
+- 连续三个有效反馈样本满足上述门限。
+
+V1 初始参数为 cr10_goal_joint_tol=0.02 rad、cr10_stop_velocity_tol=0.01 rad/s、completion_settle_timeout=2.0 s；参数可在 CR10 单机验收后收紧。超过 completion_settle_timeout 仍不满足则 Action ABORTED。Action 的成功仅表示 CR10 关节轨迹完成，不等于 whole-body 或 EE 任务成功。
+
+## 16. Pause / Resume / Abort V1
+
+本节的 Ranger 硬件命令、CR10 cancel 和 Stop() 只适用于 dry_run=false。dry_run=true 只模拟时间冻结、状态转换和容差判断，禁止发布硬件命令或调用机械臂写服务。
+
+### 16.1 Pause
+
+pause_param_time 只来自 Real Executor command timeline：
+
+~~~text
+pause_param_time = executor.last_successfully_commanded_trajectory_parameter
+~~~
+
+它不是 REMANI planner wall-clock、`ros::Time - trajectory.start_time` 或 planner 对执行进度的估计。Executor 的 monotonic timeline 只在一次 whole-body command cycle 通过输出检查并成功发出后更新该参数；收到 Pause 时冻结最近一次成功 commanded 的值，停止继续推进。
+
+Pause 时记录：
+
+~~~text
+pause_param_time
+expected_pause_state = original candidate state(pause_param_time)
+actual_stop_state
+~~~
+
+操作顺序：
+
+1. 将 Executor command timeline 冻结在 last successfully commanded trajectory parameter，并记为 pause_param_time。
+2. Ranger 立即、持续发布零速度。
+3. cancel CR10 Action，并调用经验证的 Stop()。
+4. 用 /odom 和 CR10 q 变化率确认两部分实际停稳。
+5. 保存 actual_stop_state。
+6. 两部分都确认停止后进入 PAUSED。
+
+### 16.2 Resume
+
+比较 actual_stop_state 与 frozen candidate(pause_param_time)：
+
+- base position <= 0.02 m。
+- base yaw <= 2 deg。
+- 每个 arm joint <= 1 deg。
+
+满足时：
+
+- 从 pause_param_time 截取原 frozen candidate 的剩余部分。
+- 不修改原路径几何、singul 或 whole-body synchronization。
+- 不生成新的 whole-body smooth connector。
+- 重新按第 14 节建立新的 T0。
+- Ranger 闭环跟踪消除允许范围内的小起始误差。
+- CR10 新 JointTrajectory 的 hold 使用当前实际 q；第一个原轨迹 q 必须仍在严格 joint tolerance 内。
+
+超限时：
+
+~~~text
+Resume rejected
+-> remain PAUSED
+-> user Abort
+-> Plan again from current actual state
+~~~
+
+### 16.3 Abort
 
 Abort：
 
-- 底盘持续零速度；
-- 取消 CR10 Action 并确认停止；
-- 清除候选和剩余轨迹；
-- 返回 `READY` 后必须重新 Plan。
+- Ranger 持续零速度直到确认停止。
+- cancel CR10 Action 并调用经验证的 Stop()。
+- 清除 assembling、cached 和 remaining candidate。
+- candidate_id 失效且不可复用。
+- 返回 READY 后必须重新 Plan。
 
-### 10.4 自动进入 ERROR 的条件
+### 16.4 Future Work
 
-- `/odom`、CR10 joint state、RobotStatus 或 TF 超时。
-- CR10 Action Server 消失、拒绝目标或报告失败。
-- CR10 cancel 未在规定时间内被 Action Server 接受，或 Dobot `Stop()` 调用失败。
-- 起点或运行中跟踪误差持续超限。
-- 命令或实际速度超过安全阈值。
-- Pause/Abort 后未在配置时间内确认停稳。
-- 出现未授权 `/cmd_vel` 发布者。
-- 候选轨迹不完整、数值异常或版本不一致。
+自动 smooth reconnect trajectory 移至 Future Work。若未来实现，必须单独设计 nonholonomic base path、collision check、singul、wheel speed、arm speed、acceleration continuity 和 synchronization；V1 不包含。
 
-发生错误时，底盘保持零速度并取消机械臂 Action。如果受控停止在规定时间内失败，则调用经过单机验证的、可配置的 CR10 紧急停止升级路径，进入需要人工检查和复位的 `ERROR`。物理急停始终是实机运行前置条件。
+## 17. Real execution completion
 
-## 11. Launch、话题与服务边界
+sim 继续使用 REMANI 原 EXEC_TRAJ 和 EE actual-FK completion。
 
-### 11.1 `mode:=sim`
+real 不使用 planner 的 EXEC_TRAJ completion，也不把 CR10 Action SUCCEEDED 当作任务成功。
 
-- 启动现有 `remani_sim.launch`。
-- 保留现有模拟里程计、模拟关节状态、`mm_controller` 和 fake MM 链路。
-- 不改变当前自动执行语义。
+Real Executor 到达 candidate 末端后，使用最新：
 
-### 11.2 `mode:=real`
+~~~text
+Ranger /odom
++
+CR10 actual q
+~~~
 
-新 `remani_real.launch` 一次启动：
+计算：
 
-- Ranger CAN 驱动，参数 `can_interface`。
-- Dobot v4 bringup，环境/参数选择 CR10，参数 `robot_ip`。
-- Ranger+CR10 `robot_description` 和 `robot_state_publisher`。
-- State Bridge 和 startup readiness monitor。
-- 第一阶段空环境地图。
-- REMANI Planner，候选轨迹输出被重映射。
-- Trajectory Gate 和 Real Executor。
-- RViz 及专用 Panel。
+- final_base_position_error。
+- final_base_yaw_error。
+- final_max_joint_error。
+- actual EE FK。
+- final_ee_pos_error。
+- final_ee_rot_error。
 
-### 11.3 逻辑接口
+expected final EE pose 由 Gate 对 frozen candidate 最终 base + q 做 FK 得到。
 
-控制接口类型固定如下：
+Real execution success 是显式 AND 条件：
 
-| 接口 | 语义 |
+~~~text
+cr10_trajectory_completion
+AND ranger_trajectory_completion
+AND base_tolerance_satisfied
+AND joint_tolerance_satisfied
+AND ee_fk_tolerance_satisfied
+AND feedback_and_robot_health_valid
+~~~
+
+其中：
+
+- cr10_trajectory_completion：CR10 Action 完成，且实际关节误差与停止速度满足第 15.4 节。
+- ranger_trajectory_completion：Executor 已按自身 command timeline 完整消费 frozen base trajectory，最终 Ranger command 已归零，并由实际 odom 速度确认停止。
+- 后三项 tolerance 必须使用最新实际 odom / q 计算，不使用 candidate 期望值代替实际反馈。
+
+Executor 不得只等待 CR10 Action result 后直接返回成功。上述任一布尔条件为 false、unknown 或 timeout，whole-body 结果均为 ERROR。
+
+V1 初始终点门限：
+
+| 项目 | 默认值 |
+|---|---:|
+| final base position | 0.05 m |
+| final base yaw | 5 deg |
+| final max arm joint | 0.02 rad |
+| ee_reach_pos_tol | 0.02 m |
+| ee_reach_rot_tol | 4 deg |
+
+只有同时满足：
+
+- CR10 trajectory completion。
+- Ranger trajectory completion。
+- base final tolerance。
+- joint final tolerance。
+- CR10 actual joint velocity stop tolerance。
+- ee_reach_pos_tol。
+- ee_reach_rot_tol。
+- feedback 仍然新鲜且 RobotStatus 正常。
+
+才进入 SUCCEEDED。
+
+任一失败进入 ERROR，error code 为 TERMINAL_TOLERANCE_FAILURE 或对应安全错误。Action succeeded 只是一项输入条件。
+
+Real Executor 发布 execution result；planner 可记录，但不得恢复内部 EXEC_TRAJ。
+
+## 18. ROS 接口与 ExecutionState
+
+### 18.1 控制与数据接口
+
+| 接口 | 类型/语义 |
 |---|---|
-| `/ee_goal_plan` (`std_msgs/Empty`) | Panel 的 Plan 命令现有 Marker 发布缓存目标 |
-| `/ee_goal` (`geometry_msgs/PoseStamped`) | Marker 将缓存的末端目标交给规划器 |
-| `/remani/candidate_trajectory` (`quadrotor_msgs/PolynomialTraj`) | 规划器到 Gate 的候选事务 |
-| `/remani/execution_state`（新增 `ExecutionState.msg`） | 状态、readiness、候选编号、进度、反馈年龄、最大速度和错误文本 |
-| `/remani/execute` (`std_srvs/Trigger`) | 显式人工执行确认 |
-| `/remani/pause` (`std_srvs/Trigger`) | 请求受控暂停 |
-| `/remani/resume` (`std_srvs/Trigger`) | 请求按容差恢复；失败响应携带超限原因 |
-| `/remani/abort` (`std_srvs/Trigger`) | 停止并清除轨迹，或在健康恢复后复位错误 |
-| `/remani/candidate_robot` (`visualization_msgs/MarkerArray`) | 与实际状态隔离的全身轨迹动画 |
-| `/remani/candidate_base_path` (`nav_msgs/Path`) | 候选底盘路径 |
-| `/remani/candidate_ee_path` (`nav_msgs/Path`) | 候选末端路径 |
-| `/odom` | Ranger 实际相对里程计 |
-| `/joint_states` | 映射后的整机 RobotModel 状态 |
-| `/remani/cr10_joint_states` | 固定顺序六轴规划/执行反馈 |
-| `/cmd_vel` | 仅由实机命令所有者输出给 Ranger |
-| CR10 FollowJointTrajectory | Executor 到机械臂的轨迹执行 |
+| /ee_goal_plan | std_msgs/Empty；Panel 让 Marker 发布缓存目标 |
+| /ee_goal | geometry_msgs/PoseStamped；real plan-only planner 输入 |
+| /remani/planner_candidate | quadrotor_msgs/PolynomialTraj；Planner -> Gate raw transaction control protocol |
+| /remani/frozen_candidate | Gate-owned immutable frozen candidate；含 candidate_id、完整已验证轨迹与 validation result；Executor 唯一轨迹输入 |
+| /remani/execute | ExecuteCandidate.srv；request 含 uint64 candidate_id |
+| /remani/pause | std_srvs/Trigger |
+| /remani/resume | std_srvs/Trigger |
+| /remani/abort | std_srvs/Trigger |
+| /remani/execution_result | 新增 ExecutionResult.msg；candidate_id、result code、final errors |
+| /remani/execution_state | 统一只读状态；Panel 不自行推导 |
+| /remani/candidate_robot | visualization_msgs/MarkerArray；隔离预览 |
+| /remani/candidate_base_path | nav_msgs/Path |
+| /remani/candidate_ee_path | nav_msgs/Path |
+| /odom | Ranger 实际相对里程计 |
+| /remani/cr10_joint_states_raw | CR10 驱动原始六轴状态 |
+| /remani/cr10_joint_states | 固定 q1..q6 的 planner / Executor 状态 |
+| /joint_states | RobotModel 显示状态 |
+| /dobot_v4_bringup/msg/RobotStatus | 当前 CR10 驱动原始 connected/enabled 状态；不是完整 fault 状态 |
+| /remani/cr10_status | 规范化 CR10 connected/enabled/error_status/robot_mode/age，只读安全状态 |
+| /remani/hardware/ranger/cmd_vel | real launch namespace 隔离后的 Ranger 硬件命令；Executor 唯一合法 publisher |
+| /remani/dry_run/ranger_cmd_vel_preview | dry-run diagnostics-only |
+| /cr10_robot/joint_controller/follow_joint_trajectory | 正式 CR10 Action，仅 non-dry-run 可发送 |
 
-`ExecutionState.msg` 至少包含：枚举状态、模式、`dry_run`、候选轨迹编号、各 readiness 布尔值、各反馈年龄、总时长、执行进度、候选最大速度、起点误差和最后错误文本。Panel 只展示该状态，不自己推导安全状态。
+### 18.2 ExecutionState 最小字段
 
-## 12. 测试设计
+~~~text
+mode
+execution_owner
+dry_run
+environment_mode
 
-### 12.1 单元测试
+planner_state  # IDLE / PLANNING / HANDOFF
 
-- Gate 对完整、缺段、乱序、重复和超限事务的处理。
-- 状态机全部合法/非法转换。
-- 正向、倒车和奇异段底盘命令计算。
-- JointState 按名称映射、乱序、缺失、NaN 和陈旧消息。
-- 启动同步门控，尤其是禁止全零默认姿态误判为已同步。
-- Ranger 全零 Twist 不产生 NaN，纯直线不除零，命令超时触发显式停止。
-- 候选起点和最新实际状态检查。
-- Pause 剩余轨迹截取、Resume 重新计时和平滑衔接。
-- CR10 非阻塞 Action sampler、cancel 抢占、正确 canceled 状态和 `Stop()` 失败路径。
-- `dry_run` 屏蔽所有硬件运动输出。
+transaction_state
+candidate_id
+candidate_complete
+candidate_valid
 
-### 12.2 集成测试
+executor_state # NONE / PLANNED / EXECUTING / PAUSED / SUCCEEDED / ERROR
 
-使用假的 Ranger odom/TF、Dobot RobotStatus 和 CR10 Action Server，验证：
+odom_ready
+cr10_joint_ready
+cr10_velocity_valid
+tf_ready
+robot_status_ready
+robot_connected
+robot_enabled
+robot_error_status
+robot_mode
+action_server_ready
+cr10_action_state
+grid_map_ready
+ranger_watchdog_ready
+ranger_watchdog_timed_out
 
-- 首帧同步完成前 RobotModel/Marker/readiness 的行为。
-- Plan 不产生硬件命令。
-- Execute 前没有底盘或机械臂运动输出。
-- Pause 同时停止两条执行链。
-- Resume 偏差超限时拒绝继续。
-- Abort 后旧轨迹不能再次执行。
-- 反馈、TF 或 Action 中断时进入 `ERROR`。
-- 候选预览不污染真实 TF 和 `/joint_states`。
-- `mode:=sim` 原有规划和仿真执行通过回归测试。
+ranger_feedback_age
+cr10_joint_feedback_age
+tf_age
+robot_status_age
 
-### 12.3 实机分阶段调试
+base_tracking_error
+joint_tracking_error
 
-1. **只连接反馈：** `dry_run:=true`，核对底盘启动原点、CR10 实际关节、TF、实际末端 Marker 和预览方向。
-2. **只验证 Ranger：** 禁用 CR10 输出，在清空区域执行极短直线和小角度旋转，验证速度、方向、Pause 和 Abort。
-3. **只验证 CR10：** 禁用底盘输出，从安全姿态执行小范围单关节及末端轨迹，重点测量 Action cancel、停止和保持。
-4. **验证同步：** 执行低速、短距离的全身轨迹，比较共同起始时刻和进度。
-5. **验证恢复：** 在早期、中段和末段测试 Pause/Resume；人工制造超容差偏差，确认拒绝恢复。
-6. **组合验收：** 逐步增加轨迹长度，但第一阶段始终保持场地清空并配备物理急停。
+candidate_start_base_error
+candidate_start_joint_error
 
-## 13. 第一阶段验收标准
+requested_t0
+ranger_trajectory_start_time
+ranger_first_motion_time
+cr10_first_motion_time
+start_skew
 
-- 一条命令可选择仿真或实机，且 `mode:=sim` 行为不回归。
-- 实机启动时，RViz 在实际状态同步前保持 `NOT_READY`，同步后显示真实底盘相对位姿和 CR10 当前关节姿态。
-- 末端 Marker 初始位置来自实际 FK，而非固定默认值。
-- 点击 Execute 前，实机不会产生任何运动。
-- 候选轨迹可在 RViz 中检查底盘、机械臂和末端的同步运动。
-- 轨迹不完整、超限、反馈不健康或起点偏差过大时不能执行。
-- Pause 请求后，Ranger 零速度命令在一个控制周期内发出；CR10 cancel/hold 请求延迟和实际停机时间分别记录并验收。
-- Resume 从剩余轨迹继续，并对超容差偏差拒绝恢复。
-- Abort 和任何安全错误都使旧轨迹失效。
-- 第一阶段不宣称具备动态障碍物安全能力。
+final_base_error
+final_base_position_error
+final_base_yaw_error
+final_joint_error
+final_ee_pos_error
+final_ee_rot_error
 
-## 14. 实施顺序约束
+last_error_code
+last_error
+~~~
 
-后续实现计划应按以下依赖顺序拆分：
+Panel 只展示该统一状态和服务响应，不根据 topic 数量、本地计时、planner_busy 或 planner 是否 IDLE 自行推导执行状态。planner_state 与 executor_state 必须作为两个独立字段传输。
 
-1. State Bridge、真实 TF/JointState 初始化和 readiness。
-2. 候选轨迹事务与 Trajectory Gate。
-3. RViz Panel 和只读候选预览。
-4. `dry_run` Real Executor 及状态机。
-5. Ranger 单独执行与停止。
-6. CR10 单独执行、取消、保持和驱动周期参数化。
-7. 同步执行、Pause/Resume/Abort。
-8. 统一 real launch、回归测试和实机分阶段验收。
+## 19. 测试与分阶段验收
 
-在前一阶段验证通过前，不进入下一阶段的组合实机运动。
+### 19.1 单元测试
+
+- execution_owner 组合校验；real 永不进入内部 EXEC_TRAJ。
+- real candidate handoff 后清除 planner execution ownership/timer state，同时保留 candidate_id correlation；不发布 planning/finish、不运行 periodic replan、不运行 planner execution safety timer。
+- START / ADD / FINAL 正常、缺段、乱序、重复、跳号、ABORT、IMPOSSIBLE 和 timeout。
+- sim 继续 ADD-only；real action 只由 Gate 按 transaction control protocol 解释。
+- candidate_id 单调性、失效和 Execute 绑定；trajectory_id 每事务从 1 开始。
+- `/remani/planner_candidate` 只到 Gate，Executor 只接受 `/remani/frozen_candidate`；绕过 Gate 的 raw candidate 被拒绝。
+- planner_state 与 executor_state 的合法组合；planner IDLE 不得被解释成 execution idle。
+- State Bridge name reorder、缺失、重复、NaN、velocity estimate 和两路输出。
+- planner 只消费 /remani/cr10_joint_states 的六轴固定顺序。
+- Ranger 零 Twist、直线除零、watchdog timeout 和 hardware topic ownership。
+- Ranger watchdog 的 idle、dry-run、pre-start freshness handshake 和执行期 timeout 语义。
+- dry_run 对 Ranger publisher、CR10 Action goal 和所有写服务的阻断。
+- CR10 规范化状态对 ErrorStatus、robot_mode、unknown 和 timeout 的 fail-closed 行为。
+- static-empty 参数 default、override、非法值拒绝、free GridMap、ESDF ready、边界 hard-invalid 和无 depth timeout。
+- CR10 goal validation 的所有 reject 路径。
+- CR10 timer callback 单步采样、cancel、Stop failure、正确 Action 状态和 completion settle。
+- Pause 使用 Executor last successfully commanded parameter；Resume 使用 frozen candidate(pause_param_time)，确认没有 planner wall-clock 和 V1 connector。
+- shared T0、hold mapping、accept deadline 和 start skew 记录。
+- CR10 completion AND Ranger completion AND base/joint/EE tolerance；任一 false/unknown/timeout 均 ERROR。
+
+### 19.2 集成测试
+
+使用 fake Ranger、fake CR10 Action、fake RobotStatus 和实际 planner：
+
+- sim 仍是 internal owner 和现有自动执行。
+- real planner 只产生 transaction，Gate 拦住时 planner 不虚拟执行。
+- real 执行时 planner_state=IDLE、executor_state=EXECUTING。
+- real Plan 不产生硬件命令。
+- FINAL 前 Execute 禁用。
+- 旧 candidate_id Execute 被拒绝。
+- EXECUTING / PAUSED 的新 START 不覆盖 frozen candidate。
+- /cmd_vel 发布不能到达 Ranger hardware topic。
+- dry-run 运行完整状态机但硬件输出计数为零。
+- actual RobotModel 与 candidate preview 不互相污染。
+- world -> base_link 只有 State Bridge 一个发布者，且与 /odom 数值一致。
+- Pause 同时停止两条链；Resume 只恢复原剩余轨迹。
+- final EE tolerance failure 进入 ERROR。
+- CR10 Action succeeded 但 Ranger 未完成时进入 ERROR。
+
+### 19.3 实机分阶段验证
+
+1. dry_run 只读连接：实际 odom、q、TF、static-empty map、Marker 和 preview。
+2. Ranger watchdog 与隔离 topic：无 Executor 时超时停机，普通 /cmd_vel 不驱动硬件。
+3. Ranger-only 极短、低速执行和 Pause/Abort。
+4. CR10 Action validation、非阻塞 sampling、cancel、Stop 和 completion 单机验证。
+5. CR10-only 小范围、低速轨迹执行。
+6. shared T0 synchronized dry-run，核对 hold 和 timestamp。
+7. synchronized real short trajectory，测量 start_skew。
+8. 早期、中段、末段 Pause/Resume；超容差必须拒绝。
+9. final base/joint/EE completion 和故障注入。
+10. 保持空场地与物理急停，逐步增加轨迹长度。
+
+## 20. 实施顺序约束
+
+本节只是设计依赖顺序，不是 implementation plan。
+
+1. Planner real plan-only / candidate transaction protocol。
+2. State Bridge + actual TF/readiness。
+3. Trajectory Gate transaction assembly/validation。
+4. RViz candidate preview + Panel。
+5. dry_run Real Executor + Real Deployment State Machine。
+6. Ranger command topic isolation + watchdog。
+7. Ranger-only low-speed execution。
+8. CR10 Action non-blocking refactor + strict validation/cancel。
+9. CR10-only low-speed execution。
+10. shared monotonic T0 + synchronized dry-run。
+11. synchronized real execution。
+12. Pause/Resume/Abort。
+13. real final FK completion。
+14. unified remani_real.launch。
+15. sim regression + staged real acceptance。
+
+硬性依赖：
+
+~~~text
+Planner real plan-only
+  must complete before
+hardware Real Executor implementation
+~~~
+
+CR10 non-blocking cancel 和 Ranger watchdog 未验证前，不允许组合实机运动。
+
+## 21. 第一阶段验收标准
+
+- mode:=sim 默认且行为不回归。
+- mode:=real 强制 execution_owner=external。
+- Gate 拦住 candidate 时 REMANI 不进入 EXEC_TRAJ、不虚拟推进、不发布 finish。
+- 正式 transaction 为 START / ADD 1..N / FINAL。
+- candidate_id 与 trajectory_id 不混用。
+- /joint_states 只服务 RobotModel；planner 只接固定六轴 /remani/cr10_joint_states。
+- ordinary /cmd_vel 无法驱动 Ranger；硬件只接 /remani/hardware/ranger/cmd_vel。
+- dry_run 对 Ranger hardware topic、CR10 Action goal 和机械臂写服务实现零输出。
+- static-empty GridMap 参数可配置且 V1 default 为 16 m × 12 m × 3 m / 0.05 m；有可查询 ESDF 和硬边界，但 UI 明示没有现实障碍感知。
+- Execute 前无硬件运动；Execute 必须绑定当前 candidate_id。
+- Pause 可停止；Resume 只在严格容差内恢复原剩余轨迹；超限 Abort + Replan。
+- CR10 Action 可抢占、非阻塞、输入严格校验，cancel 不伪报 SUCCEEDED。
+- shared T0 明确，start_skew 被记录并初始验收为 <=100 ms。
+- real 成功需要 CR10 completion AND Ranger completion AND actual base/joint/EE FK 全部通过，Action succeeded 不等于任务成功。
+- 物理急停和空场地是 V1 实机运行前置条件。
+
+## 22. Source consistency self-check
+
+修改后的正确语义：
+
+| 检查项 | 最终语义 |
+|---|---|
+| Gate 拦住后 planner 是否执行 | 否；real planner plan-only，禁止进入内部 EXEC_TRAJ |
+| handoff 后 planner 保留什么 | 清除 execution ownership、EXEC_TRAJ/timer state；仅保留 candidate_id、external metadata 和 result correlation，随后 planner_state=IDLE |
+| START / FINAL 是否为当前行为 | 否；这是 real candidate protocol 必须新增的行为 |
+| real PolynomialTraj action 由谁解释 | 仅 Trajectory Gate 按 begin/append/commit/invalidate/failure transaction control protocol 解释；sim 保持 ADD-only |
+| trajectory_id 是否为 candidate_id | 否；前者是 segment 序号，后者是 Gate 单调 candidate version |
+| Executor 是否消费 planner raw trajectory | 否；数据流固定为 Planner -> /remani/planner_candidate -> Gate -> /remani/frozen_candidate -> Executor |
+| planner 是否用 busy 表示执行状态 | 否；planner_state 与 executor_state 分离，IDLE + EXECUTING 是合法组合 |
+| planner 是否接完整 /joint_states | 否；只接 /remani/cr10_joint_states |
+| rogue publisher 检测是否足够 | 否；先做 /remani/hardware/ranger/cmd_vel launch namespace 隔离，再做唯一 publisher 检查 |
+| Resume 是否生成 connector | 否；V1 小误差恢复原剩余轨迹，超限 Abort + Replan |
+| Pause 参数时间来自哪里 | 仅 Executor last successfully commanded timeline，不来自 planner wall-clock 或 trajectory.start_time |
+| Action SUCCEEDED 是否等于 whole-body succeeded | 否；需要 CR10 AND Ranger completion AND actual base/joint/EE tolerance |
+| 无 depth/cloud 是否可忽略 GridMap | 否；real V1 使用 explicit static-empty GridMap + ESDF + boundary |
+| static-empty 尺寸是否固定 | 否；16 m × 12 m × 3 m / 0.05 m 是 V1 default，必须可配置且禁止 hard-code |
+| real 谁负责 execution safety | 仅 Real Executor |
+| sim 谁负责 execution lifecycle | REMANI 原 FSM |
+| 当前 RobotStatus 是否能完整表示 fault | 否；必须增加规范化只读 error_status / robot_mode telemetry，不能从 connected/enabled 推断 |
+| READY 或 dry-run 的 watchdog timeout 是否等于执行故障 | 否；安全空闲允许 timeout，正式 Execute 接受前必须完成零命令 freshness handshake，执行期 timeout 才进入 ERROR |
+| world -> base_link 谁发布 | 仅 State Bridge；Ranger driver 的 publish_odom_tf=false，且两者使用同一 /odom |
+
+全文不再依赖以下错误假设：
+
+- REMANI EXEC_TRAJ 和 Real Executor EXECUTING 可以同时存在。
+- planner wall-clock 可以代表未执行 candidate 的实际进度。
+- 完整 RobotModel JointState 的前六项天然是 CR10。
+- 检测 /cmd_vel publisher 数量就能阻止其他节点驱动底盘。
+- 简单 joint-wise quintic 可以作为非完整约束底盘的恢复段。
+- CR10 elapsed duration 到期即可成功。
+
+## 23. Remaining risk 与 plan-ready 判定
+
+设计层面已经关闭 implementation-blocking ownership、protocol、topic、state、timing、fault telemetry 和 completion 歧义。
+
+仍需在实现/验收阶段验证的硬件事实：
+
+- Ranger SDK/固件停止响应和 watchdog 实际停机时间。
+- Dobot Stop() 对 ServoJ 的受控停止效果。
+- servoj_period=0.10 s 的实机可用性。
+- CR10 Action accept latency 和最终 start_skew。
+- 实机反馈噪声对应的 velocity、tracking 和 completion threshold。
+
+这些是已定义失败处理与阶段门槛的硬件验证项，不是未定义的架构决策。当前 spec 已经 implementation-plan ready；本轮不生成 implementation plan。
