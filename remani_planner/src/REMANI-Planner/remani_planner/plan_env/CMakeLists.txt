@@ -48,3 +48,12 @@ target_link_libraries( plan_env
     ${PCL_LIBRARIES}
     ${OpenCV_LIBRARIES}
     )  
+
+if(CATKIN_ENABLE_TESTING)
+  catkin_add_gtest(test_static_empty_grid_map
+    test/test_static_empty_grid_map.cpp)
+  if(TARGET test_static_empty_grid_map)
+    target_link_libraries(test_static_empty_grid_map
+      plan_env ${catkin_LIBRARIES})
+  endif()
+endif()

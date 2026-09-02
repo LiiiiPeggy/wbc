@@ -175,6 +175,12 @@ public:
   GridMap() {}
   ~GridMap() {}
 
+  enum class EnvironmentMode
+  {
+    Simulated,
+    StaticEmpty
+  };
+
   enum
   {
     POSE_STAMPED = 1,
@@ -220,6 +226,12 @@ public:
   inline bool isKnownOccupied(const Eigen::Vector3d &pt);
 
   void initMap(ros::NodeHandle &nh);
+  EnvironmentMode getEnvironmentMode() const { return environment_mode_; }
+  bool isReady() const { return map_ready_; }
+  bool usesOnlineSensing() const
+  {
+    return environment_mode_ != EnvironmentMode::StaticEmpty;
+  }
 
   void publishMap();
   void publishMapInflate(bool all_info = false);
@@ -260,8 +272,13 @@ public:
   EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
 private:
+  void initializeStaticEmpty();
+  void setupOnlineSensing();
+
   MappingParameters mp_;
   MappingData md_;
+  EnvironmentMode environment_mode_{EnvironmentMode::Simulated};
+  bool map_ready_{false};
 
   // get depth image and camera pose
   void depthPoseCallback(const sensor_msgs::ImageConstPtr &img,
@@ -370,9 +387,9 @@ inline bool GridMap::isUnknown(const Eigen::Vector3d &pos)
 
 inline bool GridMap::isKnownFree(const Eigen::Vector3i &id)
 {
-  Eigen::Vector3i id1 = id;
-  boundIndex(id1);
-  int adr = toAddress(id1);
+  if (!isInMap(id))
+    return false;
+  int adr = toAddress(id);
 
   // return md_.occupancy_buffer_[adr] >= mp_.clamp_min_log_ &&
   //     md_.occupancy_buffer_[adr] < mp_.min_occupancy_log_;

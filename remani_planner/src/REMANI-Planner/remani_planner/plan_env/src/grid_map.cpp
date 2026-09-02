@@ -1,18 +1,63 @@
 #include "plan_env/grid_map.h"
 
+#include <algorithm>
+#include <cmath>
+#include <stdexcept>
+
 // #define current_img_ md_.depth_image_[image_cnt_ & 1]
 // #define last_img_ md_.depth_image_[!(image_cnt_ & 1)]
 
 void GridMap::initMap(ros::NodeHandle &nh)
 {
   node_ = nh;
+  map_ready_ = false;
+
+  std::string environment_mode;
+  node_.param("environment_mode", environment_mode, std::string("simulated"));
+  if (environment_mode == "simulated")
+  {
+    environment_mode_ = EnvironmentMode::Simulated;
+  }
+  else if (environment_mode == "static_empty")
+  {
+    environment_mode_ = EnvironmentMode::StaticEmpty;
+  }
+  else
+  {
+    const std::string message =
+        "Unsupported environment_mode '" + environment_mode +
+        "'; expected 'simulated' or 'static_empty'";
+    ROS_ERROR_STREAM(message);
+    throw std::invalid_argument(message);
+  }
 
   /* get parameter */
   double x_size, y_size, z_size;
-  node_.param("grid_map/resolution", mp_.resolution_, -1.0);
-  node_.param("grid_map/map_size_x", x_size, -1.0);
-  node_.param("grid_map/map_size_y", y_size, -1.0);
-  node_.param("grid_map/map_size_z", z_size, -1.0);
+  if (environment_mode_ == EnvironmentMode::StaticEmpty)
+  {
+    node_.param("environment/static_empty/resolution", mp_.resolution_, 0.05);
+    node_.param("environment/static_empty/size_x", x_size, 16.0);
+    node_.param("environment/static_empty/size_y", y_size, 12.0);
+    node_.param("environment/static_empty/size_z", z_size, 3.0);
+
+    if (!std::isfinite(mp_.resolution_) || mp_.resolution_ <= 0.0 ||
+        !std::isfinite(x_size) || x_size <= 0.0 ||
+        !std::isfinite(y_size) || y_size <= 0.0 ||
+        !std::isfinite(z_size) || z_size <= 0.0)
+    {
+      const std::string message =
+          "Static-empty size_x, size_y, size_z, and resolution must be finite and strictly positive";
+      ROS_ERROR_STREAM(message);
+      throw std::invalid_argument(message);
+    }
+  }
+  else
+  {
+    node_.param("grid_map/resolution", mp_.resolution_, -1.0);
+    node_.param("grid_map/map_size_x", x_size, -1.0);
+    node_.param("grid_map/map_size_y", y_size, -1.0);
+    node_.param("grid_map/map_size_z", z_size, -1.0);
+  }
   node_.param("grid_map/local_update_range_x", mp_.local_update_range_(0), -1.0);
   node_.param("grid_map/local_update_range_y", mp_.local_update_range_(1), -1.0);
   node_.param("grid_map/local_update_range_z", mp_.local_update_range_(2), -1.0);
@@ -63,9 +108,6 @@ void GridMap::initMap(ros::NodeHandle &nh)
   if(global_plan){
     mp_.use_global_map_ = true;
   }
-  bool use_load_map_;
-  nh.param("grid_map/use_load_map", use_load_map_, false);
-
   if(mp_.local_bound_inflate_ > 1e-3) mp_.local_bound_inflate_ = max(mp_.resolution_, mp_.local_bound_inflate_);
   else mp_.local_bound_inflate_ = 0.0;
 
@@ -139,8 +181,39 @@ void GridMap::initMap(ros::NodeHandle &nh)
                    0.0,  0.0, 1.0, 0.0,
                    0.0,  0.0, 0.0, 1.0;
 
-  /* init callback */
-  
+  md_.occ_need_update_ = false;
+  md_.local_updated_ = false;
+  md_.has_first_depth_ = false;
+  md_.has_odom_ = false;
+  md_.has_cloud_ = false;
+  md_.image_cnt_ = 0;
+  md_.last_occ_update_time_.fromSec(0);
+  md_.esdf_need_update_ = false;
+
+  md_.fuse_time_ = 0.0;
+  md_.update_num_ = 0;
+  md_.max_fuse_time_ = 0.0;
+
+  md_.flag_depth_odom_timeout_ = false;
+  md_.flag_use_depth_fusion = false;
+
+  if (environment_mode_ == EnvironmentMode::StaticEmpty)
+  {
+    initializeStaticEmpty();
+  }
+  else
+  {
+    setupOnlineSensing();
+  }
+
+  // rand_noise_ = uniform_real_distribution<double>(-0.2, 0.2);
+  // rand_noise2_ = normal_distribution<double>(0, 0.2);
+  // random_device rd;
+  // eng_ = default_random_engine(rd());
+}
+
+void GridMap::setupOnlineSensing()
+{
   depth_sub_.reset(new message_filters::Subscriber<sensor_msgs::Image>(node_, "grid_map/depth", 50));
   cloud_sub_.reset(new message_filters::Subscriber<sensor_msgs::PointCloud2>(node_, "grid_map/cloud", 50));
   // extrinsic_sub_ = node_.subscribe<nav_msgs::Odometry>(
@@ -169,7 +242,9 @@ void GridMap::initMap(ros::NodeHandle &nh)
   
   // use odometry and point cloud 
   // sim
-  if(use_load_map_){
+  bool use_load_map;
+  node_.param("grid_map/use_load_map", use_load_map, false);
+  if(use_load_map){
     // std::cout << "use load map or sim" << std::endl;
     if(mp_.use_global_map_){
       // std::cout << "use global map" << std::endl;
@@ -193,27 +268,20 @@ void GridMap::initMap(ros::NodeHandle &nh)
   map_pub_      = node_.advertise<sensor_msgs::PointCloud2>("grid_map/occupancy", 10);
   map_inf_pub_  = node_.advertise<sensor_msgs::PointCloud2>("grid_map/occupancy_inflate", 10);
   esdf_pub_     = node_.advertise<sensor_msgs::PointCloud2>("grid_map/esdf", 10);
+}
 
-  md_.occ_need_update_ = false;
-  md_.local_updated_ = false;
-  md_.has_first_depth_ = false;
-  md_.has_odom_ = false;
-  md_.has_cloud_ = false;
-  md_.image_cnt_ = 0;
-  md_.last_occ_update_time_.fromSec(0);
-  md_.esdf_need_update_ = false;
-
-  md_.fuse_time_ = 0.0;
-  md_.update_num_ = 0;
-  md_.max_fuse_time_ = 0.0;
-
+void GridMap::initializeStaticEmpty()
+{
+  std::fill(md_.occupancy_buffer_.begin(), md_.occupancy_buffer_.end(),
+            mp_.clamp_min_log_);
+  std::fill(md_.occupancy_buffer_inflate_.begin(),
+            md_.occupancy_buffer_inflate_.end(), 0);
+  md_.local_bound_min_.setZero();
+  md_.local_bound_max_ = mp_.map_voxel_num_ - Eigen::Vector3i::Ones();
   md_.flag_depth_odom_timeout_ = false;
   md_.flag_use_depth_fusion = false;
-
-  // rand_noise_ = uniform_real_distribution<double>(-0.2, 0.2);
-  // rand_noise2_ = normal_distribution<double>(0, 0.2);
-  // random_device rd;
-  // eng_ = default_random_engine(rd());
+  updateESDF3d();
+  map_ready_ = true;
 }
 
 void GridMap::resetBuffer()
