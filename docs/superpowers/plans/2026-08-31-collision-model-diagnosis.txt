@@ -1,0 +1,42 @@
+# Ranger CR10 Collision Model Diagnosis (Task 3B)
+# Date: 2026-08-31
+# Branch: topay
+
+## Current whole-body collision stack
+
+### Layer 1 — Chassis 2D (GridMap)
+- Consumer: GridMap::isCollision2d(state.head(2), chassis_colli_radius)
+- Radius: 0.711 m (robot_ranger_cr10.yaml)
+- Obstacle ingestion: 2D ESDF built from occ_buffer_2d; low-Z obstacle points only
+- Covers: ground-level disk including wheels / lower body
+
+### Layer 2 — Arm 3D spheres (CR10 collision_proxies_)
+- Consumer: getColliPts() → isCollision3d per sphere (obstacle_radius=0.10)
+- Self-collision: separate collision_matrix + colli_self_radii_ (self_radius=0.045)
+- Chassis-arm ignore: link_ids {0,1} skipped for chassis self check (Cr10)
+
+### Layer 3 — Upper cargo box (base_obstacle_proxies_) — ADDED Task 3C
+- Separate from collision_proxies_ / collision_matrix
+- API: getBaseObstaclePts() / getBaseObstacleGrads()
+- Transform: p_world = base_T(x,y,yaw) * local_offset
+- Layout: 3×3×2 multi-sphere, R=0.18 m, margin 0.02 m (from Task 3A audit)
+- Planning z envelope: [0.073, 0.472] m (box_link.STL in planning frame)
+
+### z-filter gap (root cause of smoke false negative)
+- chassis_height = 0.15 m
+- GridMap 2D layer ignores obstacles with z >= chassis_height in map generation
+- Arm spheres sit on mount chain above chassis; do NOT wrap cargo box sides/top
+- Result: obstacle at z ∈ (0.15, box_top) with XY overlap → RViz box mesh intersects,
+  but isWholeBodyCollision() returned false BEFORE base_obstacle integration
+
+## Smoke false negative instance (observed)
+- Robot: ranger_cr10 @ origin, arm home
+- Obstacle: XY overlaps box footprint, z ≈ 0.25 m (above chassis disk filter)
+- RViz: box_link visual intersects obstacle point cloud
+- Planner (pre-fix): GridMap::isWholeBodyCollision() == false
+- Post-fix: base_obstacle 3D spheres at z=0.18/0.38 detect collision (Case B gate)
+
+## Continuous optimizer gap (pre-fix)
+- MomaTrajOpt ESDF cost loop used getColliPts() (arm only)
+- Trajectory could pass discrete endpoints while mid-path box envelope penetrated obstacle
+- Post-fix: eeCostCallback + inner loop + falm/relax penalty path call getBaseObstaclePts/Grads

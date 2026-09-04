@@ -7,6 +7,8 @@
 #include <iostream>
 #include <random>
 #include <algorithm>
+#include <array>
+#include <stdexcept>
 
 namespace
 {
@@ -71,7 +73,52 @@ MomaParam makeCr10Profile()
     profile.initCr10FixedTransforms();
     profile.buildCollisionProxies();
     profile.buildCollisionIgnoreMatrix();
+    // ################################
+    // C++: Match production robot_ranger_cr10.yaml box_obstacle 3×3×2 grid
+    // ################################
+    profile.box_obstacle_enabled_ = true;
+    profile.box_obstacle_margin_ = 0.02;
+    const std::array<double, 3> grid_x = {-0.45, 0.0, 0.45};
+    const std::array<double, 3> grid_y = {-0.35, 0.0, 0.35};
+    const std::array<double, 2> grid_z = {0.18, 0.38};
+    const double box_radius = 0.18;
+    for (double x : grid_x)
+    {
+        for (double y : grid_y)
+        {
+            for (double z : grid_z)
+            {
+                CollisionSphere sphere;
+                sphere.local_offset << x, y, z;
+                sphere.obstacle_radius = box_radius;
+                sphere.self_radius = 0.0;
+                sphere.link_id = -1;
+                profile.base_obstacle_proxies_.push_back(sphere);
+            }
+        }
+    }
+    profile.buildBaseObstacleProxies();
     return profile;
+}
+
+double scalarBaseSphere(const MomaParam& profile, const Eigen::VectorXd& state,
+                        size_t sphere_idx, const Eigen::Vector3d& direction)
+{
+    const std::vector<Eigen::Vector4d> base_pts = profile.getBaseObstaclePts(state);
+    return direction.dot(base_pts[sphere_idx].head(3));
+}
+
+size_t pickCornerBaseSphereIndex(const MomaParam& profile)
+{
+    for (size_t i = 0; i < profile.base_obstacle_proxies_.size(); ++i)
+    {
+        const Eigen::Vector3d offset = profile.base_obstacle_proxies_[i].local_offset;
+        if (offset.x() > 0.4 && offset.y() > 0.3)
+        {
+            return i;
+        }
+    }
+    throw std::runtime_error("no corner base obstacle sphere with nonzero local xy");
 }
 
 double scalarSphere(const MomaParam& profile, const Eigen::VectorXd& state,
@@ -387,6 +434,65 @@ int main()
         return 1;
     }
     std::cout << "CR10 collision-gradient validation PASSED" << std::endl;
+
+    // ################################
+    // C++: Base-box x/y/yaw analytic gradient FD gate (nonzero local xy offset)
+    // ################################
+    const size_t corner_sphere_idx = pickCornerBaseSphereIndex(profile);
+    const Eigen::Vector3d corner_offset =
+        profile.base_obstacle_proxies_[corner_sphere_idx].local_offset;
+    std::cout << "base_corner_sphere local_offset="
+              << corner_offset.transpose() << std::endl;
+
+    double max_base_grad_err = 0.0;
+    const std::array<double, 2> yaw_states = {0.0, 0.7};
+    for (const double yaw : yaw_states)
+    {
+        Eigen::VectorXd state = Eigen::VectorXd::Zero(9);
+        state(2) = yaw;
+        const Eigen::Vector3d direction = Eigen::Vector3d::UnitX()
+                                        + Eigen::Vector3d::UnitY()
+                                        + Eigen::Vector3d::UnitZ();
+        std::vector<Eigen::Vector3d> pos_grads(profile.base_obstacle_proxies_.size(),
+                                              Eigen::Vector3d::Zero());
+        pos_grads[corner_sphere_idx] = direction;
+        const Eigen::VectorXd analytic_grad =
+            profile.getBaseObstacleGrads(state, pos_grads);
+
+        for (int base_dof = 0; base_dof < 3; ++base_dof)
+        {
+            Eigen::VectorXd plus = state;
+            Eigen::VectorXd minus = state;
+            plus(base_dof) += fd_eps;
+            minus(base_dof) -= fd_eps;
+            const double fd_grad = (scalarBaseSphere(profile, plus, corner_sphere_idx, direction)
+                                    - scalarBaseSphere(profile, minus, corner_sphere_idx, direction))
+                                   / (2.0 * fd_eps);
+            const double denom = std::max(std::abs(fd_grad), 1e-12);
+            max_base_grad_err = std::max(
+                max_base_grad_err,
+                std::abs(analytic_grad(base_dof) - fd_grad) / denom);
+        }
+
+        for (int joint = 0; joint < 6; ++joint)
+        {
+            if (std::abs(analytic_grad(3 + joint)) > 1e-9)
+            {
+                std::cerr << "CR10 base obstacle grad leaked into arm joint "
+                          << joint << std::endl;
+                return 1;
+            }
+        }
+    }
+
+    std::cout << "base_obstacle_yaw_states=2 max_base_grad_rel_err="
+              << max_base_grad_err << std::endl;
+    if (max_base_grad_err >= 1e-4)
+    {
+        std::cerr << "CR10 base-box x/y/yaw analytic gradient FD FAILED" << std::endl;
+        return 1;
+    }
+    std::cout << "CR10 base-box x/y/yaw analytic gradient FD PASSED" << std::endl;
 
     Eigen::VectorXi collision_link;
     const Eigen::VectorXd home_state = Eigen::VectorXd::Zero(9);

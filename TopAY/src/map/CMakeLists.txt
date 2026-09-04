@@ -74,3 +74,14 @@ target_link_libraries(grid_map
   ${catkin_LIBRARIES}
   OsqpEigen::OsqpEigen
 )
+
+# ################################
+# CMake: Ranger upper-box discrete GridMap collision gate
+# ################################
+add_executable(test_topay_box_collision src/test_topay_box_collision.cpp)
+add_dependencies(test_topay_box_collision fake_moma_gencpp)
+target_link_libraries(test_topay_box_collision
+  grid_map
+  fake_moma
+  ${catkin_LIBRARIES}
+)

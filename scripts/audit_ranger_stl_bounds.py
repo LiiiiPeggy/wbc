@@ -258,6 +258,101 @@ def chassis_footprint_radius(x_len: float, y_len: float) -> float:
     return float(np.sqrt((x_len / 2.0) ** 2 + (y_len / 2.0) ** 2))
 
 
+def recommend_box_sphere_layout(
+    world_vmin: np.ndarray,
+    world_vmax: np.ndarray,
+    margin: float = 0.02,
+    obstacle_radius: float = 0.18,
+) -> dict:
+    # ################################
+    # Python: 3×3×2 multi-sphere envelope with conservative corner coverage
+    # ################################
+    expanded_min = world_vmin - margin
+    expanded_max = world_vmax + margin
+    grid_x = [-0.45, 0.0, 0.45]
+    grid_y = [-0.35, 0.0, 0.35]
+    grid_z = [0.18, 0.38]
+    spacing_x = 0.45
+    spacing_y = 0.35
+    spacing_z = 0.20
+    max_uncovered = 0.0
+    sample_points = [
+        world_vmin,
+        world_vmax,
+        np.array([world_vmin[0], world_vmax[1], world_vmin[2]]),
+        np.array([world_vmax[0], world_vmin[1], world_vmax[2]]),
+    ]
+    centers = []
+    for x in grid_x:
+        for y in grid_y:
+            for z in grid_z:
+                centers.append(np.array([x, y, z], dtype=float))
+    for point in sample_points:
+        dist = min(np.linalg.norm(point - c) for c in centers)
+        max_uncovered = max(max_uncovered, dist - obstacle_radius)
+    return {
+        "layout": "3x3x2 multi_sphere",
+        "margin": margin,
+        "obstacle_radius": obstacle_radius,
+        "grid_x": grid_x,
+        "grid_y": grid_y,
+        "grid_z": grid_z,
+        "spacing_xyz": [spacing_x, spacing_y, spacing_z],
+        "expanded_bounds_min": expanded_min,
+        "expanded_bounds_max": expanded_max,
+        "max_corner_coverage_error_m": float(max_uncovered),
+        "sphere_count": len(centers),
+    }
+
+
+def print_box_layout_report(layout: dict) -> None:
+    print("\n=== Box multi-sphere layout recommendation ===")
+    print(f"recommended layout: {layout['layout']}")
+    print(f"sphere count: {layout['sphere_count']}")
+    print(f"margin: {layout['margin']:.3f} m")
+    print(f"obstacle_radius: {layout['obstacle_radius']:.3f} m")
+    print(f"grid_x: {layout['grid_x']}")
+    print(f"grid_y: {layout['grid_y']}")
+    print(f"grid_z: {layout['grid_z']}")
+    print(f"center spacing (x,y,z): {layout['spacing_xyz']}")
+    print(f"expanded bounds min: {fmt_vec(layout['expanded_bounds_min'])}")
+    print(f"expanded bounds max: {fmt_vec(layout['expanded_bounds_max'])}")
+    print(f"max corner coverage error estimate: {layout['max_corner_coverage_error_m']:.6f} m")
+    if layout["max_corner_coverage_error_m"] > 0.01:
+        print("WARNING: corner coverage error > 1 cm — increase radius or add spheres")
+
+
+def test_box_layout_gate(repo_root: Path, yaml_path: Path) -> None:
+    profile = load_moma_profile(yaml_path)
+    mesh_parts = profile.get("mesh_parts", [])
+    base_T = np.eye(4)
+    box_planning = None
+    for entry in mesh_parts:
+        if is_box_entry(entry):
+            box_planning = audit_mesh_entry(entry, repo_root, base_T, [0, 0, 0], False)
+            break
+    if box_planning is None:
+        raise AssertionError("box_link.stl entry not found in mesh_parts")
+
+    box_obstacle = profile.get("box_obstacle", {})
+    margin = float(box_obstacle.get("margin", 0.02))
+    radius = float(box_obstacle.get("obstacle_radius", 0.18))
+    layout = recommend_box_sphere_layout(
+        box_planning["world_vmin"], box_planning["world_vmax"], margin, radius
+    )
+    assert layout["max_corner_coverage_error_m"] <= 0.02, (
+        f"box layout coverage error {layout['max_corner_coverage_error_m']:.4f} > 2 cm"
+    )
+    assert layout["sphere_count"] >= 8
+    has_nonzero_xy = any(
+        abs(x) > 1e-6 or abs(y) > 1e-6
+        for x in layout["grid_x"]
+        for y in layout["grid_y"]
+        for _ in layout["grid_z"]
+    )
+    assert has_nonzero_xy
+
+
 def run_audit(repo_root: Path, yaml_path: Path) -> int:
     profile = load_moma_profile(yaml_path)
     visual_root = profile.get("visual", {}).get("base_xyz", [0.0, 0.0, 0.0])
@@ -302,7 +397,19 @@ def run_audit(repo_root: Path, yaml_path: Path) -> int:
         print(f"chassis collision_radius: {float(chassis.get('collision_radius', 0.0)):.6f}")
         print(
             "note: GridMap chassis 2D layer only ingests obstacle points with z < chassis_height "
-            f"({chassis.get('height')}); upper box has no dedicated 3D envelope yet."
+            f"({chassis.get('height')}); upper box uses base_obstacle_proxies_ 3D envelope."
+        )
+        layout = recommend_box_sphere_layout(
+            box_planning["world_vmin"],
+            box_planning["world_vmax"],
+            margin=float(profile.get("box_obstacle", {}).get("margin", 0.02)),
+            obstacle_radius=float(profile.get("box_obstacle", {}).get("obstacle_radius", 0.18)),
+        )
+        print_box_layout_report(layout)
+        chassis_r = float(chassis.get("collision_radius", 0.0))
+        print(
+            f"chassis disk covers box XY footprint: "
+            f"{xy_half:.6f} <= {chassis_r:.6f} -> {xy_half <= chassis_r + 1e-6}"
         )
 
     print("\n=== CR10 collision proxies ===")
@@ -342,12 +449,17 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--repo-root", type=Path, default=REPO_ROOT_DEFAULT)
     parser.add_argument("--yaml", type=Path, default=YAML_DEFAULT)
     parser.add_argument("--test-wheels", action="store_true", help="Run four-wheel ground gate")
+    parser.add_argument("--test-box-layout", action="store_true", help="Run box multi-sphere coverage gate")
     args = parser.parse_args(argv)
 
     yaml_path = args.yaml if args.yaml.is_absolute() else args.repo_root / args.yaml
     if args.test_wheels:
         test_four_wheel_ground_gate(args.repo_root, yaml_path)
         print("Four-wheel ground gate PASSED")
+        return 0
+    if args.test_box_layout:
+        test_box_layout_gate(args.repo_root, yaml_path)
+        print("Base-box obstacle proxy geometry coverage PASSED")
         return 0
     return run_audit(args.repo_root, yaml_path)
 

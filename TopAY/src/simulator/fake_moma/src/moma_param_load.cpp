@@ -103,6 +103,101 @@ void loadAg95Spheres(const ros::NodeHandle& root_nh, std::vector<CollisionSphere
 }
 
 // ################################
+// C++: Parse upper-box obstacle multi-sphere layout from global /moma/box_obstacle
+// ################################
+void loadBoxObstacle(const ros::NodeHandle& root_nh, MomaParam& profile)
+{
+    if (!root_nh.getParam("moma/box_obstacle/enabled", profile.box_obstacle_enabled_))
+    {
+        profile.box_obstacle_enabled_ = false;
+        return;
+    }
+    if (!profile.box_obstacle_enabled_)
+    {
+        return;
+    }
+
+    root_nh.getParam("moma/box_obstacle/margin", profile.box_obstacle_margin_);
+
+    XmlRpc::XmlRpcValue spheres;
+    if (root_nh.getParam("moma/box_obstacle/spheres", spheres))
+    {
+        if (spheres.getType() != XmlRpc::XmlRpcValue::TypeArray || spheres.size() == 0)
+        {
+            throw std::runtime_error("Global parameter /moma/box_obstacle/spheres must be a non-empty array");
+        }
+
+        profile.base_obstacle_proxies_.clear();
+        for (int idx = 0; idx < spheres.size(); ++idx)
+        {
+            if (spheres[idx].getType() != XmlRpc::XmlRpcValue::TypeStruct)
+            {
+                throw std::runtime_error("Global parameter /moma/box_obstacle/spheres entries must be maps");
+            }
+
+            CollisionSphere sphere;
+            const auto& entry = spheres[idx];
+            if (!entry.hasMember("local_offset") || !entry.hasMember("obstacle_radius"))
+            {
+                throw std::runtime_error(
+                    "Global parameter /moma/box_obstacle/spheres entries require "
+                    "local_offset and obstacle_radius");
+            }
+
+            if (entry["local_offset"].getType() != XmlRpc::XmlRpcValue::TypeArray
+                || entry["local_offset"].size() != 3)
+            {
+                throw std::runtime_error(
+                    "Global parameter /moma/box_obstacle/spheres local_offset must contain 3 values");
+            }
+
+            sphere.local_offset << static_cast<double>(entry["local_offset"][0]),
+                static_cast<double>(entry["local_offset"][1]),
+                static_cast<double>(entry["local_offset"][2]);
+            sphere.obstacle_radius = static_cast<double>(entry["obstacle_radius"]);
+            sphere.self_radius = 0.0;
+            sphere.link_id = -1;
+            profile.base_obstacle_proxies_.push_back(sphere);
+        }
+        return;
+    }
+
+    std::vector<double> grid_x;
+    std::vector<double> grid_y;
+    std::vector<double> grid_z;
+    double obstacle_radius = 0.0;
+    if (!root_nh.getParam("moma/box_obstacle/grid_x", grid_x)
+        || !root_nh.getParam("moma/box_obstacle/grid_y", grid_y)
+        || !root_nh.getParam("moma/box_obstacle/grid_z", grid_z)
+        || !root_nh.getParam("moma/box_obstacle/obstacle_radius", obstacle_radius))
+    {
+        throw std::runtime_error(
+            "Global /moma/box_obstacle requires spheres[] or grid_x/grid_y/grid_z + obstacle_radius");
+    }
+    if (obstacle_radius <= 0.0)
+    {
+        throw std::runtime_error("Global /moma/box_obstacle/obstacle_radius must be positive");
+    }
+
+    profile.base_obstacle_proxies_.clear();
+    for (double x : grid_x)
+    {
+        for (double y : grid_y)
+        {
+            for (double z : grid_z)
+            {
+                CollisionSphere sphere;
+                sphere.local_offset << x, y, z;
+                sphere.obstacle_radius = obstacle_radius;
+                sphere.self_radius = 0.0;
+                sphere.link_id = -1;
+                profile.base_obstacle_proxies_.push_back(sphere);
+            }
+        }
+    }
+}
+
+// ################################
 // C++: Parse profile mesh parts and their link-relative visual transforms
 // ################################
 double xmlNumber(const XmlRpc::XmlRpcValue& value, const std::string& name)
@@ -321,6 +416,7 @@ MomaParam MomaParam::fromRos(const ros::NodeHandle& root_nh)
             }
         }
         loadAg95Spheres(root_nh, profile.ag95_spheres);
+        loadBoxObstacle(root_nh, profile);
     }
     else
     {
@@ -392,6 +488,10 @@ void MomaParam::finalizeCollision()
     {
         buildCollisionProxies();
         buildCollisionIgnoreMatrix();
+        // ################################
+        // C++: Upper-box obstacle proxies stay outside collision_matrix
+        // ################################
+        buildBaseObstacleProxies();
         return;
     }
 

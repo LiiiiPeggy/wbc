@@ -1,0 +1,26 @@
+# Collision Consumer Audit (Task 3C0)
+# Date: 2026-08-31
+# Must see box env = integrated in Task 3C2/3C3
+
+| Consumer | File | arm env | self | collision_matrix | getColliGrads | must see box env | must NOT see box self |
+|----------|------|---------|------|------------------|---------------|------------------|----------------------|
+| GridMap::isWholeBodyCollision | grid_map.h | yes (arm pts) | yes | yes | no | YES (3C2 done) | YES |
+| MomaTrajOpt::eeCostCallback | moma_traj_opt.cpp:66 | yes + ESDF | yes | yes | yes | YES (3C3 done) | YES |
+| MomaTrajOpt inner loop | moma_traj_opt.cpp:1526 | yes | yes | yes | yes | YES (3C3 done) | YES |
+| MomaTrajOptFalm | moma_traj_opt_falm.cpp:991 | yes | yes | yes | yes | YES (penalty path) | YES |
+| MomaTrajOptRelax | moma_traj_opt_relax.cpp:989 | yes | yes | yes | yes | YES (3C3 done) | YES |
+| MomaParam::isSelfCollision | moma_param.h | no | yes | yes | no | no | YES |
+| moma_sim.cpp self + cylinder | moma_sim.cpp | debug only | yes | — | no | no | YES |
+| moma_vis.cpp self | moma_vis.cpp | no | yes | — | no | no | YES |
+| BiRRT::isValid | birrts.h | via GridMap | via GridMap | — | no | via 3C2 | YES |
+| MCRRT::isValid | mcrrts.h | via GridMap | via GridMap | — | no | via 3C2 | YES |
+| OMPL::isValid | ompls.h/cpp | via GridMap | via GridMap | — | no | via 3C2 | YES |
+| planner.cpp sampling | planner.cpp | via GridMap | via GridMap | — | no | via 3C2 | YES |
+| planner.cpp gripper pts | planner.cpp:1912 | arm pts only | — | — | no | no | YES |
+| moma_traj_opt.h min_dist | moma_traj_opt.h:1002 | arm pts | — | — | no | deferred | YES |
+
+## Integration notes
+- base_obstacle_proxies_ intentionally excluded from collision_proxies_, collision_matrix, colli_self_radii_
+- GridMap box check runs after arm env + self loops; coll_type=1 on box hit
+- Traj-opt base cost uses same ESDF penalty scale as arm env; grads via getBaseObstacleGrads (x/y/yaw only)
+- FALM: base obstacle uses smooth-L1 penalty without extra ALM constraint slot (constraint count unchanged)

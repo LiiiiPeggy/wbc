@@ -133,11 +133,17 @@ namespace nmoma_planner
         public:
             GridMap() {}
             ~GridMap()
-            { 
-                for (int i=0; i<buffer_size_3d; i++) 
-                    delete[] grid_node_map[i];
-
-                delete[] grid_node_map;
+            {
+                // ################################
+                // C++: grid_node_map[i] is new GridNode(), not new GridNode[]
+                // ################################
+                if (grid_node_map != nullptr)
+                {
+                    for (int i = 0; i < buffer_size_3d; i++)
+                        delete grid_node_map[i];
+                    delete[] grid_node_map;
+                    grid_node_map = nullptr;
+                }
                 return;
             }
 
@@ -659,6 +665,17 @@ namespace nmoma_planner
             }
         }
 
+        // ################################
+        // C++: Upper-box obstacle 3D envelope (not in collision_matrix / self loop)
+        // ################################
+        for (const Eigen::Vector4d& box_pt : moma_param->getBaseObstaclePts(state))
+        {
+            if (isCollision3d(box_pt.head(3), box_pt(3)))
+            {
+                return true;
+            }
+        }
+
         return false;
     }
 
@@ -708,6 +725,18 @@ namespace nmoma_planner
                     coll_type = 3;
                     return true;
                 }
+            }
+        }
+
+        // ################################
+        // C++: Upper-box obstacle 3D envelope (not in collision_matrix / self loop)
+        // ################################
+        for (const Eigen::Vector4d& box_pt : moma_param->getBaseObstaclePts(state))
+        {
+            if (isCollision3d(box_pt.head(3), box_pt(3)))
+            {
+                coll_type = 1;
+                return true;
             }
         }
         coll_type = -1;

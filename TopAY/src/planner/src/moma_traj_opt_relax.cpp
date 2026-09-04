@@ -1010,6 +1010,33 @@ namespace nmoma_planner
                         pos_grads.push_back(grad_to_pos);
                     }
                     // ################################
+                    // C++: Upper-box obstacle ESDF cost + base x/y/yaw gradient
+                    // ################################
+                    std::vector<Eigen::Vector4d> base_obstacle_pts =
+                        moma_param->getBaseObstaclePts(moma_pos);
+                    std::vector<Eigen::Vector3d> base_pos_grads;
+                    for (size_t bidx = 0; bidx < base_obstacle_pts.size(); ++bidx)
+                    {
+                        Eigen::Vector3d pc = base_obstacle_pts[bidx].head(3);
+                        Eigen::Vector3d grad_pc;
+                        grid_map->getDisWithGradI3d(pc, sdf_value, grad_pc);
+                        violaPos = base_obstacle_pts[bidx][3] * cost_scale * 1.1 - sdf_value * cost_scale;
+                        Eigen::Vector3d grad_to_pos = Eigen::Vector3d::Zero();
+                        if (violaPos > 0)
+                        {
+                            smoothL1Penalty(violaPos, violaPosPena, violaPosPenaD);
+                            grad_to_pos = -omg * step * opt_param.second_stage.mani_colli_weight
+                                          * violaPosPenaD * grad_pc * cost_scale;
+                            gdT(i) += omg * opt_param.second_stage.mani_colli_weight
+                                      * (violaPosPena / opt_param.int_K);
+                            double base_colli = omg * step * opt_param.second_stage.mani_colli_weight
+                                                * violaPosPena;
+                            cost += base_colli;
+                            debug_manager["base_obstacle_colli"] += base_colli;
+                        }
+                        base_pos_grads.push_back(grad_to_pos);
+                    }
+                    // ################################
                     // C++: Dual-radius self collision aligned with GridMap
                     // ################################
                     // moma self collision
@@ -1064,6 +1091,7 @@ namespace nmoma_planner
                     }
 
                     Eigen::VectorXd moma_grad = moma_param->getColliGrads(moma_pos, pos_grads);
+                    moma_grad += moma_param->getBaseObstacleGrads(moma_pos, base_pos_grads);
 
                     // joint pos limit
                     for (size_t ji = 0; ji < moma_param->dof_num; ji++)

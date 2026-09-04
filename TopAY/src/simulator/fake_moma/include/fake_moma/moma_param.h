@@ -145,6 +145,12 @@ struct MomaParam
     std::vector<int> chassis_ignore_link_ids;
     std::vector<CollisionSphere> ag95_spheres;
     std::vector<CollisionSphere> collision_proxies_;
+    // ################################
+    // C++: Upper-box environment proxies (separate from arm self-collision)
+    // ################################
+    bool box_obstacle_enabled_ = false;
+    double box_obstacle_margin_ = 0.02;
+    std::vector<CollisionSphere> base_obstacle_proxies_;
     std::vector<double> colli_self_radii_;
 
     // ################################
@@ -276,9 +282,17 @@ struct MomaParam
                                    const Eigen::VectorXd& ee_grad) const;
     void buildCollisionProxies();
     void buildCollisionIgnoreMatrix();
+    // ################################
+    // C++: Build upper-box obstacle envelope from YAML grid/spheres
+    // ################################
+    void buildBaseObstacleProxies();
     std::vector<Eigen::Vector4d> getColliPtsCr10(const Eigen::VectorXd& moma_pos) const;
     Eigen::VectorXd getColliGradsCr10(const Eigen::VectorXd& moma_pos,
                                       const std::vector<Eigen::Vector3d>& pos_grads) const;
+    std::vector<Eigen::Vector4d> getBaseObstaclePtsCr10(const Eigen::VectorXd& moma_pos) const;
+    Eigen::VectorXd getBaseObstacleGradsCr10(
+        const Eigen::VectorXd& moma_pos,
+        const std::vector<Eigen::Vector3d>& pos_grads) const;
     visualization_msgs::MarkerArray getColliCylinderArrayCr10(const Eigen::VectorXd& moma_pos) const;
     double getColliSelfRadius(size_t idx) const;
     bool isChassisArmCollisionIgnored(int link_id) const;
@@ -403,6 +417,29 @@ struct MomaParam
         }
 
         return colli_pts;
+    }
+
+    // ################################
+    // C++: Base-mounted upper-box obstacle points (planning base frame)
+    // ################################
+    std::vector<Eigen::Vector4d> getBaseObstaclePts(const Eigen::VectorXd& moma_pos) const
+    {
+        if (kinematics == KinematicsType::Cr10)
+        {
+            return getBaseObstaclePtsCr10(moma_pos);
+        }
+        return {};
+    }
+
+    Eigen::VectorXd getBaseObstacleGrads(
+        const Eigen::VectorXd& moma_pos,
+        const std::vector<Eigen::Vector3d>& pos_grads) const
+    {
+        if (kinematics == KinematicsType::Cr10)
+        {
+            return getBaseObstacleGradsCr10(moma_pos, pos_grads);
+        }
+        return Eigen::VectorXd::Zero(3 + static_cast<int>(dof_num));
     }
 
     Eigen::VectorXd getColliGrads(const Eigen::VectorXd& moma_pos,

@@ -1022,6 +1022,31 @@ namespace nmoma_planner
                         pos_grads.push_back(grad_to_pos);
                     }
                     // ################################
+                    // C++: Upper-box obstacle ESDF penalty (no extra ALM slot)
+                    // ################################
+                    std::vector<Eigen::Vector4d> base_obstacle_pts =
+                        moma_param->getBaseObstaclePts(moma_pos);
+                    std::vector<Eigen::Vector3d> base_pos_grads;
+                    for (size_t bidx = 0; bidx < base_obstacle_pts.size(); ++bidx)
+                    {
+                        Eigen::Vector3d pc = base_obstacle_pts[bidx].head(3);
+                        Eigen::Vector3d grad_pc;
+                        double sdf_value;
+                        grid_map->getDisWithGradI3d(pc, sdf_value, grad_pc);
+                        violaPos = base_obstacle_pts[bidx][3] * 1.1 - sdf_value;
+                        Eigen::Vector3d grad_to_pos = Eigen::Vector3d::Zero();
+                        if (violaPos > 0)
+                        {
+                            double violaPosPena;
+                            double violaPosPenaD;
+                            smoothL1Penalty(violaPos, violaPosPena, violaPosPenaD);
+                            cost += opt_param.second_stage.mani_colli_weight * violaPosPena;
+                            grad_to_pos = -opt_param.second_stage.mani_colli_weight * violaPosPenaD
+                                          * grad_pc;
+                        }
+                        base_pos_grads.push_back(grad_to_pos);
+                    }
+                    // ################################
                     // C++: Dual-radius self collision; keep FALM constraint count
                     // ################################
                     // moma self collision
@@ -1085,6 +1110,7 @@ namespace nmoma_planner
                     }
 
                     Eigen::VectorXd moma_grad = moma_param->getColliGrads(moma_pos, pos_grads);
+                    moma_grad += moma_param->getBaseObstacleGrads(moma_pos, base_pos_grads);
 
                     // joint pos limit * 7
                     for (size_t ji = 0; ji < moma_param->dof_num; ji++)

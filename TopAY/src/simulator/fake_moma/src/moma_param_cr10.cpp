@@ -518,6 +518,101 @@ Eigen::VectorXd MomaParam::getColliGradsCr10(
 }
 
 // ################################
+// C++: Validate / finalize upper-box obstacle proxy layout from YAML
+// ################################
+void MomaParam::buildBaseObstacleProxies()
+{
+    if (!box_obstacle_enabled_)
+    {
+        base_obstacle_proxies_.clear();
+        return;
+    }
+    if (base_obstacle_proxies_.empty())
+    {
+        throw std::runtime_error("Global /moma/box_obstacle enabled but no spheres configured");
+    }
+
+    bool has_nonzero_xy = false;
+    for (const CollisionSphere& proxy : base_obstacle_proxies_)
+    {
+        if (std::abs(proxy.local_offset.x()) > 1e-6 || std::abs(proxy.local_offset.y()) > 1e-6)
+        {
+            has_nonzero_xy = true;
+            break;
+        }
+    }
+    if (!has_nonzero_xy)
+    {
+        throw std::runtime_error(
+            "Global /moma/box_obstacle requires at least one sphere with local_offset.x or .y != 0");
+    }
+}
+
+// ################################
+// C++: Upper-box obstacle sphere centers in world frame (base_T * local_offset)
+// ################################
+std::vector<Eigen::Vector4d> MomaParam::getBaseObstaclePtsCr10(const Eigen::VectorXd& moma_pos) const
+{
+    std::vector<Eigen::Vector4d> colli_pts;
+    if (!box_obstacle_enabled_ || base_obstacle_proxies_.empty())
+    {
+        return colli_pts;
+    }
+
+    colli_pts.reserve(base_obstacle_proxies_.size());
+    const Eigen::Matrix4d base_T = baseTransform2d(moma_pos(0), moma_pos(1), moma_pos(2));
+    for (const CollisionSphere& proxy : base_obstacle_proxies_)
+    {
+        const Eigen::Vector4d local =
+            (Eigen::Vector4d() << proxy.local_offset, 1.0).finished();
+        Eigen::Vector4d colli_pt;
+        colli_pt.head(3) = (base_T * local).head(3);
+        colli_pt[3] = proxy.obstacle_radius;
+        colli_pts.push_back(colli_pt);
+    }
+    return colli_pts;
+}
+
+// ################################
+// C++: Upper-box obstacle analytic gradient (base x/y/yaw only; arm DOFs == 0)
+// ################################
+Eigen::VectorXd MomaParam::getBaseObstacleGradsCr10(
+    const Eigen::VectorXd& moma_pos,
+    const std::vector<Eigen::Vector3d>& pos_grads) const
+{
+    Eigen::VectorXd colli_grads = Eigen::VectorXd::Zero(3 + static_cast<int>(dof_num));
+    if (!box_obstacle_enabled_ || base_obstacle_proxies_.empty())
+    {
+        return colli_grads;
+    }
+    if (pos_grads.size() != base_obstacle_proxies_.size())
+    {
+        throw std::runtime_error("getBaseObstacleGradsCr10: pos_grads size mismatch");
+    }
+
+    Eigen::Matrix4d dbase_dyaw = Eigen::Matrix4d::Zero();
+    dbase_dyaw(0, 0) = -std::sin(moma_pos(2));
+    dbase_dyaw(0, 1) = -std::cos(moma_pos(2));
+    dbase_dyaw(1, 0) = std::cos(moma_pos(2));
+    dbase_dyaw(1, 1) = -std::sin(moma_pos(2));
+    Eigen::Matrix4d dbase_dx = Eigen::Matrix4d::Zero();
+    dbase_dx(0, 3) = 1.0;
+    Eigen::Matrix4d dbase_dy = Eigen::Matrix4d::Zero();
+    dbase_dy(1, 3) = 1.0;
+
+    for (size_t sphere_idx = 0; sphere_idx < base_obstacle_proxies_.size(); ++sphere_idx)
+    {
+        const CollisionSphere& proxy = base_obstacle_proxies_[sphere_idx];
+        const Eigen::Vector3d pos_grad = pos_grads[sphere_idx];
+        colli_grads(2) += positionDirectionalGrad(dbase_dyaw, proxy.local_offset, pos_grad);
+        colli_grads(0) += positionDirectionalGrad(dbase_dx, proxy.local_offset, pos_grad);
+        colli_grads(1) += positionDirectionalGrad(dbase_dy, proxy.local_offset, pos_grad);
+    }
+
+    return colli_grads;
+}
+
+// ################################
 // C++: Dual-radius lookup for self-collision consumers
 // ################################
 double MomaParam::getColliSelfRadius(size_t idx) const
