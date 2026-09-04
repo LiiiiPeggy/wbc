@@ -1,0 +1,34 @@
+<launch>
+  <param name="/test_remani_plan_only/ready" value="false"/>
+
+  <node pkg="remani_planner" type="remani_planner_node"
+        name="remani_planner_node" output="screen" required="true">
+    <rosparam command="load" file="$(find remani_planner)/config/exp_ranger_cr10_param.yaml"/>
+    <rosparam command="load" file="$(find remani_planner)/config/mm_param_ranger_cr10.yaml"/>
+    <rosparam command="load" file="$(find remani_planner)/config/remani_planner_param.yaml"/>
+
+    <param name="mode" value="real"/>
+    <param name="execution_owner" value="external"/>
+    <param name="environment_mode" value="static_empty"/>
+    <param name="environment/static_empty/size_x" value="16.0"/>
+    <param name="environment/static_empty/size_y" value="12.0"/>
+    <param name="environment/static_empty/size_z" value="3.0"/>
+    <param name="environment/static_empty/resolution" value="0.05"/>
+    <param name="fsm/target_type" value="2"/>
+    <param name="search/min_turning_radius" value="0.5"/>
+    <param name="search/max_seach_time" value="3.0"/>
+    <param name="visualization/enable_traj_mesh_vis" value="false"/>
+    <param name="visualization/enable_debug_vis" value="false"/>
+
+    <remap from="~odom_world" to="/odom"/>
+    <remap from="~joint_state" to="/joint_state"/>
+    <remap from="~gripper_state" to="/gripper_state"/>
+    <remap from="~planning/finish" to="/planning/finish"/>
+  </node>
+
+  <node pkg="remani_planner" type="fake_plan_only_actual_state.py"
+        name="fake_plan_only_actual_state" output="screen" required="true"/>
+
+  <test test-name="test_remani_plan_only" pkg="remani_planner"
+        type="test_remani_plan_only.py" time-limit="120"/>
+</launch>

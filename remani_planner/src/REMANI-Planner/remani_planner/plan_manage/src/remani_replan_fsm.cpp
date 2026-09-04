@@ -34,6 +34,8 @@ namespace remani_planner
   REMANIReplanFSM::~REMANIReplanFSM(){}
   void REMANIReplanFSM::init(ros::NodeHandle &nh)
   {
+    execution_policy_ = ExecutionPolicy::load(nh);
+
     exec_state_ = FSM_EXEC_STATE::INIT;
     have_target_ = false;
     have_odom_ = false;
@@ -43,6 +45,16 @@ namespace remani_planner
     flag_relan_astar_ = false;
     have_local_traj_ = false;
     replan_fail_time_ = 0;
+
+    if(execution_policy_.ownsInternalExecution()){
+      poly_traj_pub_ = nh.advertise<quadrotor_msgs::PolynomialTraj>(
+          "planning/trajectory", 10);
+    }else{
+      candidate_traj_pub_ = nh.advertise<quadrotor_msgs::PolynomialTraj>(
+          "/remani/planner_candidate", 10);
+      planner_status_pub_ = nh.advertise<remani_real_msgs::PlannerStatus>(
+          "/remani/planner_status", 10, true);
+    }
 
     /*  fsm param  */
     nh.param("fsm/target_type", target_type_, -1);
@@ -155,14 +167,10 @@ namespace remani_planner
     // ################################
 
     /* callback */
-    exec_timer_ = nh.createTimer(ros::Duration(0.01), &REMANIReplanFSM::execFSMCallback, this);
-    safety_timer_ = nh.createTimer(ros::Duration(0.01), &REMANIReplanFSM::checkCollisionCallback, this);
-
     odom_sub_ = nh.subscribe("odom_world", 1, &REMANIReplanFSM::mmCarOdomCallback, this);
     joint_state_sub_ = nh.subscribe("joint_state", 1, &REMANIReplanFSM::mmManiOdomCallback, this);
     gripper_state_sub_ = nh.subscribe("gripper_state", 1, &REMANIReplanFSM::gripperCallback, this);
 
-    poly_traj_pub_ = nh.advertise<quadrotor_msgs::PolynomialTraj>("planning/trajectory", 10);
     data_disp_pub_ = nh.advertise<traj_utils::DataDisp>("planning/data_display", 100);
 
     gripper_cmd_pub_ = nh.advertise<std_msgs::Bool>("gripper_cmd", 100);
@@ -171,6 +179,22 @@ namespace remani_planner
     start_pub_ = nh.advertise<std_msgs::Bool>("planning/start", 1);
     reached_pub_ = nh.advertise<std_msgs::Bool>("planning/finish", 1);
     waypoint_sub_ = nh.subscribe("/move_base_simple/goal", 1, &REMANIReplanFSM::waypointCallback, this);
+
+    if(execution_policy_.isRealPlanOnly()){
+      frozen_candidate_sub_ = nh.subscribe(
+          "/remani/frozen_candidate", 1,
+          &REMANIReplanFSM::frozenCandidateCallback, this);
+      execution_state_sub_ = nh.subscribe(
+          "/remani/execution_state", 1,
+          &REMANIReplanFSM::executionStateCallback, this);
+      publishPlannerStatus(remani_real_msgs::PlannerStatus::IDLE);
+    }
+
+    exec_timer_ = nh.createTimer(ros::Duration(0.01), &REMANIReplanFSM::execFSMCallback, this);
+    if(execution_policy_.ownsInternalExecution()){
+      safety_timer_ = nh.createTimer(
+          ros::Duration(0.01), &REMANIReplanFSM::checkCollisionCallback, this);
+    }
     
   }
 
@@ -226,9 +250,15 @@ namespace remani_planner
       bool success = planFromGlobalTraj(10);
       // std::cout << "gen new traj 2\n";
       if (success){
-        changeFSMExecState(EXEC_TRAJ, "FSM");
         flag_escape_emergency_ = true;
         try_plan_after_emergency_ = false;
+        if(planSuccessDisposition(execution_policy_) ==
+           PlanSuccessDisposition::EnterInternalExec){
+          changeFSMExecState(EXEC_TRAJ, "FSM");
+        }else{
+          enterExternalHandoff();
+          changeFSMExecState(WAIT_TARGET, "PLAN_ONLY");
+        }
       }
       else
       {
@@ -241,7 +271,24 @@ namespace remani_planner
         const int kino_st = planner_manager_->getLastKinoStatus();
         const bool invalid_terminal =
             (kino_st == KinoAstar::GOAL_COLLISION || kino_st == KinoAstar::START_COLLISION);
-        if(invalid_terminal){
+        if(execution_policy_.isRealPlanOnly()){
+          if(!external_failure_reported_){
+            if(invalid_terminal){
+              publishExternalImpossible(
+                  "TERMINAL_COLLISION",
+                  "planner rejected the start or terminal state as colliding");
+            }else if(kino_st == KinoAstar::NO_PATH){
+              publishExternalImpossible(
+                  "NO_PATH",
+                  "planner exhausted the real candidate path search");
+            }else{
+              publishExternalImpossible(
+                  "OPTIMIZATION_FAILED",
+                  "planner exhausted real candidate generation");
+            }
+          }
+          changeFSMExecState(WAIT_TARGET, "PLAN_ONLY_FAILURE");
+        }else if(invalid_terminal){
           ROS_ERROR("[FSM] abort current goal: terminal/start state invalid (kino status=%d)", kino_st);
           have_target_ = false;
           have_trigger_ = false;
@@ -430,10 +477,16 @@ namespace remani_planner
     data_disp_pub_.publish(data_disp_);
 
   force_return:;
-    exec_timer_.start();
+    if(!(execution_policy_.isRealPlanOnly() && awaiting_gate_ack_)){
+      exec_timer_.start();
+    }
   }
 
   void REMANIReplanFSM::checkCollisionCallback(const ros::TimerEvent &e){
+    if(execution_policy_.isRealPlanOnly()){
+      return;
+    }
+
     SingulTrajData *info = &planner_manager_->traj_container_.singul_traj_data;
     auto map = planner_manager_->grid_map_;
 
@@ -556,6 +609,11 @@ namespace remani_planner
     else
     {
       ROS_ERROR("Unable to generate global trajectory!");
+      if(execution_policy_.isRealPlanOnly()){
+        publishExternalImpossible(
+            "GLOBAL_TRAJECTORY_FAILED",
+            "planner could not generate a global trajectory to the target");
+      }
     }
 
     return success;
@@ -563,8 +621,13 @@ namespace remani_planner
 
   // manual waypoint
   void REMANIReplanFSM::waypointCallback(const geometry_msgs::PoseStamped::ConstPtr &msg){
+    if(execution_policy_.isRealPlanOnly() && awaiting_gate_ack_){
+      ROS_WARN("[PLAN_ONLY] ignored target while awaiting Gate acknowledgement");
+      return;
+    }
     
     if (target_type_ == TARGET_TYPE::PRESET_TARGET){
+      beginExternalPlanning();
       have_trigger_ = true;
       cout << "Triggered! traget type: " << target_type_ << endl;
 
@@ -580,7 +643,9 @@ namespace remani_planner
       flag_msg.data = true;
       planner_manager_->global_start_time_ = ros::Time::now();
       planner_manager_->start_flag_ = true;
-      start_pub_.publish(flag_msg);
+      if(execution_policy_.ownsInternalExecution()){
+        start_pub_.publish(flag_msg);
+      }
       wpt_id_ = 0;
       // ################################
       // C++: preset two-phase EE metadata commit begin
@@ -646,6 +711,7 @@ namespace remani_planner
     // C++: manual goal also sets trigger end
     // ################################
     init_state_ = mm_state_pos_;
+    beginExternalPlanning();
     end_pt_ = Eigen::VectorXd::Zero(traj_dim_);
 
     // ################################
@@ -739,7 +805,120 @@ namespace remani_planner
     }
   }
 
+  void REMANIReplanFSM::publishPlannerStatus(
+      uint8_t state, const std::string &code, const std::string &detail){
+    if(!execution_policy_.isRealPlanOnly()){
+      return;
+    }
+    remani_real_msgs::PlannerStatus status;
+    status.header.stamp = ros::Time::now();
+    status.state = state;
+    status.last_error_code = code;
+    status.last_error = detail;
+    planner_status_pub_.publish(status);
+  }
+
+  void REMANIReplanFSM::clearExternalTrajectoryOwnership(){
+    have_target_ = false;
+    have_trigger_ = false;
+    have_local_traj_ = false;
+    have_new_target_ = false;
+    replan_fail_time_ = 0;
+    flag_relan_astar_ = false;
+    try_plan_after_emergency_ = false;
+    flag_escape_emergency_ = true;
+    clearEeGoalState();
+  }
+
+  void REMANIReplanFSM::beginExternalPlanning(){
+    if(!execution_policy_.isRealPlanOnly()){
+      return;
+    }
+    external_failure_reported_ = false;
+    external_terminal_failure_ = false;
+    pending_transaction_stamp_ = ros::Time(0);
+    publishPlannerStatus(remani_real_msgs::PlannerStatus::PLANNING);
+  }
+
+  void REMANIReplanFSM::enterExternalHandoff(){
+    clearExternalTrajectoryOwnership();
+    awaiting_gate_ack_ = true;
+    safety_timer_.stop();
+    publishPlannerStatus(remani_real_msgs::PlannerStatus::HANDOFF);
+  }
+
+  void REMANIReplanFSM::finishExternalHandoff(
+      const std::string &code, const std::string &detail){
+    awaiting_gate_ack_ = false;
+    clearExternalTrajectoryOwnership();
+    publishPlannerStatus(remani_real_msgs::PlannerStatus::IDLE, code, detail);
+    if(exec_timer_.isValid()){
+      exec_timer_.start();
+    }
+  }
+
+  void REMANIReplanFSM::publishExternalImpossible(
+      const std::string &code, const std::string &detail){
+    if(!execution_policy_.isRealPlanOnly() || external_failure_reported_){
+      return;
+    }
+    external_failure_reported_ = true;
+    external_terminal_failure_ = true;
+    const auto impossible = CandidateTransactionBuilder::buildControl(
+        quadrotor_msgs::PolynomialTraj::ACTION_WARN_IMPOSSIBLE,
+        ros::Time::now());
+    candidate_traj_pub_.publish(impossible);
+    finishExternalHandoff(code, detail);
+  }
+
+  void REMANIReplanFSM::frozenCandidateCallback(
+      const remani_real_msgs::FrozenCandidate::ConstPtr &msg){
+    if(!execution_policy_.isRealPlanOnly() || !awaiting_gate_ack_){
+      return;
+    }
+    if(!msg->complete || !msg->valid || msg->candidate_id == 0){
+      ROS_WARN("[PLAN_ONLY] ignored incomplete/invalid Gate acknowledgement");
+      return;
+    }
+    committed_candidate_id_ = msg->candidate_id;
+    committed_candidate_stamp_ = msg->header.stamp;
+    committed_candidate_duration_ = msg->duration;
+    ROS_INFO("[PLAN_ONLY] Gate committed candidate %llu (raw stamp %.9f)",
+             static_cast<unsigned long long>(committed_candidate_id_),
+             pending_transaction_stamp_.toSec());
+    finishExternalHandoff();
+  }
+
+  void REMANIReplanFSM::executionStateCallback(
+      const remani_real_msgs::ExecutionState::ConstPtr &msg){
+    if(!execution_policy_.isRealPlanOnly() || !awaiting_gate_ack_ ||
+       msg->transaction_state !=
+           remani_real_msgs::ExecutionState::TRANSACTION_INVALID){
+      return;
+    }
+    committed_candidate_id_ = msg->candidate_id;
+    const std::string code = msg->last_error_code.empty()
+        ? "GATE_COMMIT_FAILED" : msg->last_error_code;
+    const std::string detail = msg->last_error.empty()
+        ? "Gate rejected the raw planner transaction" : msg->last_error;
+    finishExternalHandoff(code, detail);
+  }
+
   void REMANIReplanFSM::changeFSMExecState(FSM_EXEC_STATE new_state, string pos_call){
+    if(execution_policy_.isRealPlanOnly() &&
+       (new_state == REPLAN_TRAJ || new_state == EXEC_TRAJ ||
+        new_state == EMERGENCY_STOP)){
+      ROS_FATAL("[PLAN_ONLY] refused internal execution state transition to %d from %s",
+                static_cast<int>(new_state), pos_call.c_str());
+      clearExternalTrajectoryOwnership();
+      exec_state_ = WAIT_TARGET;
+      publishPlannerStatus(
+          remani_real_msgs::PlannerStatus::IDLE,
+          "INTERNAL_EXECUTION_STATE_REFUSED",
+          "real/external planner refused an internal execution state");
+      return;
+    }
+
     if (new_state == exec_state_)
       continously_called_times_++;
     else
@@ -803,29 +982,32 @@ namespace remani_planner
     return std::pair<int, FSM_EXEC_STATE>(continously_called_times_, exec_state_);
   }
 
-  void REMANIReplanFSM::sendPolyTrajROSMsg(){
-    auto data = &planner_manager_->traj_container_.singul_traj_data;
-    
-    for(unsigned int i = 0; i < data->singul_traj.size(); ++i){
-      quadrotor_msgs::PolynomialTraj msg;
-      msg.trajectory_id = data->singul_traj[i].traj_id;
-      msg.header.stamp = ros::Time(data->start_time);
-      msg.action = msg.ACTION_ADD;
-      msg.singul = data->singul_traj[i].singul;
-      int piece_num = data->singul_traj[i].traj.getPieceNum();
-      for (int j = 0; j < piece_num; ++j)
-      {
-        quadrotor_msgs::PolynomialMatrix piece;
-        piece.num_dim = data->singul_traj[i].traj.getPiece(j).getDim();
-        piece.num_order = data->singul_traj[i].traj.getPiece(j).getDegree();
-        piece.duration = data->singul_traj[i].traj.getPiece(j).getDuration();
-        auto cMat = data->singul_traj[i].traj.getPiece(j).getCoeffMat();
-        piece.data.assign(cMat.data(),cMat.data() + cMat.rows()*cMat.cols());
-        msg.trajectory.emplace_back(piece);
-      }
-      poly_traj_pub_.publish(msg);
-    }
+  bool REMANIReplanFSM::sendPolyTrajROSMsg(){
+    const auto &data = planner_manager_->traj_container_.singul_traj_data;
+    ros::Time stamp;
+    stamp.fromSec(data.start_time);
 
+    try{
+      const auto messages = execution_policy_.ownsInternalExecution()
+          ? CandidateTransactionBuilder::buildInternalAdds(data, stamp)
+          : CandidateTransactionBuilder::buildExternal(data, stamp);
+      ros::Publisher &publisher = execution_policy_.ownsInternalExecution()
+          ? poly_traj_pub_ : candidate_traj_pub_;
+      if(execution_policy_.isRealPlanOnly()){
+        pending_transaction_stamp_ = stamp;
+      }
+      for(const auto &message : messages){
+        publisher.publish(message);
+      }
+      return true;
+    }catch(const std::exception &ex){
+      ROS_ERROR("trajectory transaction serialization failed: %s", ex.what());
+      if(execution_policy_.isRealPlanOnly()){
+        external_terminal_failure_ = true;
+        publishExternalImpossible("TRANSACTION_SERIALIZATION_ERROR", ex.what());
+      }
+      return false;
+    }
   }
 
   bool REMANIReplanFSM::planFromGlobalTraj(const int trial_times /*= 1*/){
@@ -841,6 +1023,9 @@ namespace remani_planner
     for(int i = 0; i < trial_times; i++){
       if(callReboundReplan(true, flag_random_poly_init)){
         return true;
+      }
+      if(external_terminal_failure_){
+        break;
       }
     }
     return false;
@@ -939,7 +1124,9 @@ namespace remani_planner
       init_time_list_.push_back(init_time);
       opt_time_list_.push_back(opt_time);
       total_time_list_.push_back(init_time + opt_time);
-      sendPolyTrajROSMsg();
+      if(!sendPolyTrajROSMsg()){
+        return false;
+      }
       have_local_traj_ = true;
 
       // vis local traj
@@ -1032,6 +1219,10 @@ namespace remani_planner
 
   void REMANIReplanFSM::eeGoalCallback(
       const geometry_msgs::PoseStamped::ConstPtr &msg){
+    if(execution_policy_.isRealPlanOnly() && awaiting_gate_ack_){
+      ROS_WARN("[PLAN_ONLY] ignored EE goal while awaiting Gate acknowledgement");
+      return;
+    }
     if(exec_state_ != WAIT_TARGET || have_target_){
       ROS_WARN("[EE GOAL] ignored: planner is not idle");
       return;
@@ -1070,6 +1261,7 @@ namespace remani_planner
     T_goal(1, 3) = msg->pose.position.y;
     T_goal(2, 3) = msg->pose.position.z;
 
+    beginExternalPlanning();
     pending_ee_goal_ = true;
     T_world_ee_pending_ = T_goal;
 
@@ -1083,6 +1275,9 @@ namespace remani_planner
       ROS_WARN("[EE GOAL] IK failed: %s", result.fail_reason.c_str());
       clearPendingEeGoal();
       deleteEeTerminalGhost();
+      if(execution_policy_.isRealPlanOnly()){
+        publishExternalImpossible("IK_FAILED", result.fail_reason);
+      }
       return;
     }
 

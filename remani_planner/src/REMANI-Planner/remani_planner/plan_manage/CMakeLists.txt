@@ -22,6 +22,7 @@ find_package(catkin REQUIRED COMPONENTS
   traj_opt
   traj_utils
   mm_config
+  remani_real_msgs
   message_generation
   cv_bridge
 )
@@ -30,7 +31,7 @@ find_package(catkin REQUIRED COMPONENTS
 catkin_package(
  INCLUDE_DIRS include
  LIBRARIES remani_planner
- CATKIN_DEPENDS plan_env path_searching traj_opt traj_utils mm_config
+ CATKIN_DEPENDS plan_env path_searching traj_opt traj_utils mm_config remani_real_msgs
 #  DEPENDS system_lib
 )
 
@@ -91,4 +92,16 @@ if(CATKIN_ENABLE_TESTING)
     target_link_libraries(test_candidate_transaction_builder
       candidate_transaction_builder ${catkin_LIBRARIES})
   endif()
+
+  catkin_add_gtest(test_plan_only_policy test/test_plan_only_policy.cpp)
+  if(TARGET test_plan_only_policy)
+    target_link_libraries(test_plan_only_policy ${catkin_LIBRARIES})
+  endif()
+
+  find_package(rostest REQUIRED)
+  catkin_install_python(PROGRAMS
+    test/fake_plan_only_actual_state.py
+    test/test_remani_plan_only.py
+    DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION})
+  add_rostest(test/remani_plan_only.test)
 endif()

@@ -24,7 +24,12 @@
 #include <traj_utils/DataDisp.h>
 #include <plan_manage/planner_manager.h>
 #include <plan_manage/planning_visualization.h>
+#include <plan_manage/execution_policy.hpp>
+#include <plan_manage/candidate_transaction_builder.hpp>
 #include <quadrotor_msgs/PolynomialTraj.h>
+#include <remani_real_msgs/ExecutionState.h>
+#include <remani_real_msgs/FrozenCandidate.h>
+#include <remani_real_msgs/PlannerStatus.h>
 #include <traj_utils/Assignment.h>
 #include <tf2_ros/transform_broadcaster.h>
 #include <tf2/LinearMath/Quaternion.h>
@@ -44,6 +49,16 @@ using std::vector;
 
 namespace remani_planner
 {
+
+  enum class PlanSuccessDisposition { EnterInternalExec, ExternalHandoff };
+
+  inline PlanSuccessDisposition planSuccessDisposition(
+      const ExecutionPolicy &policy)
+  {
+    return policy.ownsInternalExecution()
+        ? PlanSuccessDisposition::EnterInternalExec
+        : PlanSuccessDisposition::ExternalHandoff;
+  }
 
   class REMANIReplanFSM
   {
@@ -107,6 +122,16 @@ namespace remani_planner
     FSM_EXEC_STATE exec_state_;
     int continously_called_times_{0};
 
+    ExecutionPolicy execution_policy_{
+        ExecutionPolicy::fromStrings("sim", "internal")};
+    bool awaiting_gate_ack_{false};
+    bool external_failure_reported_{false};
+    bool external_terminal_failure_{false};
+    uint64_t committed_candidate_id_{0};
+    ros::Time pending_transaction_stamp_;
+    ros::Time committed_candidate_stamp_;
+    double committed_candidate_duration_{0.0};
+
     // ################################
     // C++: EE pose goal FSM state begin
     // ################################
@@ -144,7 +169,9 @@ namespace remani_planner
     ros::NodeHandle node_;
     ros::Timer exec_timer_, safety_timer_;
     ros::Subscriber waypoint_sub_, odom_sub_, joint_state_sub_, gripper_state_sub_, trigger_sub_, assignment_sub_;
+    ros::Subscriber frozen_candidate_sub_, execution_state_sub_;
     ros::Publisher replan_pub_, new_pub_, poly_traj_pub_, data_disp_pub_, gripper_cmd_pub_, map_state_pub_;
+    ros::Publisher planner_status_pub_, candidate_traj_pub_;
 
     ros::Publisher reached_pub_, start_pub_;
 
@@ -185,6 +212,20 @@ namespace remani_planner
     void mmCarOdomCallback(const nav_msgs::OdometryConstPtr &msg);
     void mmManiOdomCallback(const sensor_msgs::JointStateConstPtr &msg);
     void gripperCallback(const std_msgs::Bool::ConstPtr &msg);
+    void frozenCandidateCallback(
+        const remani_real_msgs::FrozenCandidate::ConstPtr &msg);
+    void executionStateCallback(
+        const remani_real_msgs::ExecutionState::ConstPtr &msg);
+    void beginExternalPlanning();
+    void enterExternalHandoff();
+    void finishExternalHandoff(const std::string &code = "",
+                               const std::string &detail = "");
+    void clearExternalTrajectoryOwnership();
+    void publishPlannerStatus(uint8_t state,
+                              const std::string &code = "",
+                              const std::string &detail = "");
+    void publishExternalImpossible(const std::string &code,
+                                   const std::string &detail);
     // ################################
     // C++: EE pose goal helpers begin
     // ################################
@@ -198,7 +239,7 @@ namespace remani_planner
     // ################################
     // C++: EE pose goal helpers end
     // ################################
-    void sendPolyTrajROSMsg();
+    bool sendPolyTrajROSMsg();
     bool frontEndPathSearching();
     bool checkCollision();
 

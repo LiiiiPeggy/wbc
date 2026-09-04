@@ -50,6 +50,8 @@
   <!--   <doc_depend>doxygen</doc_depend> -->
   <buildtool_depend>catkin</buildtool_depend>
   <test_depend>gtest</test_depend>
+  <test_depend>rostest</test_depend>
+  <test_depend>rospy</test_depend>
   <build_depend>roscpp</build_depend>
   <build_depend>std_msgs</build_depend>
   
@@ -61,6 +63,10 @@
   <depend>interactive_markers</depend>
   <depend>visualization_msgs</depend>
   <depend>geometry_msgs</depend>
+  <depend>nav_msgs</depend>
+  <depend>sensor_msgs</depend>
+  <depend>quadrotor_msgs</depend>
+  <depend>remani_real_msgs</depend>
 
   <build_export_depend>roscpp</build_export_depend>
   <build_export_depend>std_msgs</build_export_depend>
