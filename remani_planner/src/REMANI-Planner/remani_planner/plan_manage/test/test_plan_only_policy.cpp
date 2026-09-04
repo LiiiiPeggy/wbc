@@ -17,6 +17,19 @@ TEST(PlanOnlyPolicy, SimulationSuccessKeepsInternalExecution) {
                 ExecutionPolicy::fromStrings("sim", "internal")));
 }
 
+TEST(PlanOnlyPolicy, RealTargetWaitsForIdleState) {
+  const auto real = ExecutionPolicy::fromStrings("real", "external");
+
+  EXPECT_FALSE(targetAdmissionAllowed(real, false));
+  EXPECT_TRUE(targetAdmissionAllowed(real, true));
+}
+
+TEST(PlanOnlyPolicy, SimulationTargetKeepsLegacyAdmission) {
+  const auto sim = ExecutionPolicy::fromStrings("sim", "internal");
+
+  EXPECT_TRUE(targetAdmissionAllowed(sim, false));
+}
+
 }  // namespace
 }  // namespace remani_planner
 

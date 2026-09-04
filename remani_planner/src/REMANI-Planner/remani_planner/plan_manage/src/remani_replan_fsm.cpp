@@ -625,6 +625,10 @@ namespace remani_planner
       ROS_WARN("[PLAN_ONLY] ignored target while awaiting Gate acknowledgement");
       return;
     }
+    if(!targetAdmissionAllowed(execution_policy_, exec_state_ == WAIT_TARGET)){
+      ROS_WARN("[PLAN_ONLY] ignored target before planner reached WAIT_TARGET");
+      return;
+    }
     
     if (target_type_ == TARGET_TYPE::PRESET_TARGET){
       beginExternalPlanning();

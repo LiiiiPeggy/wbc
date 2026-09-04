@@ -22,8 +22,24 @@ def main():
 
     rate = rospy.Rate(50)
     ready_ticks = 0
+    early_triggered = False
     triggered = False
     while not rospy.is_shutdown():
+        early_connected = (trigger_pub.get_num_connections() > 0 and
+                           rospy.get_param("/test_remani_plan_only/ready",
+                                           False))
+        if not early_triggered and early_connected:
+            early_goal = PoseStamped()
+            early_goal.header.stamp = rospy.Time.now()
+            early_goal.header.frame_id = "world"
+            early_goal.pose.orientation.w = 1.0
+            trigger_pub.publish(early_goal)
+            rospy.set_param("/test_remani_plan_only/early_goal_sent", True)
+            early_triggered = True
+        if not early_triggered:
+            rate.sleep()
+            continue
+
         now = rospy.Time.now()
 
         odom = Odometry()
@@ -47,7 +63,7 @@ def main():
                      trigger_pub.get_num_connections() > 0 and
                      rospy.get_param("/test_remani_plan_only/ready", False))
         ready_ticks = ready_ticks + 1 if connected else 0
-        if not triggered and ready_ticks >= 50:
+        if early_triggered and not triggered and ready_ticks >= 50:
             goal = PoseStamped()
             goal.header.stamp = now
             goal.header.frame_id = "world"

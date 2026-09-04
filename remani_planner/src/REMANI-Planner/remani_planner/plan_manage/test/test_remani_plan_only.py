@@ -33,6 +33,7 @@ class RemaniPlanOnlyTest(unittest.TestCase):
             self._status_callback, queue_size=20)
         self._finish_sub = rospy.Subscriber(
             "/planning/finish", Bool, self._finish_callback, queue_size=10)
+        rospy.set_param("/test_remani_plan_only/early_goal_sent", False)
         rospy.set_param("/test_remani_plan_only/ready", True)
 
     def _candidate_callback(self, message):
@@ -83,6 +84,21 @@ class RemaniPlanOnlyTest(unittest.TestCase):
             self._finish_count += 1
 
     def test_real_planner_hands_off_without_internal_execution(self):
+        early_goal_deadline = rospy.Time.now() + rospy.Duration(10.0)
+        while (not rospy.get_param("/test_remani_plan_only/early_goal_sent",
+                                   False) and
+               rospy.Time.now() < early_goal_deadline):
+            rospy.sleep(0.01)
+        self.assertTrue(
+            rospy.get_param("/test_remani_plan_only/early_goal_sent", False),
+            "fake state did not publish the early startup target")
+        rospy.sleep(0.2)
+        with self._lock:
+            self.assertNotIn(
+                PlannerStatus.PLANNING,
+                [status.state for status in self._statuses],
+                "planner accepted the early target before reaching WAIT_TARGET")
+
         self.assertTrue(self._final.wait(45.0),
                         "planner did not publish a complete raw transaction")
         self.assertTrue(self._idle_after_handoff.wait(10.0),

@@ -1,5 +1,6 @@
 <launch>
   <param name="/test_remani_plan_only/ready" value="false"/>
+  <param name="/test_remani_plan_only/early_goal_sent" value="false"/>
 
   <node pkg="remani_planner" type="remani_planner_node"
         name="remani_planner_node" output="screen" required="true">

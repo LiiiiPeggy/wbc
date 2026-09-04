@@ -60,6 +60,12 @@ namespace remani_planner
         : PlanSuccessDisposition::ExternalHandoff;
   }
 
+  inline bool targetAdmissionAllowed(const ExecutionPolicy &policy,
+                                     bool fsm_is_waiting_for_target)
+  {
+    return !policy.isRealPlanOnly() || fsm_is_waiting_for_target;
+  }
+
   class REMANIReplanFSM
   {
 
