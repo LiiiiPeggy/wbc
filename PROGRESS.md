@@ -2,7 +2,7 @@
 
 **Goal:** Ranger+CR10 viz/collision fixes on `topay` — plan `docs/superpowers/plans/2026-08-31-ranger-cr10-viz-collision-fixes.md`.
 
-**Branch / HEAD:** `topay` @ `9dd76d3`.
+**Branch / HEAD:** `topay` @ `b77bd0d`.
 
 **Plan status:** Tasks 0–4 closed for unit/docs/smoke-startup scope.
 
