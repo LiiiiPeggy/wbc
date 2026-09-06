@@ -102,6 +102,8 @@ if(CATKIN_ENABLE_TESTING)
   catkin_install_python(PROGRAMS
     test/fake_plan_only_actual_state.py
     test/test_remani_plan_only.py
+    test/test_remani_sim_owner.py
     DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION})
   add_rostest(test/remani_plan_only.test)
+  add_rostest(test/remani_sim_owner.test)
 endif()

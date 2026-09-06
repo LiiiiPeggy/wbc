@@ -1,0 +1,9 @@
+<?xml version="1.0"?>
+<launch>
+  <include file="$(find remani_planner)/launch/remani_ranger_cr10_sim.launch">
+    <arg name="use_rviz" value="false"/>
+  </include>
+
+  <test test-name="test_remani_sim_owner" pkg="remani_planner"
+        type="test_remani_sim_owner.py" time-limit="180"/>
+</launch>

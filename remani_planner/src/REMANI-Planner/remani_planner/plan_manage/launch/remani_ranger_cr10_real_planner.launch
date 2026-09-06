@@ -1,0 +1,19 @@
+<?xml version="1.0"?>
+<launch>
+  <node pkg="remani_planner" type="remani_planner_node"
+        name="remani_planner_node" output="screen">
+    <rosparam command="load" file="$(find remani_planner)/config/exp_ranger_cr10_param.yaml"/>
+    <rosparam command="load" file="$(find remani_planner)/config/mm_param_ranger_cr10.yaml"/>
+    <rosparam command="load" file="$(find remani_planner)/config/remani_planner_param.yaml"/>
+    <rosparam command="load" file="$(find remani_planner)/config/remani_ranger_cr10_real.yaml"/>
+
+    <param name="mode" value="real"/>
+    <param name="execution_owner" value="external"/>
+    <param name="environment_mode" value="static_empty"/>
+    <param name="fsm/global_plan" value="true"/>
+
+    <remap from="~odom_world" to="/odom"/>
+    <remap from="~joint_state" to="/remani/cr10_joint_states"/>
+    <remap from="~grid_map/odom" to="/odom"/>
+  </node>
+</launch>

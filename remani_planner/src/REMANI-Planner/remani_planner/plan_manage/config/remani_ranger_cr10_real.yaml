@@ -1,0 +1,16 @@
+mode: real
+execution_owner: external
+environment_mode: static_empty
+
+fsm:
+  global_plan: true
+
+environment:
+  static_empty:
+    size_x: 16.0
+    size_y: 12.0
+    size_z: 3.0
+    resolution: 0.05
+
+grid_map:
+  frame_id: world
