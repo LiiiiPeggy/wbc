@@ -19,5 +19,8 @@
 - `git commit -m` can fail on trailer hooks here; use `/usr/bin/git commit -F <msgfile>`.
 - Never commit `TopAY/src/simulator/random_map_generator/env/map.pcd`.
 - Standalone tests that call `ros::Time::now()` without a node can crash; CR10 visual/cylinder paths avoid stamping inside the API.
-- GridMap `init` with `agent/mode != planner` calls `regenerateMap` and needs live ROS/param server — without roscore, tests hang and spam XmlRpc. Use `mode=planner` + `loadMap` for unit gates.
+- GridMap `init` with `agent/mode != planner` calls `regenerateMap` and needs live ROS/param server — without roscore, tests hang and spam XmlRpc. Use `mode=planner` + `loadMap` for unit gates; still start `roscore` because timers/subscriptions contact the master.
 - Default `catkin_make -j32` plus stuck tests can exhaust RAM/swap; use low `-j`, `timeout`, and kill leftover `test_topay_*` after interrupted sessions.
+- `moma_traj_opt_falm.cpp` / `moma_traj_opt_relax.cpp` are not in `planner/CMakeLists.txt`; only `moma_traj_opt.cpp` is linked into `libplanner`. Keep falm/relax source-synced if editing collision costs, but verify the compiled path.
+- GridMap destructor must `delete` each `grid_node_map[i]` (allocated with `new GridNode()`), not `delete[]`, or standalone tests segfault on exit.
+- Box continuous Case D: place mid-height obstacle on the box side (±y), not on the CR10 arm mount (+x), or discrete mid hits can be arm-only while base ESDF cost stays zero.

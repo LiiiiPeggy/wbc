@@ -1,25 +1,16 @@
 # Progress
 
-**Goal:** On branch `topay`, finish Ranger+CR10 visualization/collision fixes per `docs/superpowers/plans/2026-08-31-ranger-cr10-viz-collision-fixes.md` (wheels, CR10 sphere frames, upper-box false negatives).
+**Goal:** Ranger+CR10 viz/collision fixes on `topay` — plan `docs/superpowers/plans/2026-08-31-ranger-cr10-viz-collision-fixes.md`.
 
-**Branch / HEAD:** `topay` @ `9f6b0c6` (Tasks 0–2C committed). Working tree has large **uncommitted** Task 3+ changes; do not treat them as merged.
+**Branch / HEAD:** `topay` @ `9dd76d3`.
 
-**Committed and verified (docker `topay`):**
-- Task 0–1: STL audit + four-wheel visual ground fix (`--test-wheels` PASS).
-- Task 2A–2C: planning sphere truth, `/sphere_visual` overlay, CR10 cylinder exact-chain (`test_topay_cr10_colli_frame` PASS).
-- Base-box FD gate inside `test_topay_cr10_fk` PASS (corner sphere, yaw 0/0.7).
+**Plan status:** Tasks 0–4 closed for unit/docs/smoke-startup scope.
 
-**Implemented in tree, not committed / not fully re-verified after last edit:**
-- `base_obstacle_proxies_` + YAML `box_obstacle` (3×3×2, R=0.18, margin 0.02).
-- `getBaseObstaclePts` / `getBaseObstacleGrads`; GridMap + `MomaTrajOpt*` (incl. falm/relax) wired.
-- Docs: collision-model diagnosis + consumer audit.
-- Discrete+continuous gates merged into `map/test_topay_box_collision` (Cases A–D); planner-side traj test **removed**.
-- GridMap standalone tests must use `agent/mode=planner` (not `test`) or they hang without roscore.
+**Verified (docker `topay`, `-j2`, `roscore` for GridMap gates):**
+- All Final Regression unit gates PASS (FK/grads/pose, colli_frame overlay+cylinder, ranger visual, wheels, box layout, box Cases A–D).
+- Headless smoke `roslaunch planner run_ranger_cr10_smoke.launch rviz:=false` (~45s): `/moma/box_obstacle/*` loaded; `fake_moma` / `moma_vis` / `planner_node` start as `ranger_cr10`; log shows `Map ready`. Timeout kill was clean. Full interactive RViz planning demo not asserted here.
+- `moma_traj_opt_falm.cpp` / `moma_traj_opt_relax.cpp` are alternate sources **not** listed in `planner/CMakeLists.txt`; production smoke uses compiled `moma_traj_opt.cpp` (base-obstacle wired).
 
-**Open:**
-- Rebuild/re-run `test_topay_box_collision` (A–D) and remaining Final Regression Gates after merge cleanup.
-- Commit Task 3+ (exclude `map.pcd`).
-- Task 4 smoke: `roslaunch planner run_ranger_cr10_smoke.launch` — not confirmed here.
-- Docker `topay` may be stopped; host `TopAY/build` is often root-owned — prefer container builds with modest `-j`.
+**Uncommitted on purpose:** `map.pcd`; optional `.gitignore` IDE exception.
 
-**Next:** Verify box gate in docker → commit Task 3 stack → full regression + smoke → update this file.
+**Next (user):** optional RViz smoke for visual confirm; merge/PR when ready.
