@@ -78,18 +78,24 @@ Visualization Manager:
             {}
           Queue Size: 100
           Value: false
+        # ################################
+        # RViz: green /sphere = planning; blue /sphere_visual = CAD overlay.
+        # Smoke runs both fake_moma + moma_vis — they publish duplicate sphere_visual.
+        # Default ON only here; moma_vis/sphere_visual stays OFF to avoid stacked alpha.
+        # Toggle: Displays → fake_moma → sphere_visual (and/or moma_vis → sphere_visual).
+        # ################################
         - Class: rviz/MarkerArray
-          Enabled: true
+          Enabled: false
           Marker Topic: /fake_moma_node/sphere
-          Name: sphere
+          Name: sphere (planning)
           Namespaces:
             "": true
           Queue Size: 100
-          Value: true
+          Value: false
         - Class: rviz/MarkerArray
           Enabled: true
           Marker Topic: /fake_moma_node/sphere_visual
-          Name: sphere_visual
+          Name: sphere_visual (CAD)
           Namespaces:
             "": true
           Queue Size: 100
@@ -306,22 +312,26 @@ Visualization Manager:
             {}
           Queue Size: 100
           Value: true
+        # ################################
+        # RViz: duplicate of fake_moma CAD spheres — OFF by default.
+        # Closing only this leave /fake_moma_node/sphere_visual still drawn (looks "lighter").
+        # ################################
         - Class: rviz/MarkerArray
-          Enabled: true
+          Enabled: false
           Marker Topic: /moma_vis_node/sphere
-          Name: sphere
+          Name: sphere (planning)
           Namespaces:
             {}
           Queue Size: 100
-          Value: true
+          Value: false
         - Class: rviz/MarkerArray
-          Enabled: true
+          Enabled: false
           Marker Topic: /moma_vis_node/sphere_visual
-          Name: sphere_visual
+          Name: sphere_visual (CAD dup)
           Namespaces:
             {}
           Queue Size: 100
-          Value: true
+          Value: false
       Enabled: true
       Name: real_vis
     - Class: rviz/Group

@@ -11,6 +11,8 @@
 - Headless smoke `roslaunch planner run_ranger_cr10_smoke.launch rviz:=false` (~45s): `/moma/box_obstacle/*` loaded; `fake_moma` / `moma_vis` / `planner_node` start as `ranger_cr10`; log shows `Map ready`. Timeout kill was clean. Full interactive RViz planning demo not asserted here.
 - `moma_traj_opt_falm.cpp` / `moma_traj_opt_relax.cpp` are alternate sources **not** listed in `planner/CMakeLists.txt`; production smoke uses compiled `moma_traj_opt.cpp` (base-obstacle wired).
 
-**Uncommitted on purpose:** `map.pcd`; optional `.gitignore` IDE exception.
+**Uncommitted on purpose:** `map.pcd`.
 
-**Next (user):** optional RViz smoke for visual confirm; merge/PR when ready.
+**Latest (this commit):** ground lift via `visual.base_xyz` `0.275→0.4113` with URDF wheel/steering abs; RViz green `/sphere` off and CAD only on `fake_moma` (moma_vis dup off); smoke RViz `required=false`.
+
+**Next (user):** merge/PR when ready.

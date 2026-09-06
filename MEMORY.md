@@ -1,7 +1,7 @@
 # Memory
 
 ## Frames
-- Planning base stays z=0; CAD/RViz uses `visual.base_xyz ≈ [0,0,0.275]`. Collision planning truth is `T_owner * local_offset`; visual overlay is `applyVisualRoot(base_T, T_owner) * local_offset`. Do not “fix” green spheres by adding 0.275 in planning APIs.
+- Planning base stays z=0; CAD/RViz uses `visual.base_xyz` (production Ranger ≈ `[0,0,0.4113]` = STL floor 0.275 + wheel ground Δ 0.1363). Collision planning truth is `T_owner * local_offset`; visual overlay is `applyVisualRoot(base_T, T_owner) * local_offset`. Do not bake visual root into planning APIs.
 - CR10 `getColliPtsCr10()` matches that contract (not a Tracer-style frame bug). RViz `/sphere` uses `obstacle_radius` (0.10), not `self_radius`.
 
 ## Collision model
@@ -12,7 +12,8 @@
 
 ## Geometry / wheels
 - Drive-wheel STL entries match `^(fr|fl|rl|rr)_wheel_link\.stl$` only (exclude steering wheels). With Rx≈90°, ground clearance must be world-frame zmin, not local-z formulas.
-- Wheel z visual-only correction to ≈`-0.122` cleared ground gate (±1 cm). Do not mix penetration depth with clearance semantics.
+- Keep mesh_parts at URDF abs (wheels ≈`-0.2583/-0.25995`, steering `0.0335`). Ground clearance comes from raising `visual.base_xyz`, not per-wheel z — raising only wheels leaves the chassis sunk and breaks steering→wheel offset.
+- RViz: green `/sphere` = planning; blue `/sphere_visual` = CAD. Smoke runs both `fake_moma_node` and `moma_vis_node`, each publishing the same overlays — stacked alpha looks darker; disabling only one leaves the other (looks “lighter”). `default.rviz`: enable only `fake_moma` CAD spheres by default; turn both off to hide completely.
 
 ## Build / test hygiene
 - Prefer docker container `topay` (`/home/topay` → TopAY). Host `TopAY/build` is often root-owned.
@@ -24,3 +25,4 @@
 - `moma_traj_opt_falm.cpp` / `moma_traj_opt_relax.cpp` are not in `planner/CMakeLists.txt`; only `moma_traj_opt.cpp` is linked into `libplanner`. Keep falm/relax source-synced if editing collision costs, but verify the compiled path.
 - GridMap destructor must `delete` each `grid_node_map[i]` (allocated with `new GridNode()`), not `delete[]`, or standalone tests segfault on exit.
 - Box continuous Case D: place mid-height obstacle on the box side (±y), not on the CR10 arm mount (+x), or discrete mid hits can be arm-only while base ESDF cost stays zero.
+- Docker `topay` has `DISPLAY=:0` and `/tmp/.X11-unix` mounted, but still needs host X auth (`xhost +local:docker` or cookie). Without it RViz dies with `No protocol specified` / xcb. Prefer `rviz:=false` in container, or run RViz on the host against the same `ROS_MASTER_URI`.

@@ -53,6 +53,9 @@
         <remap from="~global_cloud" to="$(arg map_topic)" />
     </node>
 
+    <!-- ################################ -->
+    <!-- XML: RViz is visual-only; do not tear down the stack if DISPLAY/X11 fails -->
+    <!-- ################################ -->
     <node if="$(arg rviz)" name="rviz" pkg="rviz" type="rviz"
-          args="-d $(find fake_moma)/launch/default.rviz" required="true" />
+          args="-d $(find fake_moma)/launch/default.rviz" required="false" />
 </launch>
