@@ -84,3 +84,9 @@ target_link_libraries(test_ee_pose_ik mm_config ${catkin_LIBRARIES})
 # CMake: EE pose and Jacobian Milestone A tests end
 # ################################
 
+if(CATKIN_ENABLE_TESTING)
+  catkin_add_gtest(test_collision_bounds test/test_collision_bounds.cpp)
+  if(TARGET test_collision_bounds)
+    target_link_libraries(test_collision_bounds mm_config ${catkin_LIBRARIES})
+  endif()
+endif()

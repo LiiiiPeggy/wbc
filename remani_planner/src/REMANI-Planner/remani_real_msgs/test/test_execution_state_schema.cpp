@@ -1,4 +1,18 @@
-std_msgs/Header header
+#include <gtest/gtest.h>
+
+#include <fstream>
+#include <sstream>
+#include <string>
+
+namespace {
+
+TEST(ExecutionStateSchema, FreezesEveryFieldNameTypeAndOrder) {
+  std::ifstream schema(EXECUTION_STATE_MSG_PATH);
+  ASSERT_TRUE(schema.good()) << EXECUTION_STATE_MSG_PATH;
+  std::ostringstream actual;
+  actual << schema.rdbuf();
+
+  const std::string expected = R"SCHEMA(std_msgs/Header header
 
 uint8 MODE_SIM=0
 uint8 MODE_REAL=1
@@ -81,3 +95,14 @@ float64 final_ee_rot_error
 
 string last_error_code
 string last_error
+)SCHEMA";
+
+  EXPECT_EQ(expected, actual.str());
+}
+
+}  // namespace
+
+int main(int argc, char** argv) {
+  testing::InitGoogleTest(&argc, argv);
+  return RUN_ALL_TESTS();
+}

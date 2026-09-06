@@ -50,6 +50,7 @@ using std::vector;
 namespace remani_planner
 {
 
+  // PLAN-ONLY policy helpers keep external handoff distinct from internal execution.
   enum class PlanSuccessDisposition { EnterInternalExec, ExternalHandoff };
 
   inline PlanSuccessDisposition planSuccessDisposition(
@@ -128,6 +129,7 @@ namespace remani_planner
     FSM_EXEC_STATE exec_state_;
     int continously_called_times_{0};
 
+    // PLAN-ONLY retains only Gate handoff correlation, never execution ownership.
     ExecutionPolicy execution_policy_{
         ExecutionPolicy::fromStrings("sim", "internal")};
     bool awaiting_gate_ack_{false};
@@ -175,6 +177,7 @@ namespace remani_planner
     ros::NodeHandle node_;
     ros::Timer exec_timer_, safety_timer_;
     ros::Subscriber waypoint_sub_, odom_sub_, joint_state_sub_, gripper_state_sub_, trigger_sub_, assignment_sub_;
+    // PLAN-ONLY receives Gate commit and rejection acknowledgements on separate topics.
     ros::Subscriber frozen_candidate_sub_, execution_state_sub_;
     ros::Publisher replan_pub_, new_pub_, poly_traj_pub_, data_disp_pub_, gripper_cmd_pub_, map_state_pub_;
     ros::Publisher planner_status_pub_, candidate_traj_pub_;
@@ -218,10 +221,12 @@ namespace remani_planner
     void mmCarOdomCallback(const nav_msgs::OdometryConstPtr &msg);
     void mmManiOdomCallback(const sensor_msgs::JointStateConstPtr &msg);
     void gripperCallback(const std_msgs::Bool::ConstPtr &msg);
+    // PLAN-ONLY callbacks admit only acknowledgements correlated to the pending raw transaction.
     void frozenCandidateCallback(
         const remani_real_msgs::FrozenCandidate::ConstPtr &msg);
     void executionStateCallback(
         const remani_real_msgs::ExecutionState::ConstPtr &msg);
+    // PLAN-ONLY helpers publish planner truth and clear internal trajectory state at handoff.
     void beginExternalPlanning();
     void enterExternalHandoff();
     void finishExternalHandoff(const std::string &code = "",

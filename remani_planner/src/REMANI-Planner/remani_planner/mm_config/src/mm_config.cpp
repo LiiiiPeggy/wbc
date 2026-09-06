@@ -871,6 +871,10 @@ bool MMConfig::checkCarObsCollision(Eigen::Vector3d car_state, bool precise, boo
     double safe_dist = safe ? mobile_base_check_radius_ + car_safe_margin_ : mobile_base_check_radius_;
     safe_dist += map_resolution_;
     for(unsigned int i = 0; i < car_pts.size(); ++i){
+        if(!grid_map_ || !grid_map_->isInMap(car_pts[i])){
+            min_dist = 0.0;
+            return true;
+        }
         if(precise){
             dist = grid_map_->getPreciseDistance(car_pts[i]);
         }else{
@@ -918,6 +922,11 @@ bool MMConfig::checkManiObsCollision(Eigen::Vector3d car_state, Eigen::VectorXd 
             pt.x = pt_on_link(0);
             pt.y = pt_on_link(1);
             pt.z = pt_on_link(2);
+            if(!grid_map_ || !grid_map_->isInMap(pt_on_link)){
+                min_dist = 0.0;
+                sphere_occ_.points.push_back(pt);
+                return true;
+            }
             if(pt_on_link(2) < ground_safe_dis_){
                 min_dist = pt_on_link(2);
                 sphere_occ_.points.push_back(pt);
@@ -943,6 +952,11 @@ bool MMConfig::checkManiObsCollision(Eigen::Vector3d car_state, Eigen::VectorXd 
             pt.x = pt_on_link(0);
             pt.y = pt_on_link(1);
             pt.z = pt_on_link(2);
+            if(!grid_map_ || !grid_map_->isInMap(pt_on_link)){
+                min_dist = 0.0;
+                sphere_occ_.points.push_back(pt);
+                return true;
+            }
             if(pt_on_link(2) < ground_safe_dis_){
                 min_dist = pt_on_link(2);
                 sphere_occ_.points.push_back(pt);

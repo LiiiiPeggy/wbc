@@ -66,6 +66,7 @@ target_link_libraries(remani_planner_node
   ${catkin_LIBRARIES}
   vis_utils
   )
+add_dependencies(remani_planner_node ${catkin_EXPORTED_TARGETS})
 
 # ################################
 # CMake: EE interactive marker node begin
@@ -96,6 +97,7 @@ if(CATKIN_ENABLE_TESTING)
   catkin_add_gtest(test_plan_only_policy test/test_plan_only_policy.cpp)
   if(TARGET test_plan_only_policy)
     target_link_libraries(test_plan_only_policy ${catkin_LIBRARIES})
+    add_dependencies(test_plan_only_policy ${catkin_EXPORTED_TARGETS})
   endif()
 
   find_package(rostest REQUIRED)

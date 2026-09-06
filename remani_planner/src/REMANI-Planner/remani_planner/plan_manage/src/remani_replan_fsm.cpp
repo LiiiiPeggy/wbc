@@ -46,6 +46,7 @@ namespace remani_planner
     have_local_traj_ = false;
     replan_fail_time_ = 0;
 
+    // PLAN-ONLY uses Gate-facing topics instead of the internal trajectory publisher.
     if(execution_policy_.ownsInternalExecution()){
       poly_traj_pub_ = nh.advertise<quadrotor_msgs::PolynomialTraj>(
           "planning/trajectory", 10);
@@ -180,6 +181,7 @@ namespace remani_planner
     reached_pub_ = nh.advertise<std_msgs::Bool>("planning/finish", 1);
     waypoint_sub_ = nh.subscribe("/move_base_simple/goal", 1, &REMANIReplanFSM::waypointCallback, this);
 
+    // PLAN-ONLY subscribes only to Gate acknowledgement topics.
     if(execution_policy_.isRealPlanOnly()){
       frozen_candidate_sub_ = nh.subscribe(
           "/remani/frozen_candidate", 1,
@@ -252,6 +254,7 @@ namespace remani_planner
       if (success){
         flag_escape_emergency_ = true;
         try_plan_after_emergency_ = false;
+        // PLAN-ONLY hands a successful candidate to Gate rather than entering EXEC_TRAJ.
         if(planSuccessDisposition(execution_policy_) ==
            PlanSuccessDisposition::EnterInternalExec){
           changeFSMExecState(EXEC_TRAJ, "FSM");
@@ -477,6 +480,7 @@ namespace remani_planner
     data_disp_pub_.publish(data_disp_);
 
   force_return:;
+    // PLAN-ONLY pauses the FSM timer while Gate owns the short handoff acknowledgement.
     if(!(execution_policy_.isRealPlanOnly() && awaiting_gate_ack_)){
       exec_timer_.start();
     }
@@ -620,6 +624,7 @@ namespace remani_planner
   }
 
   // manual waypoint
+  // PLAN-ONLY admits targets only while idle and never supersedes an unacknowledged handoff.
   void REMANIReplanFSM::waypointCallback(const geometry_msgs::PoseStamped::ConstPtr &msg){
     if(execution_policy_.isRealPlanOnly() && awaiting_gate_ack_){
       ROS_WARN("[PLAN_ONLY] ignored target while awaiting Gate acknowledgement");
@@ -809,6 +814,7 @@ namespace remani_planner
     }
   }
 
+  // PLAN-ONLY status and ownership helpers keep the planner separate from external execution.
   void REMANIReplanFSM::publishPlannerStatus(
       uint8_t state, const std::string &code, const std::string &detail){
     if(!execution_policy_.isRealPlanOnly()){
@@ -884,6 +890,11 @@ namespace remani_planner
       ROS_WARN("[PLAN_ONLY] ignored incomplete/invalid Gate acknowledgement");
       return;
     }
+    // PLAN-ONLY accepts only the Gate acknowledgement for this raw transaction.
+    if(msg->raw_transaction_stamp != pending_transaction_stamp_){
+      ROS_WARN("[PLAN_ONLY] ignored stale Gate success acknowledgement");
+      return;
+    }
     committed_candidate_id_ = msg->candidate_id;
     committed_candidate_stamp_ = msg->header.stamp;
     committed_candidate_duration_ = msg->duration;
@@ -898,6 +909,11 @@ namespace remani_planner
     if(!execution_policy_.isRealPlanOnly() || !awaiting_gate_ack_ ||
        msg->transaction_state !=
            remani_real_msgs::ExecutionState::TRANSACTION_INVALID){
+      return;
+    }
+    // PLAN-ONLY accepts only the Gate failure for this raw transaction.
+    if(msg->raw_transaction_stamp != pending_transaction_stamp_){
+      ROS_WARN("[PLAN_ONLY] ignored stale Gate failure acknowledgement");
       return;
     }
     committed_candidate_id_ = msg->candidate_id;
@@ -986,6 +1002,7 @@ namespace remani_planner
     return std::pair<int, FSM_EXEC_STATE>(continously_called_times_, exec_state_);
   }
 
+  // PLAN-ONLY serializes one raw START/ADD/FINAL transaction and records its correlation stamp.
   bool REMANIReplanFSM::sendPolyTrajROSMsg(){
     const auto &data = planner_manager_->traj_container_.singul_traj_data;
     ros::Time stamp;
@@ -1028,6 +1045,7 @@ namespace remani_planner
       if(callReboundReplan(true, flag_random_poly_init)){
         return true;
       }
+      // PLAN-ONLY stops retries after publishing its terminal planning failure.
       if(external_terminal_failure_){
         break;
       }
@@ -1128,6 +1146,7 @@ namespace remani_planner
       init_time_list_.push_back(init_time);
       opt_time_list_.push_back(opt_time);
       total_time_list_.push_back(init_time + opt_time);
+      // PLAN-ONLY propagates raw transaction serialization failure to its terminal path.
       if(!sendPolyTrajROSMsg()){
         return false;
       }
@@ -1221,6 +1240,7 @@ namespace remani_planner
     ee_current_pose_pub_.publish(msg);
   }
 
+  // PLAN-ONLY admits EE goals only while idle and reports failed IK through Gate-facing status.
   void REMANIReplanFSM::eeGoalCallback(
       const geometry_msgs::PoseStamped::ConstPtr &msg){
     if(execution_policy_.isRealPlanOnly() && awaiting_gate_ack_){

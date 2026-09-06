@@ -1,5 +1,6 @@
 std_msgs/Header header
 uint64 candidate_id
+time raw_transaction_stamp
 bool complete
 bool valid
 float64 duration

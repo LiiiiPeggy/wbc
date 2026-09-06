@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 
+import copy
 import threading
 import unittest
 
 import rospy
 import rostest
 from quadrotor_msgs.msg import PolynomialTraj
-from remani_real_msgs.msg import FrozenCandidate, PlannerStatus
+from remani_real_msgs.msg import ExecutionState, FrozenCandidate, PlannerStatus
 from std_msgs.msg import Bool
 
 
@@ -21,10 +22,14 @@ class RemaniPlanOnlyTest(unittest.TestCase):
         self._finish_count = 0
         self._saw_handoff = False
         self._ack_sent = False
+        self._stale_invalid_sent = threading.Event()
         self._candidate_duration = 0.0
         self._frozen_candidate = None
+        self._raw_transaction_stamp = None
         self._frozen_pub = rospy.Publisher(
             "/remani/frozen_candidate", FrozenCandidate, queue_size=1)
+        self._execution_state_pub = rospy.Publisher(
+            "/remani/execution_state", ExecutionState, queue_size=1)
         self._candidate_sub = rospy.Subscriber(
             "/remani/planner_candidate", PolynomialTraj,
             self._candidate_callback, queue_size=20)
@@ -39,6 +44,8 @@ class RemaniPlanOnlyTest(unittest.TestCase):
     def _candidate_callback(self, message):
         with self._lock:
             self._actions.append(message.action)
+            if message.action == PolynomialTraj.ACTION_WARN_START:
+                self._raw_transaction_stamp = message.header.stamp
             if message.action == PolynomialTraj.ACTION_ADD:
                 self._adds.append(message)
                 self._candidate_duration += sum(
@@ -51,6 +58,7 @@ class RemaniPlanOnlyTest(unittest.TestCase):
             frozen = FrozenCandidate()
             frozen.header.stamp = rospy.Time.now()
             frozen.candidate_id = 42
+            frozen.raw_transaction_stamp = self._raw_transaction_stamp
             frozen.complete = True
             frozen.valid = True
             frozen.duration = self._candidate_duration
@@ -75,7 +83,24 @@ class RemaniPlanOnlyTest(unittest.TestCase):
             return
         self._ack_sent = True
         frozen = self._frozen_candidate
-        rospy.Timer(rospy.Duration(0.1),
+        stale_success = copy.deepcopy(frozen)
+        stale_success.candidate_id = 41
+        stale_success.raw_transaction_stamp -= rospy.Duration(1.0)
+        rospy.Timer(rospy.Duration(0.05),
+                    lambda _event: self._frozen_pub.publish(stale_success),
+                    oneshot=True)
+
+        def publish_stale_invalid(_event):
+            invalid = ExecutionState()
+            invalid.transaction_state = ExecutionState.TRANSACTION_INVALID
+            invalid.candidate_id = 41
+            invalid.raw_transaction_stamp = stale_success.raw_transaction_stamp
+            invalid.last_error_code = "STALE_GATE_FAILURE"
+            self._execution_state_pub.publish(invalid)
+            self._stale_invalid_sent.set()
+
+        rospy.Timer(rospy.Duration(0.10), publish_stale_invalid, oneshot=True)
+        rospy.Timer(rospy.Duration(0.15),
                     lambda _event: self._frozen_pub.publish(frozen),
                     oneshot=True)
 
@@ -101,6 +126,12 @@ class RemaniPlanOnlyTest(unittest.TestCase):
 
         self.assertTrue(self._final.wait(45.0),
                         "planner did not publish a complete raw transaction")
+        self.assertTrue(self._stale_invalid_sent.wait(5.0),
+                        "fake Gate did not publish the stale invalid acknowledgement")
+        rospy.sleep(0.02)
+        with self._lock:
+            self.assertEqual(PlannerStatus.HANDOFF, self._statuses[-1].state,
+                             "planner accepted a stale Gate acknowledgement")
         self.assertTrue(self._idle_after_handoff.wait(10.0),
                         "planner did not return IDLE after Gate acknowledgement")
 
