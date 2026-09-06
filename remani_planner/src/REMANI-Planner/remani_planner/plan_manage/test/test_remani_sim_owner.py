@@ -10,12 +10,47 @@ from geometry_msgs.msg import PoseStamped
 from quadrotor_msgs.msg import PolynomialTraj
 
 
-class RemaniSimOwnerTest(unittest.TestCase):
-    def setUp(self):
+class TrajectoryObservation:
+    def __init__(self):
         self._lock = threading.Lock()
-        self._received_add_count = 0
-        self._received_start_count = 0
-        self._received_final_count = 0
+        self._add_count = 0
+        self._start_count = 0
+        self._final_count = 0
+
+    def record(self, action):
+        with self._lock:
+            if action == PolynomialTraj.ACTION_ADD:
+                self._add_count += 1
+            elif action == PolynomialTraj.ACTION_WARN_START:
+                self._start_count += 1
+            elif action == PolynomialTraj.ACTION_WARN_FINAL:
+                self._final_count += 1
+
+    def snapshot(self):
+        with self._lock:
+            return self._add_count, self._start_count, self._final_count
+
+    def is_add_only(self):
+        _add_count, start_count, final_count = self.snapshot()
+        return start_count == 0 and final_count == 0
+
+
+class TrajectoryObservationTest(unittest.TestCase):
+    def test_late_control_message_is_visible_after_add(self):
+        observation = TrajectoryObservation()
+        observation.record(PolynomialTraj.ACTION_ADD)
+        self.assertTrue(observation.is_add_only())
+
+        observation.record(PolynomialTraj.ACTION_WARN_FINAL)
+
+        self.assertFalse(observation.is_add_only())
+
+
+class RemaniSimOwnerTest(unittest.TestCase):
+    _POST_ADD_DRAIN_SECONDS = 2.0
+
+    def setUp(self):
+        self._observation = TrajectoryObservation()
         self._trajectory_sub = rospy.Subscriber(
             "/planning/trajectory", PolynomialTraj,
             self._trajectory_callback, queue_size=100)
@@ -23,13 +58,7 @@ class RemaniSimOwnerTest(unittest.TestCase):
             "/move_base_simple/goal", PoseStamped, queue_size=1)
 
     def _trajectory_callback(self, message):
-        with self._lock:
-            if message.action == PolynomialTraj.ACTION_ADD:
-                self._received_add_count += 1
-            elif message.action == PolynomialTraj.ACTION_WARN_START:
-                self._received_start_count += 1
-            elif message.action == PolynomialTraj.ACTION_WARN_FINAL:
-                self._received_final_count += 1
+        self._observation.record(message.action)
 
     @staticmethod
     def _controller_subscribes_to_trajectory():
@@ -79,15 +108,18 @@ class RemaniSimOwnerTest(unittest.TestCase):
 
         add_deadline = rospy.Time.now() + rospy.Duration(120.0)
         while rospy.Time.now() < add_deadline:
-            with self._lock:
-                if self._received_add_count > 0:
-                    break
+            received_add_count, _start_count, _final_count = \
+                self._observation.snapshot()
+            if received_add_count > 0:
+                break
             rospy.sleep(0.1)
 
-        with self._lock:
-            received_add_count = self._received_add_count
-            received_start_count = self._received_start_count
-            received_final_count = self._received_final_count
+        # Continue receiving for a bounded interval after the first ADD so a
+        # queued late START/FINAL cannot evade the ADD-only assertion.
+        rospy.sleep(self._POST_ADD_DRAIN_SECONDS)
+        (received_add_count,
+         received_start_count,
+         received_final_count) = self._observation.snapshot()
 
         self.assertGreater(received_add_count, 0)
         self.assertEqual(0, received_start_count)

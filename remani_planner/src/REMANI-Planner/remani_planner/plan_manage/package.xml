@@ -52,6 +52,7 @@
   <test_depend>gtest</test_depend>
   <test_depend>rostest</test_depend>
   <test_depend>rospy</test_depend>
+  <test_depend>rosnode</test_depend>
   <build_depend>roscpp</build_depend>
   <build_depend>std_msgs</build_depend>
   

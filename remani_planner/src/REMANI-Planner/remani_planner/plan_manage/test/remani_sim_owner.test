@@ -5,5 +5,5 @@
   </include>
 
   <test test-name="test_remani_sim_owner" pkg="remani_planner"
-        type="test_remani_sim_owner.py" time-limit="180"/>
+        type="test_remani_sim_owner.py" time-limit="210"/>
 </launch>
