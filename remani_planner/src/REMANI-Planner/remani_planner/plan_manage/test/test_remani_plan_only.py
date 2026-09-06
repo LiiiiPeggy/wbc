@@ -21,7 +21,7 @@ class RemaniPlanOnlyTest(unittest.TestCase):
         self._statuses = []
         self._finish_count = 0
         self._saw_handoff = False
-        self._ack_sent = False
+        self._stale_acknowledgements_scheduled = False
         self._stale_invalid_sent = threading.Event()
         self._candidate_duration = 0.0
         self._frozen_candidate = None
@@ -53,7 +53,7 @@ class RemaniPlanOnlyTest(unittest.TestCase):
             if message.action != PolynomialTraj.ACTION_WARN_FINAL:
                 return
             self._final.set()
-            if self._ack_sent:
+            if self._stale_acknowledgements_scheduled:
                 return
             frozen = FrozenCandidate()
             frozen.header.stamp = rospy.Time.now()
@@ -79,9 +79,9 @@ class RemaniPlanOnlyTest(unittest.TestCase):
 
     def _maybe_ack_locked(self):
         if (not self._saw_handoff or self._frozen_candidate is None or
-                self._ack_sent):
+                self._stale_acknowledgements_scheduled):
             return
-        self._ack_sent = True
+        self._stale_acknowledgements_scheduled = True
         frozen = self._frozen_candidate
         stale_success = copy.deepcopy(frozen)
         stale_success.candidate_id = 41
@@ -100,9 +100,14 @@ class RemaniPlanOnlyTest(unittest.TestCase):
             self._stale_invalid_sent.set()
 
         rospy.Timer(rospy.Duration(0.10), publish_stale_invalid, oneshot=True)
-        rospy.Timer(rospy.Duration(0.15),
-                    lambda _event: self._frozen_pub.publish(frozen),
-                    oneshot=True)
+
+    def _publish_matching_acknowledgement(self):
+        with self._lock:
+            frozen = self._frozen_candidate
+            raw_transaction_stamp = self._raw_transaction_stamp
+        self.assertIsNotNone(frozen, "fake Gate has no matching candidate")
+        self.assertEqual(raw_transaction_stamp, frozen.raw_transaction_stamp)
+        self._frozen_pub.publish(frozen)
 
     def _finish_callback(self, _message):
         with self._lock:
@@ -128,10 +133,14 @@ class RemaniPlanOnlyTest(unittest.TestCase):
                         "planner did not publish a complete raw transaction")
         self.assertTrue(self._stale_invalid_sent.wait(5.0),
                         "fake Gate did not publish the stale invalid acknowledgement")
-        rospy.sleep(0.02)
+        rospy.sleep(0.50)
         with self._lock:
             self.assertEqual(PlannerStatus.HANDOFF, self._statuses[-1].state,
                              "planner accepted a stale Gate acknowledgement")
+            self.assertFalse(
+                self._idle_after_handoff.is_set(),
+                "planner returned IDLE after a stale Gate acknowledgement")
+        self._publish_matching_acknowledgement()
         self.assertTrue(self._idle_after_handoff.wait(10.0),
                         "planner did not return IDLE after Gate acknowledgement")
 
