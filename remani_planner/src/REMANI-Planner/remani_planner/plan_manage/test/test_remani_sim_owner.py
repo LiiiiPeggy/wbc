@@ -35,21 +35,35 @@ class TrajectoryObservation:
         return start_count == 0 and final_count == 0
 
 
-class TrajectoryObservationTest(unittest.TestCase):
-    def test_late_control_message_is_visible_after_add(self):
+def snapshot_after_drain(observation, duration, sleeper):
+    """Return counters only after a bounded callback-drain interval."""
+    sleeper(duration)
+    return observation.snapshot()
+
+
+class TrajectoryObservationDrainTest(unittest.TestCase):
+    def test_drain_snapshot_captures_late_final(self):
         observation = TrajectoryObservation()
         observation.record(PolynomialTraj.ACTION_ADD)
-        self.assertTrue(observation.is_add_only())
 
-        observation.record(PolynomialTraj.ACTION_WARN_FINAL)
+        sleeper_calls = []
 
-        self.assertFalse(observation.is_add_only())
+        def inject_late_final(seconds):
+            sleeper_calls.append(seconds)
+            observation.record(PolynomialTraj.ACTION_WARN_FINAL)
+
+        counts = snapshot_after_drain(observation, 2.0, inject_late_final)
+
+        self.assertEqual([2.0], sleeper_calls)
+        self.assertEqual((1, 0, 1), counts)
 
 
-class RemaniSimOwnerTest(unittest.TestCase):
+class RemaniSimOwnerTest(TrajectoryObservationDrainTest):
     _POST_ADD_DRAIN_SECONDS = 2.0
 
     def setUp(self):
+        if self._testMethodName == "test_drain_snapshot_captures_late_final":
+            return
         self._observation = TrajectoryObservation()
         self._trajectory_sub = rospy.Subscriber(
             "/planning/trajectory", PolynomialTraj,
@@ -116,10 +130,10 @@ class RemaniSimOwnerTest(unittest.TestCase):
 
         # Continue receiving for a bounded interval after the first ADD so a
         # queued late START/FINAL cannot evade the ADD-only assertion.
-        rospy.sleep(self._POST_ADD_DRAIN_SECONDS)
         (received_add_count,
          received_start_count,
-         received_final_count) = self._observation.snapshot()
+         received_final_count) = snapshot_after_drain(
+             self._observation, self._POST_ADD_DRAIN_SECONDS, rospy.sleep)
 
         self.assertGreater(received_add_count, 0)
         self.assertEqual(0, received_start_count)
