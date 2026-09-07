@@ -64,31 +64,11 @@ target_link_libraries(fake_moma
 )
 
 # ################################
-# CMake: CR10 FK / EE-gradient validation gate
+# CMake: CR10 FK/EE + collision proxy transform + gradient FD
 # ################################
-add_executable(test_topay_cr10_fk src/test_topay_cr10_fk.cpp)
-add_dependencies(test_topay_cr10_fk fake_moma_gencpp)
-target_link_libraries(test_topay_cr10_fk
-  fake_moma
-  ${catkin_LIBRARIES}
-)
-
-# ################################
-# CMake: CR10 collision sphere frame diagnosis gate
-# ################################
-add_executable(test_topay_cr10_colli_frame src/test_topay_cr10_colli_frame.cpp)
-add_dependencies(test_topay_cr10_colli_frame fake_moma_gencpp)
-target_link_libraries(test_topay_cr10_colli_frame
-  fake_moma
-  ${catkin_LIBRARIES}
-)
-
-# ################################
-# CMake: Ranger visual-root / sensor mesh numeric gate
-# ################################
-add_executable(test_topay_ranger_visual src/test_topay_ranger_visual.cpp)
-add_dependencies(test_topay_ranger_visual fake_moma_gencpp)
-target_link_libraries(test_topay_ranger_visual
+add_executable(test_cr10_collision_proxy src/test_cr10_collision_proxy.cpp)
+add_dependencies(test_cr10_collision_proxy fake_moma_gencpp)
+target_link_libraries(test_cr10_collision_proxy
   fake_moma
   ${catkin_LIBRARIES}
 )

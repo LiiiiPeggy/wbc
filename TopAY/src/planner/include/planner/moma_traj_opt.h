@@ -694,6 +694,10 @@ namespace nmoma_planner
 
             bool optimizeEE(Eigen::VectorXd& moma_pos, const Eigen::VectorXd& ee_ref);
             static double eeCostCallback(void* ptrObj, const Eigen::VectorXd& x, Eigen::VectorXd& grad);
+            // ################################
+            // C++: Expose EE reference for unit FD of eeCostCallback collision path
+            // ################################
+            inline void setEEPose(const Eigen::VectorXd& pose) { ee_pose = pose; }
 
             bool optimizeTraj(std::vector<Eigen::VectorXd> init_path, 
                               const Eigen::MatrixXd& boundary_vel_, 

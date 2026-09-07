@@ -1,18 +1,19 @@
 # Progress
 
-**Goal:** Ranger+CR10 viz/collision fixes on `topay` — plan `docs/superpowers/plans/2026-08-31-ranger-cr10-viz-collision-fixes.md`.
+**Goal:** Ranger + CR10 whole-body planning/visualization on branch `topay` (TopAY smoke path).
 
-**Branch / HEAD:** `topay` @ `b77bd0d`.
+**Branch / HEAD:** `topay` (test-suite consolidation commit).
 
-**Plan status:** Tasks 0–4 closed for unit/docs/smoke-startup scope.
+**Current status:** Plan `docs/superpowers/plans/2026-08-31-ranger-cr10-viz-collision-fixes.md` Tasks 0–4 closed for unit/docs/headless-smoke scope. Follow-up consolidated regression suite is in tree (viz-only gates removed).
 
-**Verified (docker `topay`, `-j2`, `roscore` for GridMap gates):**
-- All Final Regression unit gates PASS (FK/grads/pose, colli_frame overlay+cylinder, ranger visual, wheels, box layout, box Cases A–D).
-- Headless smoke `roslaunch planner run_ranger_cr10_smoke.launch rviz:=false` (~45s): `/moma/box_obstacle/*` loaded; `fake_moma` / `moma_vis` / `planner_node` start as `ranger_cr10`; log shows `Map ready`. Timeout kill was clean. Full interactive RViz planning demo not asserted here.
-- `moma_traj_opt_falm.cpp` / `moma_traj_opt_relax.cpp` are alternate sources **not** listed in `planner/CMakeLists.txt`; production smoke uses compiled `moma_traj_opt.cpp` (base-obstacle wired).
+**Verified (consolidated suite):**
+- Host: `scripts/audit_ranger_geometry.py --test-all` PASS (wheels, frames, box AABB); wrapper `audit_ranger_stl_bounds.py` forwards.
+- Docker `topay` (+`roscore`): `test_cr10_collision_proxy` PASS; `test_base_obstacle_collision` (Cases A/B) PASS; `test_optimizer_collision_gradient` PASS (`max_rel_err≈1e-6`, yaw∈{0,0.7}).
+- Production traj-opt path remains compiled `moma_traj_opt.cpp` only.
+- CAD ground lift + RViz overlay defaults unchanged on prior HEAD (`fefb389`).
 
-**Uncommitted on purpose:** `map.pcd`.
+**Open / local only:**
+- `TopAY/src/simulator/random_map_generator/env/map.pcd` — do not commit.
+- Full interactive RViz planning demo success not asserted (headless startup only).
 
-**Latest (this commit):** ground lift via `visual.base_xyz` `0.275→0.4113` with URDF wheel/steering abs; RViz green `/sphere` off and CAD only on `fake_moma` (moma_vis dup off); smoke RViz `required=false`.
-
-**Next (user):** merge/PR when ready.
+**Next:** merge/PR when ready; optional interactive RViz confirmation on hard maps.
