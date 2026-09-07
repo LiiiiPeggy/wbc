@@ -2,7 +2,7 @@
 
 **Goal:** Ranger + CR10 whole-body planning/visualization on branch `topay` (TopAY smoke path).
 
-**Branch / HEAD:** `topay` (test-suite consolidation commit).
+**Branch / HEAD:** `topay` @ `f0602de`.
 
 **Current status:** Plan `docs/superpowers/plans/2026-08-31-ranger-cr10-viz-collision-fixes.md` Tasks 0–4 closed for unit/docs/headless-smoke scope. Follow-up consolidated regression suite is in tree (viz-only gates removed).
 
