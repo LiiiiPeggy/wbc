@@ -1,0 +1,14 @@
+<?xml version="1.0"?>
+<package format="2">
+  <name>remani_real_public_consumer_test</name>
+  <version>0.0.0</version>
+  <description>Compile-only consumer of REMANI real public headers.</description>
+
+  <maintainer email="hlied@connect.ust.hk">Haojia Li</maintainer>
+  <license>TODO</license>
+
+  <buildtool_depend>catkin</buildtool_depend>
+  <build_depend>remani_real</build_depend>
+  <build_export_depend>remani_real</build_export_depend>
+  <exec_depend>remani_real</exec_depend>
+</package>

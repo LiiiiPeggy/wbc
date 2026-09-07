@@ -49,6 +49,33 @@ CandidateSegment deceleratingSegment(uint32_t id, double start_time, double dura
   return segment;
 }
 
+CandidateSegment narrowMultiIntervalSegment(uint32_t id) {
+  constexpr double kThreshold = 1e-6;
+  constexpr double kPeakOffset = 1e-12;
+  constexpr double kShape = 4e-5;
+  constexpr double kLateralSlope = 1e-9;
+  MMController::Piece::CoefficientMat coeff =
+      MMController::Piece::CoefficientMat::Zero(8, 8);
+
+  // vx = threshold + peak_offset - shape * (t - 0.3)^2 * (t - 0.7)^2.
+  // Its two valid intervals are narrower than the former 1/128 search grid.
+  coeff(0, 6) = kThreshold + kPeakOffset - kShape * 0.0441;
+  coeff(0, 5) = kShape * 0.42 / 2.0;
+  coeff(0, 4) = -kShape * 1.42 / 3.0;
+  coeff(0, 3) = kShape * 2.0 / 4.0;
+  coeff(0, 2) = -kShape / 5.0;
+  coeff(1, 6) = -kLateralSlope * 0.5;
+  coeff(1, 5) = kLateralSlope / 2.0;
+
+  CandidateSegment segment;
+  segment.trajectory_id = id;
+  segment.singul = 1;
+  segment.trajectory.emplace_back(1.0, coeff);
+  segment.start_time = 0.0;
+  segment.duration = 1.0;
+  return segment;
+}
+
 TEST(CandidateTrajectory, SamplesAcrossSegmentBoundary) {
   const CandidateSegment first = constantVelocitySegment(1, 1, 0.0, 1.0, 0.1);
   const CandidateSegment second = constantVelocitySegment(2, -1, 1.0, 2.0, 0.1);
@@ -109,6 +136,15 @@ TEST(CandidateTrajectory, RecoversHeadingFromInsideStoppedPriorPiece) {
   EXPECT_DOUBLE_EQ(0.0, sample.base_angular_velocity);
 }
 
+TEST(CandidateTrajectory, RecoversLatestNarrowMultiIntervalHeading) {
+  const CandidateTrajectory candidate(18, {narrowMultiIntervalSegment(1)}, 0.73);
+
+  const WholeBodySample sample = candidate.sample(1.0);
+  EXPECT_GT(sample.base_yaw, 0.0);
+  EXPECT_LT(sample.base_yaw, 0.1);
+  EXPECT_DOUBLE_EQ(0.0, sample.base_angular_velocity);
+}
+
 TEST(CandidateTrajectory, ComputesAngularVelocityFromPlanarAcceleration) {
   CandidateSegment segment = constantVelocitySegment(1, 1, 0.0, 2.0, 1.0);
   MMController::Piece::CoefficientMat coeff = segment.trajectory[0].getCoeffMat();
@@ -143,6 +179,30 @@ TEST(CandidateTrajectory, RejectsInvalidCandidateInvariants) {
   wrong_dimension.trajectory.emplace_back(
       1.0, MMController::Piece::CoefficientMat::Zero(7, 8));
   EXPECT_THROW(CandidateTrajectory(15, {wrong_dimension}, 0.0), std::invalid_argument);
+
+  CandidateSegment zero_duration = constantVelocitySegment(1, 1, 0.0, 0.0, 0.1);
+  EXPECT_THROW(CandidateTrajectory(19, {zero_duration}, 0.0), std::invalid_argument);
+
+  const double huge_duration = std::numeric_limits<double>::max() * 0.75;
+  CandidateSegment first = constantVelocitySegment(1, 1, 0.0, huge_duration, 0.1);
+  CandidateSegment second =
+      constantVelocitySegment(2, 1, huge_duration, huge_duration, 0.1);
+  EXPECT_THROW(CandidateTrajectory(20, {first, second}, 0.0), std::invalid_argument);
+}
+
+TEST(CandidateTrajectory, RejectsNonFinitePolynomialEvaluation) {
+  MMController::Piece::CoefficientMat coeff =
+      MMController::Piece::CoefficientMat::Zero(8, 8);
+  coeff(0, 7) = std::numeric_limits<double>::max();
+  coeff(0, 6) = std::numeric_limits<double>::max();
+  CandidateSegment segment;
+  segment.trajectory_id = 1;
+  segment.singul = 1;
+  segment.trajectory.emplace_back(1.0, coeff);
+  segment.duration = 1.0;
+
+  const CandidateTrajectory candidate(21, {segment}, 0.0);
+  EXPECT_THROW(candidate.sample(1.0), std::domain_error);
 }
 
 TEST(CandidateTrajectory, ExposesOnlyConstSegments) {

@@ -23,7 +23,12 @@ find_package(catkin REQUIRED COMPONENTS
   traj_utils
 )
 
-catkin_package()
+catkin_package(
+  INCLUDE_DIRS include
+  CATKIN_DEPENDS control_msgs nav_msgs roscpp rospy sensor_msgs std_msgs tf
+                 trajectory_msgs quadrotor_msgs mm_utils traj_utils
+  DEPENDS Eigen3
+)
 
 include_directories(
   include
@@ -50,4 +55,3 @@ target_link_libraries( mm_controller_node
   ${catkin_LIBRARIES}
   controller_utils
 )
-

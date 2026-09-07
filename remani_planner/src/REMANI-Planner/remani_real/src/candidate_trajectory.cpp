@@ -2,16 +2,21 @@
 
 #include <algorithm>
 #include <cmath>
+#include <complex>
 #include <limits>
 #include <stdexcept>
 #include <utility>
+
+#include <unsupported/Eigen/Polynomials>
 
 namespace remani_real {
 namespace {
 
 constexpr double kMinimumBaseSpeed = 1e-6;
-constexpr std::size_t kHeadingBacktrackSamples = 128;
-constexpr std::size_t kHeadingBisectionIterations = 32;
+constexpr double kMinimumBaseSpeedSquared =
+    kMinimumBaseSpeed * kMinimumBaseSpeed;
+constexpr double kPolynomialRootTolerance = 1e-9;
+constexpr std::size_t kHeadingBisectionIterations = 64;
 
 /* ---------- Validate timing comparisons without accepting arbitrary gaps. ---------- */
 bool timingsMatch(double expected, double actual) {
@@ -27,7 +32,7 @@ bool headingFromPiece(const MMController::Piece& piece, double local_time,
   const double vx = velocity(0);
   const double vy = velocity(1);
   const double squared_speed = vx * vx + vy * vy;
-  if (!std::isfinite(squared_speed) || squared_speed < kMinimumBaseSpeed * kMinimumBaseSpeed) {
+  if (!std::isfinite(squared_speed) || squared_speed < kMinimumBaseSpeedSquared) {
     return false;
   }
 
@@ -37,7 +42,88 @@ bool headingFromPiece(const MMController::Piece& piece, double local_time,
   return std::isfinite(*yaw) && std::isfinite(*angular_velocity);
 }
 
-/* ---------- Recover the nearest numerically resolvable earlier heading with bounded search. ---------- */
+/* ---------- Form the bounded-degree speed threshold polynomial in ascending powers. ---------- */
+Eigen::VectorXd speedThresholdPolynomial(const MMController::Piece& piece) {
+  const int position_degree = piece.getDegree();
+  const int velocity_degree = std::max(0, position_degree - 1);
+  Eigen::VectorXd vx = Eigen::VectorXd::Zero(velocity_degree + 1);
+  Eigen::VectorXd vy = Eigen::VectorXd::Zero(velocity_degree + 1);
+  const MMController::Piece::CoefficientMat& coefficients = piece.getCoeffMat();
+  for (int exponent = 1; exponent <= position_degree; ++exponent) {
+    const int coefficient_column = position_degree - exponent;
+    vx(exponent - 1) = exponent * coefficients(0, coefficient_column);
+    vy(exponent - 1) = exponent * coefficients(1, coefficient_column);
+  }
+
+  Eigen::VectorXd speed_squared =
+      Eigen::VectorXd::Zero(2 * velocity_degree + 1);
+  for (int left = 0; left <= velocity_degree; ++left) {
+    for (int right = 0; right <= velocity_degree; ++right) {
+      const double x_product = vx(left) * vx(right);
+      const double y_product = vy(left) * vy(right);
+      const double sum = speed_squared(left + right) + x_product + y_product;
+      if (!std::isfinite(x_product) || !std::isfinite(y_product) ||
+          !std::isfinite(sum)) {
+        throw std::domain_error("candidate speed polynomial is non-finite");
+      }
+      speed_squared(left + right) = sum;
+    }
+  }
+  speed_squared(0) -= kMinimumBaseSpeedSquared;
+  if (!std::isfinite(speed_squared(0))) {
+    throw std::domain_error("candidate speed threshold is non-finite");
+  }
+  return speed_squared;
+}
+
+/* ---------- Find all real speed-threshold roots in a piece with scale-aware filtering. ---------- */
+std::vector<double> speedThresholdRoots(const MMController::Piece& piece,
+                                        double upper_time) {
+  Eigen::VectorXd polynomial = speedThresholdPolynomial(piece);
+  double scale = 0.0;
+  for (Eigen::Index index = 0; index < polynomial.size(); ++index) {
+    scale = std::max(scale, std::abs(polynomial(index)));
+  }
+  if (scale == 0.0) {
+    return {};
+  }
+  const double coefficient_tolerance =
+      64.0 * std::numeric_limits<double>::epsilon() * scale;
+  Eigen::Index degree = polynomial.size() - 1;
+  while (degree > 0 && std::abs(polynomial(degree)) <= coefficient_tolerance) {
+    --degree;
+  }
+  if (degree == 0) {
+    return {};
+  }
+
+  Eigen::PolynomialSolver<double, Eigen::Dynamic> solver;
+  solver.compute(polynomial.head(degree + 1));
+
+  std::vector<double> roots;
+  for (Eigen::Index index = 0; index < solver.roots().size(); ++index) {
+    const std::complex<double> root = solver.roots()(index);
+    if (!std::isfinite(root.real()) || !std::isfinite(root.imag()) ||
+        std::abs(root.imag()) >
+            kPolynomialRootTolerance * std::max(1.0, std::abs(root.real()))) {
+      continue;
+    }
+    const double root_tolerance =
+        kPolynomialRootTolerance * std::max(1.0, std::abs(root.real()));
+    if (root.real() < -root_tolerance || root.real() > upper_time + root_tolerance) {
+      continue;
+    }
+    roots.push_back(std::min(std::max(0.0, root.real()), upper_time));
+  }
+  std::sort(roots.begin(), roots.end());
+  roots.erase(std::unique(roots.begin(), roots.end(), [](double left, double right) {
+    return std::abs(left - right) <=
+        kPolynomialRootTolerance * std::max(1.0, std::max(std::abs(left), std::abs(right)));
+  }), roots.end());
+  return roots;
+}
+
+/* ---------- Recover the latest valid heading by real-root interval partition, not grid probing. ---------- */
 bool recoverHeadingAtOrBefore(const MMController::Piece& piece, double upper_time,
                               int singul, double* yaw) {
   if (upper_time < 0.0) {
@@ -52,36 +138,44 @@ bool recoverHeadingAtOrBefore(const MMController::Piece& piece, double upper_tim
     return false;
   }
 
-  // A fixed reverse grid first locates the closest recoverable heading interval.
-  // A bounded bisection then refines its later edge without mutable state or loops
-  // whose termination depends on floating-point progress.
-  for (std::size_t step = 1; step <= kHeadingBacktrackSamples; ++step) {
-    const double valid_time = upper_time *
-        (1.0 - static_cast<double>(step) /
-                    static_cast<double>(kHeadingBacktrackSamples));
-    if (!headingFromPiece(piece, valid_time, singul, yaw,
+  std::vector<double> boundaries = speedThresholdRoots(piece, upper_time);
+  boundaries.push_back(0.0);
+  boundaries.push_back(upper_time);
+  std::sort(boundaries.begin(), boundaries.end());
+  boundaries.erase(std::unique(boundaries.begin(), boundaries.end(),
+                               [](double left, double right) {
+    return std::abs(left - right) <=
+        kPolynomialRootTolerance * std::max(1.0, std::max(std::abs(left), std::abs(right)));
+  }), boundaries.end());
+
+  for (std::size_t index = boundaries.size(); index > 1; --index) {
+    const double left = boundaries[index - 2];
+    const double right = boundaries[index - 1];
+    if (headingFromPiece(piece, right, singul, yaw, &ignored_angular_velocity)) {
+      return true;
+    }
+    const double midpoint = 0.5 * (left + right);
+    if (!headingFromPiece(piece, midpoint, singul, yaw,
                           &ignored_angular_velocity)) {
       continue;
     }
 
-    double lower_bound = valid_time;
-    double upper_bound = upper_time *
-        (1.0 - static_cast<double>(step - 1) /
-                    static_cast<double>(kHeadingBacktrackSamples));
+    double lower_bound = midpoint;
+    double upper_bound = right;
     for (std::size_t iteration = 0;
          iteration < kHeadingBisectionIterations; ++iteration) {
-      const double midpoint = 0.5 * (lower_bound + upper_bound);
-      if (headingFromPiece(piece, midpoint, singul, yaw,
+      const double candidate_time = 0.5 * (lower_bound + upper_bound);
+      if (headingFromPiece(piece, candidate_time, singul, yaw,
                            &ignored_angular_velocity)) {
-        lower_bound = midpoint;
+        lower_bound = candidate_time;
       } else {
-        upper_bound = midpoint;
+        upper_bound = candidate_time;
       }
     }
     return headingFromPiece(piece, lower_bound, singul, yaw,
                             &ignored_angular_velocity);
   }
-  return false;
+  return headingFromPiece(piece, 0.0, singul, yaw, &ignored_angular_velocity);
 }
 
 /* ---------- Select a segment with later ownership at exact internal boundaries. ---------- */
@@ -144,7 +238,7 @@ CandidateTrajectory::CandidateTrajectory(uint64_t candidate_id,
   double cumulative_duration = 0.0;
   for (const CandidateSegment& segment : segments_) {
     if (!std::isfinite(segment.start_time) || !std::isfinite(segment.duration) ||
-        segment.duration < 0.0 || !timingsMatch(cumulative_duration, segment.start_time)) {
+        segment.duration <= 0.0 || !timingsMatch(cumulative_duration, segment.start_time)) {
       throw std::invalid_argument("candidate segments must have contiguous finite timing");
     }
     if (segment.trajectory.getPieceNum() <= 0 || segment.trajectory.getDim() != 8) {
@@ -156,7 +250,8 @@ CandidateTrajectory::CandidateTrajectory(uint64_t candidate_id,
       const MMController::Piece& piece = segment.trajectory[piece_index];
       if (piece.getDim() != 8 || piece.getCoeffMat().cols() <= 0 ||
           !piece.getCoeffMat().allFinite() || !std::isfinite(piece.getDuration()) ||
-          piece.getDuration() < 0.0) {
+          piece.getDuration() <= 0.0 ||
+          trajectory_duration > std::numeric_limits<double>::max() - piece.getDuration()) {
         throw std::invalid_argument("candidate polynomial piece is invalid");
       }
       trajectory_duration += piece.getDuration();
@@ -165,7 +260,13 @@ CandidateTrajectory::CandidateTrajectory(uint64_t candidate_id,
         !timingsMatch(segment.duration, trajectory_duration)) {
       throw std::invalid_argument("segment duration must equal its polynomial duration");
     }
+    if (cumulative_duration > std::numeric_limits<double>::max() - segment.duration) {
+      throw std::invalid_argument("candidate duration overflows");
+    }
     cumulative_duration += segment.duration;
+  }
+  if (!std::isfinite(cumulative_duration) || cumulative_duration <= 0.0) {
+    throw std::invalid_argument("candidate must have finite positive duration");
   }
   duration_ = cumulative_duration;
 }
@@ -204,6 +305,10 @@ WholeBodySample CandidateTrajectory::sample(double t) const {
   result.position = piece.getPos(piece_time);
   result.velocity = piece.getVel(piece_time);
   result.acceleration = piece.getAcc(piece_time);
+  if (!result.position.allFinite() || !result.velocity.allFinite() ||
+      !result.acceleration.allFinite()) {
+    throw std::domain_error("candidate polynomial evaluation is non-finite");
+  }
   result.singul = segment.singul;
 
   if (headingFromPiece(piece, piece_time, segment.singul, &result.base_yaw,

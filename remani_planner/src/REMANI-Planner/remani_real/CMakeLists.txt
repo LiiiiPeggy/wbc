@@ -11,6 +11,7 @@ catkin_package(
   INCLUDE_DIRS include
   LIBRARIES remani_real_candidate
   CATKIN_DEPENDS roscpp mm_controller
+  DEPENDS Eigen3
 )
 
 include_directories(
