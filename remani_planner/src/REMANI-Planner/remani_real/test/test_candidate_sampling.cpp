@@ -33,6 +33,22 @@ CandidateSegment stoppedSegment(uint32_t id, double start_time, double duration)
   return segment;
 }
 
+CandidateSegment deceleratingSegment(uint32_t id, double start_time, double duration) {
+  MMController::Piece::CoefficientMat coeff =
+      MMController::Piece::CoefficientMat::Zero(8, 8);
+  coeff.col(7) << 0.0, 0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6;
+  coeff(0, 6) = 1.0;
+  coeff(0, 5) = -0.5;
+
+  CandidateSegment segment;
+  segment.trajectory_id = id;
+  segment.singul = 1;
+  segment.trajectory.emplace_back(duration, coeff);
+  segment.start_time = start_time;
+  segment.duration = duration;
+  return segment;
+}
+
 TEST(CandidateTrajectory, SamplesAcrossSegmentBoundary) {
   const CandidateSegment first = constantVelocitySegment(1, 1, 0.0, 1.0, 0.1);
   const CandidateSegment second = constantVelocitySegment(2, -1, 1.0, 2.0, 0.1);
@@ -70,6 +86,27 @@ TEST(CandidateTrajectory, UsesConstructorYawUntilMotionIsRecoverable) {
   const CandidateTrajectory candidate(10, {stoppedSegment(1, 0.0, 1.0)}, 0.7);
 
   EXPECT_NEAR(0.7, candidate.sample(0.5).base_yaw, 1e-12);
+}
+
+TEST(CandidateTrajectory, RecoversHeadingFromInsideStoppedCurrentPiece) {
+  const CandidateTrajectory candidate(
+      16, {deceleratingSegment(1, 0.0, 1.0)}, 0.73);
+
+  const WholeBodySample sample = candidate.sample(1.0);
+  EXPECT_NEAR(0.0, sample.base_yaw, 1e-12);
+  EXPECT_DOUBLE_EQ(0.0, sample.base_angular_velocity);
+}
+
+TEST(CandidateTrajectory, RecoversHeadingFromInsideStoppedPriorPiece) {
+  CandidateSegment segment = deceleratingSegment(1, 0.0, 1.0);
+  segment.trajectory.emplace_back(
+      1.0, MMController::Piece::CoefficientMat::Zero(8, 8));
+  segment.duration = 2.0;
+  const CandidateTrajectory candidate(17, {segment}, 0.73);
+
+  const WholeBodySample sample = candidate.sample(1.5);
+  EXPECT_NEAR(0.0, sample.base_yaw, 1e-12);
+  EXPECT_DOUBLE_EQ(0.0, sample.base_angular_velocity);
 }
 
 TEST(CandidateTrajectory, ComputesAngularVelocityFromPlanarAcceleration) {

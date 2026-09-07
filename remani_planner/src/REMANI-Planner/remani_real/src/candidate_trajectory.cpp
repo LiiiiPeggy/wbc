@@ -10,6 +10,8 @@ namespace remani_real {
 namespace {
 
 constexpr double kMinimumBaseSpeed = 1e-6;
+constexpr std::size_t kHeadingBacktrackSamples = 128;
+constexpr std::size_t kHeadingBisectionIterations = 32;
 
 /* ---------- Validate timing comparisons without accepting arbitrary gaps. ---------- */
 bool timingsMatch(double expected, double actual) {
@@ -33,6 +35,53 @@ bool headingFromPiece(const MMController::Piece& piece, double local_time,
                     static_cast<double>(singul) * vx);
   *angular_velocity = (vx * acceleration(1) - vy * acceleration(0)) / squared_speed;
   return std::isfinite(*yaw) && std::isfinite(*angular_velocity);
+}
+
+/* ---------- Recover the nearest numerically resolvable earlier heading with bounded search. ---------- */
+bool recoverHeadingAtOrBefore(const MMController::Piece& piece, double upper_time,
+                              int singul, double* yaw) {
+  if (upper_time < 0.0) {
+    return false;
+  }
+
+  double ignored_angular_velocity = 0.0;
+  if (headingFromPiece(piece, upper_time, singul, yaw, &ignored_angular_velocity)) {
+    return true;
+  }
+  if (upper_time == 0.0) {
+    return false;
+  }
+
+  // A fixed reverse grid first locates the closest recoverable heading interval.
+  // A bounded bisection then refines its later edge without mutable state or loops
+  // whose termination depends on floating-point progress.
+  for (std::size_t step = 1; step <= kHeadingBacktrackSamples; ++step) {
+    const double valid_time = upper_time *
+        (1.0 - static_cast<double>(step) /
+                    static_cast<double>(kHeadingBacktrackSamples));
+    if (!headingFromPiece(piece, valid_time, singul, yaw,
+                          &ignored_angular_velocity)) {
+      continue;
+    }
+
+    double lower_bound = valid_time;
+    double upper_bound = upper_time *
+        (1.0 - static_cast<double>(step - 1) /
+                    static_cast<double>(kHeadingBacktrackSamples));
+    for (std::size_t iteration = 0;
+         iteration < kHeadingBisectionIterations; ++iteration) {
+      const double midpoint = 0.5 * (lower_bound + upper_bound);
+      if (headingFromPiece(piece, midpoint, singul, yaw,
+                           &ignored_angular_velocity)) {
+        lower_bound = midpoint;
+      } else {
+        upper_bound = midpoint;
+      }
+    }
+    return headingFromPiece(piece, lower_bound, singul, yaw,
+                            &ignored_angular_velocity);
+  }
+  return false;
 }
 
 /* ---------- Select a segment with later ownership at exact internal boundaries. ---------- */
@@ -162,11 +211,17 @@ WholeBodySample CandidateTrajectory::sample(double t) const {
     return result;
   }
 
+  if (recoverHeadingAtOrBefore(piece, piece_time, segment.singul,
+                               &result.base_yaw)) {
+    result.base_angular_velocity = 0.0;
+    return result;
+  }
   for (std::size_t prior_piece = piece_index; prior_piece > 0; --prior_piece) {
     const MMController::Piece& candidate_piece =
         segment.trajectory[static_cast<int>(prior_piece - 1)];
-    if (headingFromPiece(candidate_piece, candidate_piece.getDuration(), segment.singul,
-                         &result.base_yaw, &result.base_angular_velocity)) {
+    if (recoverHeadingAtOrBefore(candidate_piece, candidate_piece.getDuration(),
+                                 segment.singul, &result.base_yaw)) {
+      result.base_angular_velocity = 0.0;
       return result;
     }
   }
@@ -176,9 +231,9 @@ WholeBodySample CandidateTrajectory::sample(double t) const {
          --prior_piece) {
       const MMController::Piece& candidate_piece =
           candidate_segment.trajectory[prior_piece - 1];
-      if (headingFromPiece(candidate_piece, candidate_piece.getDuration(),
-                           candidate_segment.singul, &result.base_yaw,
-                           &result.base_angular_velocity)) {
+      if (recoverHeadingAtOrBefore(candidate_piece, candidate_piece.getDuration(),
+                                   candidate_segment.singul, &result.base_yaw)) {
+        result.base_angular_velocity = 0.0;
         return result;
       }
     }
