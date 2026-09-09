@@ -4,6 +4,7 @@ project(remani_real)
 find_package(Eigen3 REQUIRED)
 find_package(catkin REQUIRED COMPONENTS
   nav_msgs
+  quadrotor_msgs
   remani_real_msgs
   roscpp
   sensor_msgs
@@ -15,7 +16,7 @@ find_package(catkin REQUIRED COMPONENTS
 catkin_package(
   INCLUDE_DIRS include
   LIBRARIES remani_real_candidate remani_real_state_bridge
-  CATKIN_DEPENDS nav_msgs remani_real_msgs roscpp sensor_msgs tf2 tf2_ros mm_controller
+  CATKIN_DEPENDS nav_msgs quadrotor_msgs remani_real_msgs roscpp sensor_msgs tf2 tf2_ros mm_controller
   DEPENDS EIGEN3
 )
 
@@ -28,8 +29,10 @@ include_directories(
 
 add_library(remani_real_candidate
   src/candidate_trajectory.cpp
+  src/candidate_assembler.cpp
 )
 target_compile_features(remani_real_candidate PUBLIC cxx_std_14)
+add_dependencies(remani_real_candidate ${catkin_EXPORTED_TARGETS})
 target_link_libraries(remani_real_candidate
   ${catkin_LIBRARIES}
 )
@@ -85,6 +88,23 @@ if(CATKIN_ENABLE_TESTING)
       ${catkin_LIBRARIES}
     )
   endif()
+
+  # ################################
+  # CMake: CandidateAssembler gtest begin
+  # ################################
+  catkin_add_gtest(test_candidate_assembler
+    test/test_candidate_assembler.cpp
+  )
+  if(TARGET test_candidate_assembler)
+    target_compile_features(test_candidate_assembler PRIVATE cxx_std_14)
+    target_link_libraries(test_candidate_assembler
+      remani_real_candidate
+      ${catkin_LIBRARIES}
+    )
+  endif()
+  # ################################
+  # CMake: CandidateAssembler gtest end
+  # ################################
 
   # ################################
   # CMake: State Bridge unit/rostests begin
