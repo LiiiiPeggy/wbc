@@ -15,6 +15,7 @@
 #include "utils/lbfgs.hpp"
 #include "map/grid_map.h"
 #include "fake_moma/moma_param.h"
+#include "planner/trajectory_collision_checker.h"
 
 #include <boost/thread.hpp>
 
@@ -1110,6 +1111,12 @@ namespace nmoma_planner
         std::vector<Eigen::Vector4d> min_dist_mani = moma_param->getColliPts(temp_state);
         for (size_t i=0; i<min_dist_mani.size(); i++)
             min_dist_mani[i].x() = 1.0e+10;
+        // ################################
+        // C++: Track upper-box (base_obstacle) ESDF minima for hard feasibility
+        // ################################
+        std::vector<Eigen::Vector4d> min_dist_box = moma_param->getBaseObstaclePts(temp_state);
+        for (size_t i = 0; i < min_dist_box.size(); i++)
+            min_dist_box[i].x() = 1.0e+10;
 
         for (double t=0.0; t<traj.getTotalDuration(); t+=res)
         {
@@ -1148,6 +1155,20 @@ namespace nmoma_planner
                 grid_map->getDistance3d(mani_pts[i].head(3), d);
                 if (d < min_dist_mani[i].x())
                     min_dist_mani[i].x() = d;
+            }
+            // ################################
+            // C++: Base-obstacle box sphere distances (same contract as GridMap)
+            // ################################
+            std::vector<Eigen::Vector4d> box_pts = moma_param->getBaseObstaclePts(state);
+            for (size_t i = 0; i < box_pts.size() && i < min_dist_box.size(); i++)
+            {
+                double d_box = 0.0;
+                grid_map->getDistance3d(box_pts[i].head(3), d_box);
+                if (d_box < min_dist_box[i].x())
+                {
+                    min_dist_box[i].x() = d_box;
+                    min_dist_box[i].w() = box_pts[i].w();
+                }
             }
         }
 
@@ -1237,12 +1258,46 @@ namespace nmoma_planner
         for (size_t i=0; i<min_dist_mani.size(); i++)
             if (min_dist_mani[i].x() < 0.99 * min_dist_mani[i].w())
             {
-                // feasible = false;
+                // ################################
+                // C++: Arm env penetration is a hard feasibility failure
+                // ################################
+                feasible = false;
                 PRINTF_RED(min_dist_mani[i].x()<<" ");
             }
             else
                 PRINTF_WHITE(min_dist_mani[i].x()<<" ");
         PRINTF_WHITE("\n");
+
+        // ################################
+        // C++: Base-obstacle (upper box) hard report — any penetration rejects traj
+        // ################################
+        PRINTF_WHITE("[Moma Opt] traj base_obstacle collision constraints:\n");
+        for (size_t i = 0; i < min_dist_box.size(); i++)
+            PRINTF_YELLOW(min_dist_box[i].w() << " ");
+        PRINTF_WHITE("\n");
+        PRINTF_WHITE("[Moma Opt] traj base_obstacle min distance:\n");
+        for (size_t i = 0; i < min_dist_box.size(); i++)
+        {
+            if (min_dist_box[i].x() < 0.99 * min_dist_box[i].w())
+            {
+                feasible = false;
+                PRINTF_RED(min_dist_box[i].x() << " ");
+            }
+            else
+                PRINTF_WHITE(min_dist_box[i].x() << " ");
+        }
+        PRINTF_WHITE("\n");
+
+        // ################################
+        // C++: Unified whole-body hard gate (chassis + arm + box + self)
+        // ################################
+        if (!checkWholeBodyTrajectoryCollision(grid_map, traj, res))
+        {
+            feasible = false;
+            PRINT_RED("[Moma Opt] whole-body trajectory collision FAILED");
+        }
+        else
+            PRINT_GREEN("[Moma Opt] whole-body trajectory collision OK");
 
         return feasible;
     }

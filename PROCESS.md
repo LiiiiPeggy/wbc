@@ -91,3 +91,25 @@ RViz smoke: Box/LiDAR looked sunk into chassis; Box env collisions felt wrong.
 - `default.rviz`: moma_vis CAD marker OFF.
 - `box_obstacle` grid densified; audit STL-vertex coverage + outward gates.
 - GridMap Cases A–D tied to physical STL AABB / proxy hit.
+
+---
+
+## 2026-09-09 — Whole-body trajectory hard gate (publish safety)
+
+### Symptom
+
+After box densify + soft ESDF cost, smoke still showed final traj with upper-box ↔ obstacle penetration.
+
+### Root cause
+
+Path search already used `isWholeBodyCollision` (includes box). Traj opt only soft-penalized box. `printConstraintsSituations` / `safeCallback` checked chassis+arm only (arm print did not set `feasible=false`). Optimize success → publish with no whole-body hard reject.
+
+### Final design
+
+- Single API `checkWholeBodyTrajectoryCollision` → dense `GridMap::isWholeBodyCollision` (no third collision contract).
+- Gate after every `optimizeTraj` success path; harden `printConstraintsSituations`; `safeCallback` calls the same API.
+- Did **not** change visual root / box grid / radius / weights.
+
+### Verification
+
+`test_trajectory_collision_checker` A/B/C PASS; prior GridMap/optimizer gates PASS; headless smoke `Map ready` + `box_obstacle` params.

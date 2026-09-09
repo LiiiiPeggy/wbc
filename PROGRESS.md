@@ -2,18 +2,17 @@
 
 **Goal:** Ranger + CR10 whole-body planning/visualization on branch `topay`.
 
-**Branch / HEAD:** `topay` @ `b83bad7`.
+**Branch / HEAD:** `topay` (local uncommitted: whole-body traj hard gate).
 
-**Current status:** Diagnosed RViz Box/LiDAR “embed” + Box env collision; dual CAD marker deduped; box_obstacle densified for STL coverage; GridMap A–D redesigned.
+**Current status:** Soft-opt traj could publish box-penetrating paths; added unified hard validator + wire into optimize/printConstraints/safeCallback.
 
 **Verified:**
-- `audit_ranger_geometry.py --test-all` PASS (wheels, relative frames, STL coverage hole≈1e-3, outward≤0.13).
-- Docker: `test_cr10_collision_proxy`, `test_base_obstacle_collision` A–D, `test_optimizer_collision_gradient` PASS.
+- `test_trajectory_collision_checker` A/B/C PASS.
+- `test_base_obstacle_collision` A–D PASS; `test_optimizer_collision_gradient` PASS.
+- Headless smoke: `box_obstacle` params load + `Map ready` (timeout kill OK).
 
-**Rulings:**
-- Keep `visual.base_xyz.z=0.4113` (ground-correct); do not raise further / do not revert to 0.275 for wheels alone.
-- Default RViz: only `/fake_moma_node/marker` CAD ON.
+**Rulings (unchanged this round):**
+- Do not change visual root / box grid / `obstacle_radius` / collision weights.
+- Hard safety = `checkWholeBodyTrajectoryCollision` → `GridMap::isWholeBodyCollision` only.
 
-**Open:** `map.pcd` local dirty — do not commit.
-
-**Next:** push when asked; optional interactive RViz re-check.
+**Open:** `map.pcd` local dirty — do not commit. Commit/push hard-gate when asked.

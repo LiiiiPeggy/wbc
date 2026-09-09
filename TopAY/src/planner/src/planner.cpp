@@ -1,4 +1,5 @@
 #include "planner/planner.h"
+#include "planner/trajectory_collision_checker.h"
 #include "fake_moma/visual_transform_utils.h"
 
 namespace nmoma_planner
@@ -635,35 +636,13 @@ namespace nmoma_planner
             if (tsvr->has_goal && tsvr->has_traj && tsvr->is_safe && (!tsvr->in_plan) )
             {
                 // ################################
-                // C++: Whole-body state dimension from dof_num
+                // C++: Runtime safety uses unified whole-body trajectory hard gate
                 // ################################
-                const int state_dim = 3 + static_cast<int>(tsvr->moma_param.dof_num);
-                Eigen::VectorXd temp_state = Eigen::VectorXd::Zero(state_dim);
-                std::vector<Eigen::Vector4d> min_dist_mani = tsvr->moma_param.getColliPts(temp_state);
-                double res = 0.01;
-                for (double t=0.0; t<tsvr->end_traj.getTotalDuration(); t+=res)
+                constexpr double kSafeCheckRes = 0.01;
+                if (!checkWholeBodyTrajectoryCollision(
+                        tsvr->grid_map, tsvr->end_traj, kSafeCheckRes))
                 {
-                    Eigen::VectorXd state = tsvr->end_traj.getState(t);
-        
-                    double d = 0.0;
-                    tsvr->grid_map->getDistance2d(state.head(2), d);
-                    if (d < tsvr->moma_param.chassis_colli_radius * 0.99)
-                    {
-                        tsvr->is_safe = false;
-                        break;
-                    }
-                    std::vector<Eigen::Vector4d> mani_pts = tsvr->moma_param.getColliPts(state);
-                    for (size_t i=0; i<mani_pts.size(); i++)
-                    {
-                        double d = 0.0;
-                        tsvr->grid_map->getDistance3d(mani_pts[i].head(3), d);
-                        if (d < min_dist_mani[i].w() * 0.99)
-                        {
-                            tsvr->is_safe = false;
-                            break;
-                        }
-                    }
-                    if (!tsvr->is_safe) break;
+                    tsvr->is_safe = false;
                 }
             }
 
@@ -917,6 +896,11 @@ namespace nmoma_planner
                         _succ = 
                             this->traj_opters[idx]->optimizeTraj(front_paths[idx], boundary_vel, boundary_acc)
                             && this->traj_opters[idx]->printConstraintsSituations(traj_opters[idx]->getTraj())
+                            // ################################
+                            // C++: Reject soft-opt residual whole-body (box) penetration
+                            // ################################
+                            && checkWholeBodyTrajectoryCollision(
+                                   this->grid_map, traj_opters[idx]->getTraj(), 0.01)
                             && this->traj_opters[idx]->getTraj().is_init;
                         
                     } while(false);
@@ -1032,6 +1016,11 @@ namespace nmoma_planner
             boundary_vel.col(0) = start_v;
             if (!this->traj_opters[0]->optimizeTraj(ompl_path, boundary_vel, boundary_acc)
                 || !this->traj_opters[0]->printConstraintsSituations(traj_opters[0]->getTraj())
+                // ################################
+                // C++: Reject soft-opt residual whole-body (box) penetration
+                // ################################
+                || !checkWholeBodyTrajectoryCollision(
+                       this->grid_map, traj_opters[0]->getTraj(), 0.01)
                 || !this->traj_opters[0]->getTraj().is_init
             ) break; // OMPL optimization failed
             end_traj = traj_opters[0]->getTraj();
@@ -1185,6 +1174,11 @@ namespace nmoma_planner
                     bool _succ = 
                         this->traj_opters[idx]->optimizeTraj(full_path, boundary_vel, boundary_acc)
                         && this->traj_opters[idx]->printConstraintsSituations(traj_opters[idx]->getTraj())
+                        // ################################
+                        // C++: Reject soft-opt residual whole-body (box) penetration
+                        // ################################
+                        && checkWholeBodyTrajectoryCollision(
+                               this->grid_map, traj_opters[idx]->getTraj(), 0.01)
                         && this->traj_opters[idx]->getTraj().is_init;
                         
                     results[idx] = std::make_pair(_succ, this->traj_opters[idx]->getTraj());
@@ -1234,6 +1228,11 @@ namespace nmoma_planner
             boundary_vel.col(0) = start_v;
             if (!this->traj_opters[0]->optimizeTraj(ompl_path, boundary_vel, boundary_acc)
                 || !this->traj_opters[0]->printConstraintsSituations(traj_opters[0]->getTraj())
+                // ################################
+                // C++: Reject soft-opt residual whole-body (box) penetration
+                // ################################
+                || !checkWholeBodyTrajectoryCollision(
+                       this->grid_map, traj_opters[0]->getTraj(), 0.01)
                 || !this->traj_opters[0]->getTraj().is_init
             ) break; // OMPL optimization failed
             end_traj = traj_opters[0]->getTraj();
@@ -1380,6 +1379,11 @@ namespace nmoma_planner
                         _succ = 
                             this->traj_opters[idx]->optimizeTraj(full_path, boundary_vel, boundary_acc)
                             && this->traj_opters[idx]->printConstraintsSituations(traj_opters[idx]->getTraj())
+                            // ################################
+                            // C++: Reject soft-opt residual whole-body (box) penetration
+                            // ################################
+                            && checkWholeBodyTrajectoryCollision(
+                                   this->grid_map, traj_opters[idx]->getTraj(), 0.01)
                             && this->traj_opters[idx]->getTraj().is_init;
                         
                     } while(false);
@@ -1456,6 +1460,11 @@ namespace nmoma_planner
             boundary_vel.col(0) = start_v;
             if (!this->traj_opters[0]->optimizeTraj(ompl_path, boundary_vel, boundary_acc)
                 || !this->traj_opters[0]->printConstraintsSituations(traj_opters[0]->getTraj())
+                // ################################
+                // C++: Reject soft-opt residual whole-body (box) penetration
+                // ################################
+                || !checkWholeBodyTrajectoryCollision(
+                       this->grid_map, traj_opters[0]->getTraj(), 0.01)
                 || !this->traj_opters[0]->getTraj().is_init
             ) break; // OMPL optimization failed
             end_traj = traj_opters[0]->getTraj();
@@ -1527,7 +1536,12 @@ namespace nmoma_planner
         Eigen::MatrixXd boundary_acc = Eigen::MatrixXd::Zero(3+moma_param.dof_num, 2);
         boundary_vel.col(0) = start_v;
         if (!traj_opters[idx]->optimizeTraj(full_path, boundary_vel, boundary_acc)
-            || !traj_opters[idx]->printConstraintsSituations(traj_opters[idx]->getTraj()) 
+            || !traj_opters[idx]->printConstraintsSituations(traj_opters[idx]->getTraj())
+            // ################################
+            // C++: Reject soft-opt residual whole-body (box) penetration
+            // ################################
+            || !checkWholeBodyTrajectoryCollision(
+                   this->grid_map, traj_opters[idx]->getTraj(), 0.01)
             )
             return false;
         else
@@ -1546,7 +1560,12 @@ namespace nmoma_planner
         Eigen::MatrixXd boundary_acc = Eigen::MatrixXd::Zero(3+moma_param.dof_num, 2);
         boundary_vel.col(0) = start_v;
         if (!traj_opters[idx]->optimizeTraj(full_path, boundary_vel, boundary_acc)
-            || !traj_opters[idx]->printConstraintsSituations(traj_opters[idx]->getTraj()) 
+            || !traj_opters[idx]->printConstraintsSituations(traj_opters[idx]->getTraj())
+            // ################################
+            // C++: Reject soft-opt residual whole-body (box) penetration
+            // ################################
+            || !checkWholeBodyTrajectoryCollision(
+                   this->grid_map, traj_opters[idx]->getTraj(), 0.01)
             )
             return false;
         else

@@ -88,6 +88,10 @@ add_library(planner
   src/mcrrts.cpp
   src/ompls.cpp
   src/moma_traj_opt.cpp
+  # ################################
+  # CMake: Whole-body trajectory hard collision validator
+  # ################################
+  src/trajectory_collision_checker.cpp
   src/planner.cpp
 )
 
@@ -118,6 +122,20 @@ target_link_libraries(planner_node
 add_executable(test_optimizer_collision_gradient src/test_optimizer_collision_gradient.cpp)
 add_dependencies(test_optimizer_collision_gradient ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 target_link_libraries(test_optimizer_collision_gradient
+  planner
+  ${catkin_LIBRARIES}
+  ${OMPL_LIBRARIES}
+  ${PCL_LIBRARIES}
+  ${CASADI_LIBRARIES}
+  ${Boost_LIBRARIES}
+)
+
+# ################################
+# CMake: Whole-body trajectory hard-validation Cases A/B/C
+# ################################
+add_executable(test_trajectory_collision_checker src/test_trajectory_collision_checker.cpp)
+add_dependencies(test_trajectory_collision_checker ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+target_link_libraries(test_trajectory_collision_checker
   planner
   ${catkin_LIBRARIES}
   ${OMPL_LIBRARIES}
