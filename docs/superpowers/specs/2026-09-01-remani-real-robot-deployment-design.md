@@ -1,7 +1,7 @@
 # REMANI Ranger+CR10 实机部署与人工确认执行设计
 
 **Date:** 2026-09-01
-**Revised:** 2026-09-01（final design polish：transaction semantics、two-level candidate interface、split state spaces）
+**Revised:** 2026-09-09（cross-host control-plane boundary：laptop plan-only + remote AGX black-box endpoint）
 **Status:** Implementation-plan ready — source-consistency review blockers closed
 **Chosen approach:** 方案 1，规划器与实机执行器分离
 **Scope:** 保留现有 REMANI 仿真模式，新增 Ranger+CR10 实机模式；在 RViz 中设置末端目标、仅规划并预览全身轨迹，待操作者确认后再执行；执行期间支持 Pause、Resume 和 Abort。
@@ -17,6 +17,19 @@
 
 实机模式不允许 REMANI 的 EXEC_TRAJ 与 Real Executor 的 EXECUTING 同时推进。real 下 REMANI 只读取实际状态、规划、发布候选事务，然后退出该候选的执行生命周期。
 
+### 0.1 跨主机部署边界（2026-09-09）
+
+当前已确认的部署拓扑：
+
+- 笔记本只运行 REMANI planner、Gate、State Bridge、dry-run Executor、RViz Panel 等控制面。
+- `agx/` 在另一台主机运行，是远端黑盒 ROS endpoint。笔记本通过 ROS 网络交换标准话题、Action 和状态。
+- 不得在笔记本上修改、编译、source 或启动任何 `agx/` 包，也不得依赖本机 `agx/build` 或 `agx/devel`。
+- 笔记本 launch 不启动 Ranger、CR10 或其他硬件节点；远端 runtime remap/config 属于远端部署契约。
+- 规范 Ranger 硬件命令话题是 `/remani/hardware/ranger/cmd_vel`。dry-run 不得 advertise/publish 该话题；dry-run 诊断只用 `/remani/dry_run/ranger_cmd_vel_preview`。
+- planner raw transaction 话题是 `/remani/planner_candidate`，不得使用过时的 `/remani/candidate_trajectory`。
+- planner 状态名是 `HANDOFF`，不是 `HANDED_OFF`。Gate acknowledgement 必须保留并回传 `raw_transaction_stamp`。
+- 正式 non-dry 硬件输出在远端 watchdog、CR10 安全 Action proxy、可靠 `/remani/cr10_status`、两机 ROS/时间同步和 shared-T0 可观测反馈单独验证前保持硬阻塞。当前 Phase 2 只允许完成 zero-output dry-run control plane。
+
 本轮已根据源码确认并修正以下事实：
 
 - 当前 GEN_NEW_TRAJ 成功后直接进入 EXEC_TRAJ，并用 ros::Time::now() 减 trajectory.start_time 推进虚拟执行时间。
@@ -26,7 +39,7 @@
 - 当前 planner 机械臂回调直接读取 position[0..5]，不按 JointState.name 重排。
 - 当前 Ranger 驱动直接订阅绝对话题 /cmd_vel，且没有 ROS 侧命令超时保护。
 - 当前 CR10 Action callback 会阻塞执行整条轨迹，单线程 spinner 下 cancel 不能保证及时执行。
-- 当前 dobot_v4_bringup/RobotStatus.msg 只包含 is_enable 和 is_connected；虽然驱动实时数据已有 ErrorStatus 和 robot_mode，但尚未通过该状态消息暴露，不能把现有 RobotStatus 直接当作完整 fault 信号。
+- 当前 dobot_v4_bringup/RobotStatus.msg 只包含 is_enable 和 is_connected；虽然驱动实时数据已有 ErrorStatus 和 robot_mode，但尚未通过该状态消息暴露，不能把现有 RobotStatus 直接当作完整 fault 信号。笔记本控制面必须消费项目自有 `/remani/cr10_status`，不得为订阅旧 AGX RobotStatus 引入 AGX generated message 编译依赖。
 
 ## 1. 目标、固定决策与非目标
 
@@ -34,7 +47,7 @@
 
 - 使用一个启动参数选择现有仿真模式或新增实机模式。
 - mode:=sim 保持当前仿真入口、内部执行状态机和自动执行语义。
-- mode:=real 一次启动 Ranger、CR10、REMANI plan-only、Trajectory Gate、Real Executor、RViz 和状态桥。
+- mode:=real 在笔记本上启动 REMANI plan-only、Trajectory Gate、Real Executor、RViz 和状态桥；Ranger/CR10 硬件节点只在远端 AGX 主机按远端部署契约运行，不由笔记本 launch 启动。
 - 实机启动后，RViz RobotModel 由当前实际 odom 和 CR10 关节反馈初始化并持续更新。
 - RViz 的 Plan 只生成候选全身轨迹；只有人工 Execute 才能进入实机执行。
 - real 模式由外部执行层统一拥有 PLANNED、EXECUTING、PAUSED、SUCCEEDED 和 ERROR。

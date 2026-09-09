@@ -13,23 +13,25 @@
 ## Global Constraints
 
 - Prerequisite: complete `2026-09-01-remani-real-planner-plan-only.md`; do not reintroduce planner execution ownership.
+- Cross-host topology: the laptop runs only the REMANI control plane (planner, Gate, State Bridge, dry-run Executor, RViz Panel). `agx/` runs on a remote host as a black-box ROS endpoint. Do not modify, compile, source, or start any `agx/` package from this laptop. Do not depend on local `agx/build` or `agx/devel` artifacts.
+- Laptop real/control-plane launch must not start Ranger, CR10, or other hardware driver nodes. Remote runtime remaps and driver config are a remote deployment contract, not laptop launch content.
+- Canonical Ranger hardware command topic is `/remani/hardware/ranger/cmd_vel`. `dry_run:=true` must not advertise or publish that topic. Dry-run diagnostics use only `/remani/dry_run/ranger_cmd_vel_preview`.
+- Planner raw transaction topic is `/remani/planner_candidate`. Do not use the obsolete `/remani/candidate_trajectory` name.
+- Planner state name is `HANDOFF` (not `HANDED_OFF`). Gate acknowledgements must preserve and return `raw_transaction_stamp`.
 - `/joint_states` is RobotModel display data; `/remani/cr10_joint_states` is exactly six CR10 joints in fixed order.
-- Raw driver input is `/remani/cr10_joint_states_raw`; raw array order is never trusted.
+- Raw driver input is `/remani/cr10_joint_states_raw` as standard `sensor_msgs/JointState`; raw array order is never trusted. `/odom` is standard `nav_msgs/Odometry`.
+- Formal CR10 fault/readiness uses project-owned `/remani/cr10_status`. Do not introduce an AGX-generated `RobotStatus` compile dependency. Until a formal status producer is deployed, remain `NOT_READY`; never infer healthy from connected/enabled or topic presence alone.
 - Gate owns monotonic `uint64 candidate_id`; `PolynomialTraj.trajectory_id` remains transaction-local segment order.
 - Execute is disabled until a complete, validated START/ADD/FINAL transaction is frozen.
 - New START may replace READY/PLANNED candidates, but must not affect EXECUTING/PAUSED candidates.
 - Actual RobotModel and candidate preview never publish to each other's `/joint_states`, `/odom`, or `world -> base_link` channels.
-- `dry_run:=true` must not advertise `/remani/ranger_cmd_vel_hw`, send a FollowJointTrajectory goal, or call ServoJ/Stop/Pause/Continue/EmergencyStop/Enable/Disable.
+- `dry_run:=true` must not advertise `/remani/hardware/ranger/cmd_vel`, send a FollowJointTrajectory goal, or call ServoJ/Stop/Pause/Continue/EmergencyStop/Enable/Disable.
 - Panel displays the unified state; it does not infer safety from local timers, publisher counts, or topic presence.
 - Environment warning text is exactly `ENVIRONMENT: STATIC EMPTY / NO ONLINE OBSTACLE SENSING`.
 - New/changed C++ blocks use one repository-style comment banner before the block.
+- Phase 2 may only complete the zero-output dry-run control plane. Formal non-dry hardware output remains blocked until remote Ranger watchdog/stop, CR10 safety Action proxy, reliable `/remani/cr10_status`, two-host ROS/time sync, and shared-T0 observability are separately designed, implemented, and verified.
 
-Before building `remani_planner`, build the existing hardware messages/services and source the overlay in the same shell:
-
-```bash
-catkin_make -C agx --pkg dobot_v4_bringup ranger_base
-source agx/devel/setup.bash
-```
+Build only the laptop control-plane packages under `remani_planner`. Do not run `catkin_make -C agx` or `source agx/devel/setup.bash`.
 
 ---
 
@@ -166,7 +168,7 @@ Use the previous valid yaw when base speed is below `1e-6`; otherwise compute `a
 
 - [ ] **Step 4: Add package dependencies and test target**
 
-`remani_real` depends on `roscpp`, `std_msgs`, `std_srvs`, `nav_msgs`, `sensor_msgs`, `geometry_msgs`, `trajectory_msgs`, `visualization_msgs`, `tf2_ros`, `actionlib`, `control_msgs`, `dobot_v4_bringup`, `quadrotor_msgs`, `remani_real_msgs`, `mm_controller`, `mm_config`, and `plan_env`; declare `robot_state_publisher` as an exec dependency.
+`remani_real` depends on `roscpp`, `std_msgs`, `std_srvs`, `nav_msgs`, `sensor_msgs`, `geometry_msgs`, `trajectory_msgs`, `visualization_msgs`, `tf2_ros`, `actionlib`, `control_msgs`, `quadrotor_msgs`, `remani_real_msgs`, `mm_controller`, `mm_config`, and `plan_env`; declare `robot_state_publisher` as an exec dependency. Do not add a compile dependency on `dobot_v4_bringup` or any other `agx/` package.
 
 Run:
 
@@ -203,15 +205,19 @@ git commit -m "feat: add immutable real candidate model"
 - Create: `remani_planner/src/REMANI-Planner/remani_real/test/state_bridge.test`
 - Create: `remani_planner/src/REMANI-Planner/remani_real/test/test_state_bridge.py`
 - Create: `remani_planner/src/REMANI-Planner/remani_real/config/remani_real.yaml`
-- Modify: `agx/TCP-IP-ROS-6AXis/dobot_v4_bringup/msg/RobotStatus.msg`
-- Modify: `agx/TCP-IP-ROS-6AXis/dobot_v4_bringup/include/dobot_v4_bringup/cr5_v4_robot.h`
-- Modify: `agx/TCP-IP-ROS-6AXis/dobot_v4_bringup/src/cr5_v4_robot.cpp`
-- Modify: `agx/TCP-IP-ROS-6AXis/dobot_v4_bringup/src/main.cpp`
+- Create: project-owned `/remani/cr10_status` message/types inside `remani_planner` (not AGX)
 - Modify: `remani_planner/src/REMANI-Planner/remani_real/CMakeLists.txt`
 
+Do **not** modify remote AGX sources, including:
+- `agx/TCP-IP-ROS-6AXis/dobot_v4_bringup/msg/RobotStatus.msg`
+- `agx/TCP-IP-ROS-6AXis/dobot_v4_bringup/include/dobot_v4_bringup/cr5_v4_robot.h`
+- `agx/TCP-IP-ROS-6AXis/dobot_v4_bringup/src/cr5_v4_robot.cpp`
+- `agx/TCP-IP-ROS-6AXis/dobot_v4_bringup/src/main.cpp`
+
 **Interfaces:**
-- Consumes: `/remani/cr10_joint_states_raw`, `/odom`, optional display joint inputs.
-- Produces: `/remani/cr10_joint_states`, `/joint_states`, and the only `world -> base_link` dynamic TF in real launch.
+- Consumes: `/remani/cr10_joint_states_raw` (`sensor_msgs/JointState`), `/odom` (`nav_msgs/Odometry`), optional display joint inputs, and fake or remote `/remani/cr10_status`.
+- Produces: `/remani/cr10_joint_states`, `/joint_states`, and the only `world -> base_link` dynamic TF in the laptop real/control-plane launch.
+- State Bridge is implemented only inside `remani_planner`. Tests use fake normalized status. If formal `/remani/cr10_status` is absent or stale, readiness stays fail-closed `NOT_READY`.
 
 - [ ] **Step 1: Write failing name-order and invalid-input tests**
 
@@ -295,16 +301,18 @@ tf  world -> base_link from latest /odom
 
 Default display joints in YAML must include Ranger steering/wheels and `gripper_finger1_joint`, each documented under `display_joint_defaults` as `measured: false`. Never copy these display defaults into the planning topic.
 
-Before compiling the subscriber, extend the existing status message to:
+Define a project-owned normalized status interface (not AGX `RobotStatus`):
 
 ```text
-bool is_enable
-bool is_connected
-bool has_error
-uint16 robot_mode
+/remani/cr10_status
+  connected
+  enabled
+  error_status
+  robot_mode
+  stamp / feedback_age
 ```
 
-Add read-only `CRRobot::hasError()` and `CRRobot::robotModeValue()` accessors. `hasError()` returns true when `commander_->getRealData()->ErrorStatus != 0` or `commander_->getRobotMode()==9`; `main.cpp` publishes both added fields on the existing `/dobot_v4_bringup/msg/RobotStatus`. This phase does not call Enable/Disable/ClearError/GetErrorID or any other write/probe service.
+Consume only that interface for readiness/fault. Do not compile against AGX-generated messages, do not modify remote driver sources, and do not infer healthy from connected/enabled or topic presence alone. Tests publish fake normalized status.
 
 - [ ] **Step 5: Add a rostest for both outputs and TF ownership**
 
@@ -326,12 +334,13 @@ Publish a message with duplicate `joint1` and confirm neither output advances.
 - [ ] **Step 6: Build and run State Bridge tests**
 
 ```bash
-catkin_make -C agx --pkg dobot_v4_bringup
-source agx/devel/setup.bash
+source /opt/ros/noetic/setup.bash
 catkin_make -C remani_planner --pkg remani_real
 catkin_make -C remani_planner --pkg remani_real --make-args run_tests_remani_real
-catkin_test_results remani_planner/build/remani_real/test_results
+catkin_test_results remani_planner/build/test_results/remani_real
 ```
+
+Do not build or source `agx/`.
 
 - [ ] **Step 7: Commit State Bridge**
 
@@ -345,11 +354,8 @@ git add remani_planner/src/REMANI-Planner/remani_real/include/remani_real/joint_
         remani_planner/src/REMANI-Planner/remani_real/test/state_bridge.test \
         remani_planner/src/REMANI-Planner/remani_real/test/test_state_bridge.py \
         remani_planner/src/REMANI-Planner/remani_real/config/remani_real.yaml \
-        agx/TCP-IP-ROS-6AXis/dobot_v4_bringup/msg/RobotStatus.msg \
-        agx/TCP-IP-ROS-6AXis/dobot_v4_bringup/include/dobot_v4_bringup/cr5_v4_robot.h \
-        agx/TCP-IP-ROS-6AXis/dobot_v4_bringup/src/cr5_v4_robot.cpp \
-        agx/TCP-IP-ROS-6AXis/dobot_v4_bringup/src/main.cpp \
         remani_planner/src/REMANI-Planner/remani_real/CMakeLists.txt
+# plus any project-owned /remani/cr10_status message files created in remani_planner
 git commit -m "feat: bridge actual state into REMANI ordering"
 ```
 
@@ -364,8 +370,8 @@ git commit -m "feat: bridge actual state into REMANI ordering"
 - Modify: `remani_planner/src/REMANI-Planner/remani_real/CMakeLists.txt`
 
 **Interfaces:**
-- Consumes: `/remani/candidate_trajectory`, current deployment state permission, current actual base yaw, and `ros::SteadyTime`.
-- Produces: an assembly event and, only after FINAL, `FrozenCandidate` for validation.
+- Consumes: `/remani/planner_candidate`, current deployment state permission, current actual base yaw, and `ros::SteadyTime`.
+- Produces: an assembly event and, only after FINAL, `FrozenCandidate` for validation. Gate acknowledgements must preserve and return `raw_transaction_stamp`.
 
 - [ ] **Step 1: Write failing protocol tests**
 
@@ -900,9 +906,9 @@ The launch includes planner-only real launch, State Bridge, `robot_state_publish
 
 - [ ] **Step 3: Create deterministic fake feedback**
 
-`fake_real_feedback_node.py` publishes finite `/odom`, shuffled `/remani/cr10_joint_states_raw`, connected/enabled/fault-free RobotStatus, and watchdog readiness. It advertises a fake `/cr10_robot/joint_controller/follow_joint_trajectory` ActionServer solely so the read-only readiness client can connect; the server counts and rejects any received goal, and the test requires that count to remain zero. It never advertises `/remani/ranger_cmd_vel_hw` or a CR10 write service.
+`fake_real_feedback_node.py` publishes finite `/odom`, shuffled `/remani/cr10_joint_states_raw`, fake healthy `/remani/cr10_status`, and watchdog readiness. It advertises a fake `/cr10_robot/joint_controller/follow_joint_trajectory` ActionServer solely so the read-only readiness client can connect; the server counts and rejects any received goal, and the test requires that count to remain zero. It never advertises `/remani/hardware/ranger/cmd_vel` or a CR10 write service.
 
-`fake_ee_goal_marker.py` caches one fixed reachable `PoseStamped` and publishes it on `/ee_goal` for every `/ee_goal_plan` Empty. `fake_candidate_planner.py` listens to `/ee_goal`, publishes `PlannerStatus::PLANNING`, then emits one deterministic 8D degree-7 START/ADD(trajectory_id=1)/FINAL transaction and `PlannerStatus::HANDED_OFF` followed by IDLE. This substitution exists only in `real_control_plane.test`; `remani_real_control_plane.launch` includes the actual PLAN-ONLY planner.
+`fake_ee_goal_marker.py` caches one fixed reachable `PoseStamped` and publishes it on `/ee_goal` for every `/ee_goal_plan` Empty. `fake_candidate_planner.py` listens to `/ee_goal`, publishes `PlannerStatus::PLANNING`, then emits one deterministic 8D degree-7 START/ADD(trajectory_id=1)/FINAL transaction on `/remani/planner_candidate` and `PlannerStatus::HANDOFF` followed by IDLE. This substitution exists only in `real_control_plane.test`; `remani_real_control_plane.launch` includes the actual PLAN-ONLY planner.
 
 - [ ] **Step 4: Write the integration assertions**
 
@@ -921,10 +927,10 @@ wait dry-run SUCCEEDED
 It checks ROS master state and counters:
 
 ```python
-self.assertNotIn("/remani/ranger_cmd_vel_hw", published_topics)
+self.assertNotIn("/remani/hardware/ranger/cmd_vel", published_topics)
 self.assertEqual(0, fake_feedback.cr10_action_goal_count)
 self.assertEqual(0, arm_write_service_count)
-self.assertGreater(dry_ranger_preview_count, 0)
+self.assertGreater(dry_ranger_preview_count, 0)  # /remani/dry_run/ranger_cmd_vel_preview
 self.assertGreater(candidate_preview_count, 0)
 ```
 
