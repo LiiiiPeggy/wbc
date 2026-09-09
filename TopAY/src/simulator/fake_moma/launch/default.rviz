@@ -304,14 +304,19 @@ Visualization Manager:
             {}
           Queue Size: 100
           Value: false
+        # ################################
+        # RViz: CAD robot meshes — only /fake_moma_node/marker ON by default.
+        # moma_vis publishes the same meshWorldVisualTransform CAD; enabling both
+        # stacks identical markers (or confuses diagnosis of "embedded" parts).
+        # ################################
         - Class: rviz/MarkerArray
-          Enabled: true
+          Enabled: false
           Marker Topic: /moma_vis_node/marker
           Name: moma
           Namespaces:
             {}
           Queue Size: 100
-          Value: true
+          Value: false
         # ################################
         # RViz: duplicate of fake_moma CAD spheres — OFF by default.
         # Closing only this leave /fake_moma_node/sphere_visual still drawn (looks "lighter").

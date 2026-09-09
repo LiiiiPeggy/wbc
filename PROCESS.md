@@ -70,3 +70,24 @@ Post-Task-4 suite still carried viz-only and duplicated gates (`test_topay_cr10_
 ### Pitfall fixed in optimizer gate
 
 yaw=0 at origin + obstacle at sphere center made ESDF analytic/FD disagree (lattice flat / center singularity). Fix: off-grid base xy, `resolution=0.05`, sphere-relative obstacle offset, `fd_eps=5e-4`, pre-size grad vectors, skip `opt.init()` (set `relu_mu` only).
+
+---
+
+## 2026-09-08/09 — Visual/box contract diagnosis (no blind Z lift)
+
+### Symptoms
+
+RViz smoke: Box/LiDAR looked sunk into chassis; Box env collisions felt wrong.
+
+### Root causes (measured)
+
+1. **Dual CAD markers:** both `/fake_moma_node/marker` and `/moma_vis_node/marker` Enabled.
+2. **Not missing visual root:** `applyVisualRoot` applies uniformly; Ranger→Box/LiDAR/CR10 relative z invariant.
+3. **Keep visual_root=0.4113** for ground contact; do not revert to 0.275 (wheels penetrate) and do not raise further.
+4. **Box env under-coverage:** old 3×3×2 grid left ~0.11 m STL-surface holes on the box bottom; densify to 5×5×3 (R=0.18, margin 0.02).
+
+### Final deltas
+
+- `default.rviz`: moma_vis CAD marker OFF.
+- `box_obstacle` grid densified; audit STL-vertex coverage + outward gates.
+- GridMap Cases A–D tied to physical STL AABB / proxy hit.

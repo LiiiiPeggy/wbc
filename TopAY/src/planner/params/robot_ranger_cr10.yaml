@@ -46,17 +46,17 @@ moma:
     - {xyz: [0.04, -0.03, 0.10], obstacle_radius: 0.03, self_radius: 0.025}
 
   # ################################
-  # YAML: Upper cargo box environment envelope (Task 3A multi-sphere layout)
-  # YAML: margin 0.02 m on box planning bounds; 3×3×2 grid, R=0.18 m
+  # YAML: Upper cargo box environment envelope (STL-surface coverage verified)
+  # YAML: denser 5×5×3 grid, R=0.18 m, margin 0.02 m
   # ################################
   box_obstacle:
     enabled: true
     layout: multi_sphere
     margin: 0.02
     obstacle_radius: 0.18
-    grid_x: [-0.45, 0.0, 0.45]
-    grid_y: [-0.35, 0.0, 0.35]
-    grid_z: [0.18, 0.38]
+    grid_x: [-0.45, -0.22, 0.0, 0.22, 0.45]
+    grid_y: [-0.35, -0.18, 0.0, 0.18, 0.35]
+    grid_z: [0.18, 0.30, 0.42]
 
   # ################################
   # YAML: Unified CAD visual root; planning base stays z=0.

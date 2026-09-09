@@ -1,5 +1,5 @@
 // ################################
-// C++: Ranger base-obstacle GridMap runtime collision (no continuous cost)
+// C++: Ranger base-obstacle GridMap Cases A–D from production Box STL AABB
 // ################################
 #include "map/grid_map.h"
 
@@ -66,26 +66,6 @@ void loadObstacleAt(nmoma_planner::GridMap& map,
     stampObstacleSphere(map, center, radius, chassis_height, occ_2d, occ_3d);
     map.loadMap(occ_2d, occ_3d);
 }
-
-double boxTopFromProxies(const MomaParam& profile)
-{
-    double zmax = 0.0;
-    for (const CollisionSphere& s : profile.base_obstacle_proxies_)
-    {
-        zmax = std::max(zmax, s.local_offset.z() + s.obstacle_radius);
-    }
-    return zmax;
-}
-
-double boxMidZFromProxies(const MomaParam& profile)
-{
-    double zsum = 0.0;
-    for (const CollisionSphere& s : profile.base_obstacle_proxies_)
-    {
-        zsum += s.local_offset.z();
-    }
-    return zsum / static_cast<double>(profile.base_obstacle_proxies_.size());
-}
 }  // namespace
 
 int main(int argc, char** argv)
@@ -120,28 +100,74 @@ int main(int argc, char** argv)
     nmoma_planner::GridMap grid_map;
     grid_map.init(nh);
     grid_map.setMomaParam(profile);
-    const Eigen::VectorXd home = Eigen::VectorXd::Zero(9);
-    const double mid_z = boxMidZFromProxies(*profile);
-    const double top_z = boxTopFromProxies(*profile);
+    const Eigen::VectorXd home = Eigen::VectorXd::Zero(3 + profile->dof_num);
 
-    // Case A — mid-height obstacle intersects box envelope
-    loadObstacleAt(grid_map, Eigen::Vector3d(0.0, 0.0, mid_z), 0.08, profile->chassis_height);
-    if (!grid_map.isWholeBodyCollision(home))
-    {
-        std::cerr << "Case A box-mid obstacle FAILED (expected collision=true)\n";
-        return 1;
-    }
-    std::cout << "Case A box-mid obstacle PASSED\n";
+    // ################################
+    // C++: Physical box_link.STL AABB in planning frame (audit_ranger_geometry.py)
+    // ################################
+    const Eigen::Vector3d stl_vmin(-0.60627484, -0.40000001, 0.073);
+    const Eigen::Vector3d stl_vmax(0.60000002, 0.41000000, 0.47210598);
+    const Eigen::Vector3d stl_center = 0.5 * (stl_vmin + stl_vmax);
+    const double margin = 0.02;
+    const double obs_r = 0.05;
 
-    // Case B — obstacle above box top clearance
-    loadObstacleAt(
-        grid_map, Eigen::Vector3d(0.0, 0.0, top_z + 0.15), 0.08, profile->chassis_height);
-    if (grid_map.isWholeBodyCollision(home))
+    // Case A — clear of physical STL + margin (must be free)
     {
-        std::cerr << "Case B above-box FAILED (expected collision=false)\n";
-        return 1;
+        const Eigen::Vector3d center(
+            stl_vmax.x() + margin + obs_r + 0.15,
+            stl_center.y(),
+            stl_center.z());
+        loadObstacleAt(grid_map, center, obs_r, profile->chassis_height);
+        if (grid_map.isWholeBodyCollision(home))
+        {
+            std::cerr << "Case A safe-outside FAILED (expected collision=false)\n";
+            return 1;
+        }
+        std::cout << "Case A safe-outside PASSED\n";
     }
-    std::cout << "Case B above-box clearance PASSED\n";
+
+    // Case B — obstacle overlaps a production box proxy sphere (must collide)
+    {
+        const Eigen::Vector3d center(0.0, 0.0, 0.30);
+        loadObstacleAt(grid_map, center, 0.10, profile->chassis_height);
+        if (!grid_map.isWholeBodyCollision(home))
+        {
+            std::cerr << "Case B STL-overlap FAILED (expected collision=true)\n";
+            return 1;
+        }
+        std::cout << "Case B STL-overlap collision PASSED\n";
+    }
+
+    // Case C — above physical STL top + margin
+    {
+        const Eigen::Vector3d center(
+            stl_center.x(),
+            stl_center.y(),
+            stl_vmax.z() + margin + obs_r + 0.12);
+        loadObstacleAt(grid_map, center, obs_r, profile->chassis_height);
+        if (grid_map.isWholeBodyCollision(home))
+        {
+            std::cerr << "Case C above-box FAILED (expected collision=false)\n";
+            return 1;
+        }
+        std::cout << "Case C above-box clearance PASSED\n";
+    }
+
+    // Case D — near STL side but outside STL+margin (false-positive gate)
+    {
+        const Eigen::Vector3d center(
+            stl_vmax.x() + margin + obs_r + 0.04,
+            stl_center.y(),
+            stl_center.z());
+        loadObstacleAt(grid_map, center, obs_r, profile->chassis_height);
+        if (grid_map.isWholeBodyCollision(home))
+        {
+            std::cerr << "Case D near-but-safe FAILED (expected collision=false; "
+                         "proxy over-conservative vs physical STL)\n";
+            return 1;
+        }
+        std::cout << "Case D near-but-not-touching PASSED\n";
+    }
 
     std::cout << "Base obstacle GridMap collision PASSED\n";
     return 0;

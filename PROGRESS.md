@@ -1,19 +1,19 @@
 # Progress
 
-**Goal:** Ranger + CR10 whole-body planning/visualization on branch `topay` (TopAY smoke path).
+**Goal:** Ranger + CR10 whole-body planning/visualization on branch `topay`.
 
-**Branch / HEAD:** `topay` @ `f0602de`.
+**Branch / HEAD:** `topay` (visual/box geometry follow-up in progress).
 
-**Current status:** Plan `docs/superpowers/plans/2026-08-31-ranger-cr10-viz-collision-fixes.md` Tasks 0–4 closed for unit/docs/headless-smoke scope. Follow-up consolidated regression suite is in tree (viz-only gates removed).
+**Current status:** Diagnosed RViz Box/LiDAR “embed” + Box env collision; dual CAD marker deduped; box_obstacle densified for STL coverage; GridMap A–D redesigned.
 
-**Verified (consolidated suite):**
-- Host: `scripts/audit_ranger_geometry.py --test-all` PASS (wheels, frames, box AABB); wrapper `audit_ranger_stl_bounds.py` forwards.
-- Docker `topay` (+`roscore`): `test_cr10_collision_proxy` PASS; `test_base_obstacle_collision` (Cases A/B) PASS; `test_optimizer_collision_gradient` PASS (`max_rel_err≈1e-6`, yaw∈{0,0.7}).
-- Production traj-opt path remains compiled `moma_traj_opt.cpp` only.
-- CAD ground lift + RViz overlay defaults unchanged on prior HEAD (`fefb389`).
+**Verified:**
+- `audit_ranger_geometry.py --test-all` PASS (wheels, relative frames, STL coverage hole≈1e-3, outward≤0.13).
+- Docker: `test_cr10_collision_proxy`, `test_base_obstacle_collision` A–D, `test_optimizer_collision_gradient` PASS.
 
-**Open / local only:**
-- `TopAY/src/simulator/random_map_generator/env/map.pcd` — do not commit.
-- Full interactive RViz planning demo success not asserted (headless startup only).
+**Rulings:**
+- Keep `visual.base_xyz.z=0.4113` (ground-correct); do not raise further / do not revert to 0.275 for wheels alone.
+- Default RViz: only `/fake_moma_node/marker` CAD ON.
 
-**Next:** merge/PR when ready; optional interactive RViz confirmation on hard maps.
+**Open:** `map.pcd` local dirty — do not commit.
+
+**Next:** commit/push when asked; optional interactive RViz re-check.

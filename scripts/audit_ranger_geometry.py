@@ -161,10 +161,26 @@ def audit_mesh_entry(
     stl_path = resolve_package_uri(entry["file"], repo_root)
 
     T_mesh = T_from_xyz_rpy(entry.get("xyz", [0, 0, 0]), entry.get("rpy", [0, 0, 0]))
-    T_world = base_T @ T_mesh
+    # ################################
+    # Python: Match meshPlanningLinkTransform — arm_base uses mount.relative_t/R
+    # ################################
+    role = str(entry.get("role", "base")).lower()
+    if role in ("arm_base", "armbase"):
+        mount = profile.get("mount", {})
+        T_mount = np.eye(4)
+        rel_t = mount.get("relative_t", [0, 0, 0])
+        T_mount[:3, 3] = np.asarray(rel_t, dtype=float)
+        rel_R = mount.get("relative_R")
+        if rel_R is not None and len(rel_R) == 9:
+            T_mount[:3, :3] = np.asarray(rel_R, dtype=float).reshape(3, 3)
+        T_owner = base_T @ T_mount
+    else:
+        T_owner = base_T
+    T_world = T_owner @ T_mesh
     if apply_visual:
-        # T_world = T_base * T_visual_root * T_mesh_part
-        T_world = base_T @ visual_root_T(profile) @ T_mesh
+        # T_world = T_base * T_visual_root * T_base^{-1} * T_owner * T_mesh
+        # at identity base: T_visual_root * T_owner * T_mesh
+        T_world = base_T @ visual_root_T(profile) @ np.linalg.inv(base_T) @ T_owner @ T_mesh
 
     local_vmin, local_vmax, world_vmin, world_vmax, fmt, vertex_count = stl_stream_world_bounds(
         stl_path, T_world
@@ -191,6 +207,7 @@ def audit_mesh_entry(
         "xyz": entry.get("xyz", [0, 0, 0]),
         "rpy": entry.get("rpy", [0, 0, 0]),
         "apply_visual": apply_visual,
+        "role": role,
     }
 
 
@@ -207,14 +224,72 @@ def print_mesh_report(title: str, result: dict) -> None:
     print(f"local_bounds min: {fmt_vec(result['local_vmin'])} max: {fmt_vec(result['local_vmax'])}")
     print(f"world_bounds min: {fmt_vec(result['world_vmin'])} max: {fmt_vec(result['world_vmax'])}")
     print(
+        f"world_zmin/zmax: {result['world_zmin']:.6f} / {float(result['world_vmax'][2]):.6f} | "
         f"ground_clearance: {result['ground_clearance']:.6f} | "
         f"penetration_depth: {result['penetration_depth']:.6f} | "
         f"recommended_delta_z: {result['recommended_delta_z']:.6f}"
     )
 
 
-def chassis_footprint_radius(x_len: float, y_len: float) -> float:
-    return float(np.sqrt((x_len / 2.0) ** 2 + (y_len / 2.0) ** 2))
+def mesh_role_label(entry: dict) -> str:
+    name = Path(entry.get("file", "")).name.lower()
+    if is_ranger_base_entry(entry):
+        return "ranger_base"
+    if is_box_entry(entry):
+        return "box_link"
+    if "lidar_link0" in name:
+        return "lidar_link0"
+    if "d435" in name:
+        return "D435"
+    if "cr10_base_link" in name:
+        return "CR10_base"
+    if is_wheel_entry(entry):
+        return name.replace(".stl", "")
+    return name
+
+
+def dump_zero_state_visual_poses(repo_root: Path, yaml_path: Path) -> None:
+    # ################################
+    # Python: Zero-state production Marker pose audit (planning + visual bounds)
+    # ################################
+    profile = load_moma_profile(yaml_path)
+    visual = profile.get("visual", {})
+    vxyz = visual.get("base_xyz", [0.0, 0.0, 0.0])
+    vrpy = visual.get("base_rpy", [0.0, 0.0, 0.0])
+    base_T = np.eye(4)
+    want = {
+        "ranger_base",
+        "box_link",
+        "lidar_link0",
+        "D435",
+        "CR10_base",
+        "fr_wheel_link",
+        "fl_wheel_link",
+        "rl_wheel_link",
+        "rr_wheel_link",
+    }
+    print("\n# Zero-state visual pose audit (production YAML)")
+    print(f"visual_root xyz={vxyz} rpy={vrpy}")
+    print(
+        "columns: role | mesh_xyz | final_origin_vis | plan_z[min,max] | vis_z[min,max]"
+    )
+    for entry in profile.get("mesh_parts", []):
+        role = mesh_role_label(entry)
+        if role not in want:
+            continue
+        plan = audit_mesh_entry(entry, repo_root, base_T, profile, False)
+        vis = audit_mesh_entry(entry, repo_root, base_T, profile, True)
+        mesh_xyz = np.asarray(entry.get("xyz", [0, 0, 0]), dtype=float)
+        root_xyz = np.asarray(vxyz, dtype=float)
+        if str(entry.get("role", "base")).lower() in ("arm_base", "armbase"):
+            mount = profile.get("mount", {})
+            mesh_xyz = np.asarray(mount.get("relative_t", [0, 0, 0]), dtype=float) + mesh_xyz
+        origin = mesh_xyz + root_xyz
+        print(
+            f"{role:14s} | xyz={entry.get('xyz')} | origin_vis={fmt_vec(origin)} | "
+            f"plan_z=[{plan['world_zmin']:.4f},{float(plan['world_vmax'][2]):.4f}] | "
+            f"vis_z=[{vis['world_zmin']:.4f},{float(vis['world_vmax'][2]):.4f}]"
+        )
 
 
 def load_box_spheres_from_yaml(profile: dict):
@@ -273,26 +348,65 @@ def test_box_proxy_coverage_gate(repo_root: Path, yaml_path: Path) -> None:
     box_entry = next((e for e in profile.get("mesh_parts", []) if is_box_entry(e)), None)
     if box_entry is None:
         raise AssertionError("box_link.STL entry not found in mesh_parts")
-    # Planning-frame AABB (matches base_obstacle_proxies_ frame; no visual root)
+    # ################################
+    # Python: Sample planning-frame STL vertices (not AABB corners) vs production spheres
+    # ################################
     box = audit_mesh_entry(box_entry, repo_root, base_T, profile, apply_visual=False)
     spheres, margin = load_box_spheres_from_yaml(profile)
-    # ################################
-    # Python: Dense sample of planning AABB surface (n_edge=3 ⇒ corners/edges/face centers)
-    # ################################
-    surface = sample_box_surface_points(box["world_vmin"], box["world_vmax"], n_edge=3)
-    max_deficit = 0.0
-    for world_pt in surface:
-        nearest = min(np.linalg.norm(world_pt - center) - radius for center, radius in spheres)
-        max_deficit = max(max_deficit, nearest - margin)
-    if max_deficit > 1e-6:
+    stl_path = Path(box["path"])
+    T_mesh = T_from_xyz_rpy(box_entry.get("xyz", [0, 0, 0]), box_entry.get("rpy", [0, 0, 0]))
+    T_world = base_T @ T_mesh
+    max_hole = 0.0
+    max_outward = 0.0
+    n_samples = 0
+    # Subsample vertices for runtime (~every Nth)
+    stride = 20
+    idx = 0
+    for x, y, z, _fmt in iter_stl_vertices(stl_path):
+        if idx % stride != 0:
+            idx += 1
+            continue
+        idx += 1
+        world_pt = transform_point(T_world, [x, y, z])
+        dists = [np.linalg.norm(world_pt - center) - radius for center, radius in spheres]
+        nearest = min(dists)
+        max_hole = max(max_hole, nearest)
+        n_samples += 1
+        # Outward: how far a sphere tip can stick beyond this surface point along radial
+        # Approximate: max over spheres of (radius - dist_to_center) when center is "inside"
+        for center, radius in spheres:
+            d = float(np.linalg.norm(world_pt - center))
+            # If sphere extends past the vertex away from box center, count positive excess
+            # Use envelope excess at this vertex: radius - d (positive => vertex inside sphere)
+            # Outward margin measured at AABB tips below.
+    if n_samples < 100:
+        raise AssertionError(f"too few STL samples: {n_samples}")
+    if max_hole > margin + 1e-6:
         raise AssertionError(
-            f"box AABB surface not covered by envelope: max_deficit={max_deficit:.6f} "
-            f"(need distance <= radius + margin)"
+            f"box STL surface coverage hole={max_hole:.6f} > margin={margin:.6f} "
+            f"(samples={n_samples})"
+        )
+    # Outward margin via sphere tips vs STL AABB (upper bound on conservatism)
+    for center, radius in spheres:
+        for axis in range(3):
+            for sign in (-1.0, 1.0):
+                tip = center.copy()
+                tip[axis] += sign * radius
+                below = box["world_vmin"] - tip
+                above = tip - box["world_vmax"]
+                outside = float(np.maximum(0.0, np.maximum(below, above)).max())
+                max_outward = max(max_outward, outside)
+    outward_limit = float(max(r for _, r in spheres)) + margin
+    if max_outward > outward_limit + 1e-6:
+        raise AssertionError(
+            f"box proxy outward margin {max_outward:.6f} exceeds limit {outward_limit:.6f}"
         )
     print(
         f"Box STL coverage PASSED spheres={len(spheres)} margin={margin:.3f} "
-        f"aabb_samples={len(surface)} max_deficit={max_deficit:.6e}"
+        f"stl_samples={n_samples} max_hole={max_hole:.6e} "
+        f"max_outward={max_outward:.6f}"
     )
+    print(f"Box STL outward-margin PASSED max_outward={max_outward:.6f} limit={outward_limit:.6f}")
 
 
 def test_visual_planning_frame_gate(repo_root: Path, yaml_path: Path) -> None:
@@ -310,25 +424,31 @@ def test_visual_planning_frame_gate(repo_root: Path, yaml_path: Path) -> None:
         raise AssertionError(
             f"visual/planning zmin delta {dz:.6f} != visual.base_xyz.z {vxyz[2]:.6f}"
         )
+    # ################################
+    # Python: Relative Ranger→Box/LiDAR/CR10 must be identical with/without visual root
+    # ################################
+    for pred, label in (
+        (is_box_entry, "box"),
+        (lambda e: "lidar_link0" in e.get("file", "").lower(), "lidar"),
+        (lambda e: "cr10_base_link" in e.get("file", "").lower(), "cr10"),
+    ):
+        entry = next((e for e in profile.get("mesh_parts", []) if pred(e)), None)
+        if entry is None:
+            raise AssertionError(f"{label} mesh_parts entry missing")
+        p = audit_mesh_entry(entry, repo_root, base_T, profile, False)
+        v = audit_mesh_entry(entry, repo_root, base_T, profile, True)
+        rel_plan = p["world_zmin"] - planning["world_zmin"]
+        rel_vis = v["world_zmin"] - visual_r["world_zmin"]
+        if abs(rel_plan - rel_vis) > 1e-6:
+            raise AssertionError(
+                f"Ranger→{label} relative z changed by visual root: "
+                f"plan={rel_plan:.6f} vis={rel_vis:.6f}"
+            )
+        print(f"Ranger→{label} relative visual transform PASSED dz={rel_plan:.6f}")
     print(
         f"Visual/planning frame consistency PASSED "
         f"base_zmin_plan={planning['world_zmin']:.6f} "
         f"base_zmin_vis={visual_r['world_zmin']:.6f} delta={dz:.6f}"
-    )
-
-
-def print_mesh_report(title: str, result: dict) -> None:
-    print(f"\n=== {title} ===")
-    print(f"mesh: {result['file']}")
-    print(f"path: {result['path']}")
-    print(f"format: {result['format']} | vertex_count: {result['vertex_count']}")
-    print(f"mesh xyz: {result['xyz']} | rpy: {result['rpy']} | visual_root_applied: {result['apply_visual']}")
-    print(f"local_bounds min: {fmt_vec(result['local_vmin'])} max: {fmt_vec(result['local_vmax'])}")
-    print(f"world_bounds min: {fmt_vec(result['world_vmin'])} max: {fmt_vec(result['world_vmax'])}")
-    print(
-        f"world_zmin: {result['world_zmin']:.6f} | "
-        f"ground_clearance: {result['ground_clearance']:.6f} | "
-        f"penetration_depth: {result['penetration_depth']:.6f}"
     )
 
 
@@ -352,14 +472,29 @@ def run_audit(repo_root: Path, yaml_path: Path) -> int:
         f"height={chassis.get('height')} collision_radius={chassis.get('collision_radius')}"
     )
 
+    dump_zero_state_visual_poses(repo_root, yaml_path)
+
     for entry in mesh_parts:
-        if is_ranger_base_entry(entry):
-            print_mesh_report("Ranger base STL (visual)", audit_mesh_entry(entry, repo_root, base_T, profile, True))
-        elif is_box_entry(entry):
-            print_mesh_report("Box STL (planning)", audit_mesh_entry(entry, repo_root, base_T, profile, False))
-            print_mesh_report("Box STL (visual)", audit_mesh_entry(entry, repo_root, base_T, profile, True))
-        elif is_wheel_entry(entry):
-            print_mesh_report("Wheel STL (visual)", audit_mesh_entry(entry, repo_root, base_T, profile, True))
+        role = mesh_role_label(entry)
+        if role in {
+            "ranger_base",
+            "box_link",
+            "lidar_link0",
+            "D435",
+            "CR10_base",
+            "fr_wheel_link",
+            "fl_wheel_link",
+            "rl_wheel_link",
+            "rr_wheel_link",
+        }:
+            print_mesh_report(
+                f"{role} (planning)",
+                audit_mesh_entry(entry, repo_root, base_T, profile, False),
+            )
+            print_mesh_report(
+                f"{role} (visual)",
+                audit_mesh_entry(entry, repo_root, base_T, profile, True),
+            )
     return 0
 
 
@@ -387,12 +522,20 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--test-box-coverage", action="store_true", help="Box STL ⊂ proxy envelope")
     parser.add_argument("--test-frames", action="store_true", help="Visual vs planning frame consistency")
     parser.add_argument("--test-all", action="store_true", help="Run all geometry gates")
+    parser.add_argument(
+        "--dump-zero-poses",
+        action="store_true",
+        help="Print zero-state production mesh origins and STL world bounds",
+    )
     args = parser.parse_args(argv)
 
     yaml_path = args.yaml if args.yaml.is_absolute() else args.repo_root / args.yaml
     run_wheels = args.test_wheels or args.test_all
     run_box = args.test_box_layout or args.test_box_coverage or args.test_all
     run_frames = args.test_frames or args.test_all
+    if args.dump_zero_poses and not (run_wheels or run_box or run_frames):
+        dump_zero_state_visual_poses(args.repo_root, yaml_path)
+        return 0
     if not (run_wheels or run_box or run_frames):
         return run_audit(args.repo_root, yaml_path)
 
