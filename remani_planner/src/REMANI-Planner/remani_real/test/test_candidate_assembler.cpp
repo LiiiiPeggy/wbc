@@ -192,6 +192,63 @@ TEST(CandidateAssembler, NewStartInvalidatesPlannedWithoutRestoring) {
   EXPECT_EQ(nullptr, gate.completedCandidate());
 }
 
+// ################################
+// C++: Regression for timeout recovery START and unknown-action freeze safety.
+// ################################
+TEST(CandidateAssembler, TimedOutConsumeStillAcceptsRecoveryStart) {
+  CandidateAssembler gate(60.0);
+  ASSERT_TRUE(gate.consume(
+      controlMessage(quadrotor_msgs::PolynomialTraj::ACTION_WARN_START),
+      steadyAt(0), true, 0.0).accepted);
+  ASSERT_TRUE(gate.consume(validAdd(1), steadyAt(1), true, 0.0).accepted);
+
+  const AssemblyEvent recovered = gate.consume(
+      controlMessage(quadrotor_msgs::PolynomialTraj::ACTION_WARN_START),
+      steadyAt(70), true, 0.25);
+  EXPECT_TRUE(recovered.accepted);
+  EXPECT_EQ(AssemblyState::Assembling, recovered.state);
+  EXPECT_EQ(2u, recovered.candidate_id);
+  EXPECT_TRUE(gate.consume(validAdd(1), steadyAt(71), true, 0.25).accepted);
+  ASSERT_TRUE(gate.consume(
+      controlMessage(quadrotor_msgs::PolynomialTraj::ACTION_WARN_FINAL),
+      steadyAt(72), true, 0.25).accepted);
+  ASSERT_NE(nullptr, gate.completedCandidate());
+  EXPECT_EQ(2u, gate.completedCandidate()->id());
+}
+
+TEST(CandidateAssembler, UnknownActionDoesNotClearFrozenCandidate) {
+  CandidateAssembler gate(60.0);
+  gate.consume(controlMessage(quadrotor_msgs::PolynomialTraj::ACTION_WARN_START),
+               steadyAt(0), true, 0.0);
+  gate.consume(validAdd(1), steadyAt(1), true, 0.0);
+  ASSERT_TRUE(gate.consume(
+      controlMessage(quadrotor_msgs::PolynomialTraj::ACTION_WARN_FINAL),
+      steadyAt(2), true, 0.0).accepted);
+  ASSERT_NE(nullptr, gate.completedCandidate());
+  const uint64_t frozen_id = gate.completedCandidate()->id();
+
+  quadrotor_msgs::PolynomialTraj garbage = controlMessage(99u);
+  const AssemblyEvent rejected =
+      gate.consume(garbage, steadyAt(3), true, 0.0);
+  EXPECT_FALSE(rejected.accepted);
+  EXPECT_EQ("UNKNOWN_ACTION", rejected.error_code);
+  ASSERT_NE(nullptr, gate.completedCandidate());
+  EXPECT_EQ(frozen_id, gate.completedCandidate()->id());
+}
+
+TEST(CandidateAssembler, RejectsMalformedControlMessages) {
+  CandidateAssembler gate(60.0);
+  auto bad_start = controlMessage(
+      quadrotor_msgs::PolynomialTraj::ACTION_WARN_START);
+  bad_start.trajectory_id = 7;
+  EXPECT_FALSE(gate.consume(bad_start, steadyAt(0), true, 0.0).accepted);
+
+  auto payload_abort = controlMessage(
+      quadrotor_msgs::PolynomialTraj::ACTION_ABORT);
+  payload_abort.trajectory.push_back(quadrotor_msgs::PolynomialMatrix());
+  EXPECT_FALSE(gate.consume(payload_abort, steadyAt(1), true, 0.0).accepted);
+}
+
 }  // namespace
 }  // namespace remani_real
 

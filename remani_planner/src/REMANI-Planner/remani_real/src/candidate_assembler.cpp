@@ -108,14 +108,40 @@ AssemblyEvent CandidateAssembler::consume(const quadrotor_msgs::PolynomialTraj& 
                                           const ros::SteadyTime& now,
                                           bool new_transaction_allowed,
                                           double actual_start_yaw) {
+  // ################################
+  // C++: Timeout invalidates assembly, but still allows a recovery START in-call.
+  // ################################
   if (timedOut(now)) {
     invalidate("ASSEMBLY_TIMEOUT");
-    return makeEvent(false, AssemblyState::Invalid, "ASSEMBLY_TIMEOUT",
-                     "assembly exceeded timeout before FINAL");
+    const bool recovery_start =
+        msg.action == quadrotor_msgs::PolynomialTraj::ACTION_WARN_START &&
+        new_transaction_allowed;
+    if (!recovery_start) {
+      return makeEvent(false, AssemblyState::Invalid, "ASSEMBLY_TIMEOUT",
+                       "assembly exceeded timeout before FINAL");
+    }
   }
+
+  const auto requireEmptyControl =
+      [&](const char* error_code) -> AssemblyEvent {
+    if (msg.trajectory_id != 0 || !msg.trajectory.empty()) {
+      if (state_ == AssemblyState::Assembling) {
+        invalidate(error_code);
+        return makeEvent(false, AssemblyState::Invalid, error_code,
+                         "control message must use trajectory_id=0 and empty trajectory");
+      }
+      return makeEvent(false, state_, error_code,
+                       "control message must use trajectory_id=0 and empty trajectory");
+    }
+    return AssemblyEvent{};  // accepted sentinel unused
+  };
 
   switch (msg.action) {
     case quadrotor_msgs::PolynomialTraj::ACTION_WARN_START: {
+      const AssemblyEvent control_error = requireEmptyControl("INVALID_START");
+      if (!control_error.error_code.empty()) {
+        return control_error;
+      }
       if (!new_transaction_allowed) {
         return makeEvent(false, state_ == AssemblyState::Complete
                                     ? AssemblyState::Complete
@@ -203,20 +229,34 @@ AssemblyEvent CandidateAssembler::consume(const quadrotor_msgs::PolynomialTraj& 
 
     case quadrotor_msgs::PolynomialTraj::ACTION_ABORT:
     case quadrotor_msgs::PolynomialTraj::ACTION_WARN_IMPOSSIBLE: {
-      invalidate(msg.action == quadrotor_msgs::PolynomialTraj::ACTION_ABORT
-                     ? "ABORT"
-                     : "IMPOSSIBLE");
-      return makeEvent(true, AssemblyState::Invalid,
-                       msg.action == quadrotor_msgs::PolynomialTraj::ACTION_ABORT
-                           ? "ABORT"
-                           : "IMPOSSIBLE",
+      const char* error_code =
+          msg.action == quadrotor_msgs::PolynomialTraj::ACTION_ABORT
+              ? "ABORT"
+              : "IMPOSSIBLE";
+      const AssemblyEvent control_error = requireEmptyControl(
+          msg.action == quadrotor_msgs::PolynomialTraj::ACTION_ABORT
+              ? "INVALID_ABORT"
+              : "INVALID_IMPOSSIBLE");
+      if (!control_error.error_code.empty()) {
+        return control_error;
+      }
+      invalidate(error_code);
+      return makeEvent(true, AssemblyState::Invalid, error_code,
                        "transaction invalidated");
     }
 
-    default:
-      invalidate("UNKNOWN_ACTION");
-      return makeEvent(false, AssemblyState::Invalid, "UNKNOWN_ACTION",
+    default: {
+      // ################################
+      // C++: Unknown actions must not clear an already frozen Complete candidate.
+      // ################################
+      if (state_ == AssemblyState::Assembling) {
+        invalidate("UNKNOWN_ACTION");
+        return makeEvent(false, AssemblyState::Invalid, "UNKNOWN_ACTION",
+                         "unsupported PolynomialTraj action");
+      }
+      return makeEvent(false, state_, "UNKNOWN_ACTION",
                        "unsupported PolynomialTraj action");
+    }
   }
 }
 
