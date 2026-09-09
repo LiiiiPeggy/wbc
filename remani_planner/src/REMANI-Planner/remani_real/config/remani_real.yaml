@@ -1,0 +1,26 @@
+# ################################
+# YAML: remani_real State Bridge defaults begin
+# ################################
+state_bridge:
+  velocity_estimator:
+    min_samples: 3
+    max_abs_velocity: 3.0
+    alpha: 0.5
+    max_dt: 0.2
+  status_stale_timeout: 0.5
+  # Static display-only joints for RobotModel / RViz. Never copied into
+  # /remani/cr10_joint_states planning output.
+  display_joint_defaults:
+    - {name: fr_steering_joint, position: 0.0, measured: false}
+    - {name: fr_wheel_joint, position: 0.0, measured: false}
+    - {name: fl_steering_wheel_joint, position: 0.0, measured: false}
+    - {name: fl_wheel_joint, position: 0.0, measured: false}
+    - {name: rl_steering_wheel_joint, position: 0.0, measured: false}
+    - {name: rl_wheel_joint, position: 0.0, measured: false}
+    - {name: rr_steering_wheel_joint, position: 0.0, measured: false}
+    - {name: rr_wheel_joint, position: 0.0, measured: false}
+    - {name: gripper_finger1_joint, position: 0.0, measured: false}
+    - {name: gripper_finger2_joint, position: 0.0, measured: false}
+# ################################
+# YAML: remani_real State Bridge defaults end
+# ################################

@@ -9,7 +9,7 @@ find_package(catkin REQUIRED COMPONENTS
   std_msgs
 )
 
-add_message_files(FILES PlannerStatus.msg ExecutionState.msg ExecutionResult.msg FrozenCandidate.msg)
+add_message_files(FILES PlannerStatus.msg ExecutionState.msg ExecutionResult.msg FrozenCandidate.msg Cr10Status.msg)
 add_service_files(FILES ExecuteCandidate.srv)
 generate_messages(DEPENDENCIES geometry_msgs nav_msgs quadrotor_msgs std_msgs)
 

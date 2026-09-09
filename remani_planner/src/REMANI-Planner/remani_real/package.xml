@@ -12,14 +12,57 @@
   <build_depend>roscpp</build_depend>
   <build_depend>mm_controller</build_depend>
   <build_depend>eigen</build_depend>
+  <!-- ################################ -->
+  <!-- XML: State Bridge deps begin -->
+  <!-- ################################ -->
+  <build_depend>nav_msgs</build_depend>
+  <build_depend>sensor_msgs</build_depend>
+  <build_depend>remani_real_msgs</build_depend>
+  <build_depend>tf2</build_depend>
+  <build_depend>tf2_ros</build_depend>
+  <!-- ################################ -->
+  <!-- XML: State Bridge deps end -->
+  <!-- ################################ -->
 
   <build_export_depend>roscpp</build_export_depend>
   <build_export_depend>mm_controller</build_export_depend>
   <build_export_depend>eigen</build_export_depend>
+  <!-- ################################ -->
+  <!-- XML: State Bridge export deps begin -->
+  <!-- ################################ -->
+  <build_export_depend>nav_msgs</build_export_depend>
+  <build_export_depend>sensor_msgs</build_export_depend>
+  <build_export_depend>remani_real_msgs</build_export_depend>
+  <build_export_depend>tf2</build_export_depend>
+  <build_export_depend>tf2_ros</build_export_depend>
+  <!-- ################################ -->
+  <!-- XML: State Bridge export deps end -->
+  <!-- ################################ -->
 
   <exec_depend>roscpp</exec_depend>
   <exec_depend>mm_controller</exec_depend>
   <exec_depend>eigen</exec_depend>
+  <!-- ################################ -->
+  <!-- XML: State Bridge exec deps begin -->
+  <!-- ################################ -->
+  <exec_depend>nav_msgs</exec_depend>
+  <exec_depend>sensor_msgs</exec_depend>
+  <exec_depend>remani_real_msgs</exec_depend>
+  <exec_depend>tf2</exec_depend>
+  <exec_depend>tf2_ros</exec_depend>
+  <exec_depend>message_runtime</exec_depend>
+  <!-- ################################ -->
+  <!-- XML: State Bridge exec deps end -->
+  <!-- ################################ -->
 
   <test_depend>gtest</test_depend>
+  <!-- ################################ -->
+  <!-- XML: State Bridge test deps begin -->
+  <!-- ################################ -->
+  <test_depend>rostest</test_depend>
+  <test_depend>rospy</test_depend>
+  <test_depend>tf</test_depend>
+  <!-- ################################ -->
+  <!-- XML: State Bridge test deps end -->
+  <!-- ################################ -->
 </package>

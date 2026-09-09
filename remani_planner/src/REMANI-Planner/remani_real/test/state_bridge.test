@@ -1,0 +1,13 @@
+<launch>
+  <!-- ################################ -->
+  <!-- Launch: State Bridge rostest begin -->
+  <!-- ################################ -->
+  <rosparam command="load" file="$(find remani_real)/config/remani_real.yaml"/>
+  <node pkg="remani_real" type="remani_state_bridge_node"
+        name="remani_state_bridge_node" output="screen" required="true"/>
+  <test test-name="test_state_bridge" pkg="remani_real"
+        type="test_state_bridge.py" time-limit="60"/>
+  <!-- ################################ -->
+  <!-- Launch: State Bridge rostest end -->
+  <!-- ################################ -->
+</launch>
