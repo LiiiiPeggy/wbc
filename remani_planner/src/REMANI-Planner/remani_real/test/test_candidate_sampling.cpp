@@ -76,6 +76,45 @@ CandidateSegment narrowMultiIntervalSegment(uint32_t id) {
   return segment;
 }
 
+CandidateSegment longDurationNormalizedSegment(uint32_t id) {
+  constexpr double kDuration = 1e9;
+  MMController::Piece::CoefficientMat coeff =
+      MMController::Piece::CoefficientMat::Zero(8, 8);
+  // vx(t) = 0.9e-6 + 3e-6*(t/T)^5 - 3.2e-6*(t/T)^6.
+  // The degree-5/6 raw-time coefficients are tiny but materially change speed on [0, T].
+  coeff(0, 6) = 0.9e-6;
+  coeff(0, 1) = 3e-6 / (6.0 * std::pow(kDuration, 5));
+  coeff(0, 0) = -3.2e-6 / (7.0 * std::pow(kDuration, 6));
+  coeff(1, 6) = 1e-9;
+
+  CandidateSegment segment;
+  segment.trajectory_id = id;
+  segment.singul = 1;
+  segment.trajectory.emplace_back(kDuration, coeff);
+  segment.start_time = 0.0;
+  segment.duration = kDuration;
+  return segment;
+}
+
+CandidateSegment tangentThresholdSegment(uint32_t id) {
+  constexpr double kThreshold = 1e-6;
+  constexpr double kCenter = 0.75;
+  MMController::Piece::CoefficientMat coeff =
+      MMController::Piece::CoefficientMat::Zero(8, 8);
+  // vx(t) = threshold - (t - center)^2 * threshold; only t=center is valid.
+  coeff(0, 6) = kThreshold * (1.0 - kCenter * kCenter);
+  coeff(0, 5) = kThreshold * kCenter;
+  coeff(0, 4) = -kThreshold / 3.0;
+
+  CandidateSegment segment;
+  segment.trajectory_id = id;
+  segment.singul = 1;
+  segment.trajectory.emplace_back(1.0, coeff);
+  segment.start_time = 0.0;
+  segment.duration = 1.0;
+  return segment;
+}
+
 TEST(CandidateTrajectory, SamplesAcrossSegmentBoundary) {
   const CandidateSegment first = constantVelocitySegment(1, 1, 0.0, 1.0, 0.1);
   const CandidateSegment second = constantVelocitySegment(2, -1, 1.0, 2.0, 0.1);
@@ -142,6 +181,24 @@ TEST(CandidateTrajectory, RecoversLatestNarrowMultiIntervalHeading) {
   const WholeBodySample sample = candidate.sample(1.0);
   EXPECT_GT(sample.base_yaw, 0.0);
   EXPECT_LT(sample.base_yaw, 0.1);
+  EXPECT_DOUBLE_EQ(0.0, sample.base_angular_velocity);
+}
+
+TEST(CandidateTrajectory, RecoversHeadingAcrossLongNormalizedDuration) {
+  const CandidateTrajectory candidate(
+      22, {longDurationNormalizedSegment(1)}, 0.73);
+
+  const WholeBodySample sample = candidate.sample(1e9);
+  EXPECT_GT(sample.base_yaw, 0.0);
+  EXPECT_LT(sample.base_yaw, 0.01);
+  EXPECT_DOUBLE_EQ(0.0, sample.base_angular_velocity);
+}
+
+TEST(CandidateTrajectory, RecoversTangentThresholdHeading) {
+  const CandidateTrajectory candidate(23, {tangentThresholdSegment(1)}, 0.73);
+
+  const WholeBodySample sample = candidate.sample(1.0);
+  EXPECT_NEAR(0.0, sample.base_yaw, 1e-12);
   EXPECT_DOUBLE_EQ(0.0, sample.base_angular_velocity);
 }
 

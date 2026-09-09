@@ -2,12 +2,9 @@
 
 #include <algorithm>
 #include <cmath>
-#include <complex>
 #include <limits>
 #include <stdexcept>
 #include <utility>
-
-#include <unsupported/Eigen/Polynomials>
 
 namespace remani_real {
 namespace {
@@ -15,7 +12,9 @@ namespace {
 constexpr double kMinimumBaseSpeed = 1e-6;
 constexpr double kMinimumBaseSpeedSquared =
     kMinimumBaseSpeed * kMinimumBaseSpeed;
-constexpr double kPolynomialRootTolerance = 1e-9;
+constexpr long double kRootTimeTolerance = 1e-12L;
+constexpr long double kRootValueTolerance =
+    4096.0L * std::numeric_limits<long double>::epsilon();
 constexpr std::size_t kHeadingBisectionIterations = 64;
 
 /* ---------- Validate timing comparisons without accepting arbitrary gaps. ---------- */
@@ -32,7 +31,13 @@ bool headingFromPiece(const MMController::Piece& piece, double local_time,
   const double vx = velocity(0);
   const double vy = velocity(1);
   const double squared_speed = vx * vx + vy * vy;
-  if (!std::isfinite(squared_speed) || squared_speed < kMinimumBaseSpeedSquared) {
+  // ################################
+  // Accept tangent/repeated threshold roots that undershoot by double roundoff only.
+  // ################################
+  constexpr double kSpeedThresholdAcceptSlack =
+      256.0 * std::numeric_limits<double>::epsilon() * kMinimumBaseSpeedSquared;
+  if (!std::isfinite(squared_speed) ||
+      squared_speed + kSpeedThresholdAcceptSlack < kMinimumBaseSpeedSquared) {
     return false;
   }
 
@@ -42,85 +47,169 @@ bool headingFromPiece(const MMController::Piece& piece, double local_time,
   return std::isfinite(*yaw) && std::isfinite(*angular_velocity);
 }
 
-/* ---------- Form the bounded-degree speed threshold polynomial in ascending powers. ---------- */
-Eigen::VectorXd speedThresholdPolynomial(const MMController::Piece& piece) {
+using Polynomial = std::vector<long double>;
+
+/* ---------- Trim only numerically irresolvable trailing terms from a normalized polynomial. ---------- */
+void trimPolynomial(Polynomial* polynomial) {
+  long double scale = 0.0L;
+  for (const long double coefficient : *polynomial) {
+    scale = std::max(scale, std::abs(coefficient));
+  }
+  const long double tolerance = kRootValueTolerance * scale;
+  while (polynomial->size() > 1 &&
+         std::abs(polynomial->back()) <= tolerance) {
+    polynomial->pop_back();
+  }
+}
+
+/* ---------- Evaluate an ascending-power polynomial on the normalized unit interval. ---------- */
+long double evaluatePolynomial(const Polynomial& polynomial, long double value) {
+  long double result = 0.0L;
+  for (Polynomial::const_reverse_iterator it = polynomial.rbegin();
+       it != polynomial.rend(); ++it) {
+    result = result * value + *it;
+  }
+  if (!std::isfinite(result)) {
+    throw std::domain_error("normalized candidate speed polynomial is non-finite");
+  }
+  return result;
+}
+
+/* ---------- Differentiate an ascending-power polynomial for recursive root isolation. ---------- */
+Polynomial derivativePolynomial(const Polynomial& polynomial) {
+  if (polynomial.size() <= 1) {
+    return {0.0L};
+  }
+  Polynomial derivative(polynomial.size() - 1, 0.0L);
+  for (std::size_t index = 1; index < polynomial.size(); ++index) {
+    derivative[index - 1] = static_cast<long double>(index) * polynomial[index];
+    if (!std::isfinite(derivative[index - 1])) {
+      throw std::domain_error("normalized candidate speed derivative is non-finite");
+    }
+  }
+  trimPolynomial(&derivative);
+  return derivative;
+}
+
+/* ---------- Bisect one monotonic normalized interval with a strict endpoint sign change. ---------- */
+long double bisectNormalizedRoot(const Polynomial& polynomial, long double left,
+                                 long double right) {
+  long double left_value = evaluatePolynomial(polynomial, left);
+  for (std::size_t iteration = 0;
+       iteration < kHeadingBisectionIterations * 2; ++iteration) {
+    const long double midpoint = 0.5L * (left + right);
+    const long double midpoint_value = evaluatePolynomial(polynomial, midpoint);
+    if (std::abs(midpoint_value) <= kRootValueTolerance ||
+        right - left <= kRootTimeTolerance) {
+      return midpoint;
+    }
+    if ((left_value < 0.0L && midpoint_value > 0.0L) ||
+        (left_value > 0.0L && midpoint_value < 0.0L)) {
+      right = midpoint;
+    } else {
+      left = midpoint;
+      left_value = midpoint_value;
+    }
+  }
+  return 0.5L * (left + right);
+}
+
+/* ---------- Isolate all real roots on [0,1] through derivative critical intervals. ---------- */
+std::vector<long double> isolateNormalizedRoots(Polynomial polynomial) {
+  trimPolynomial(&polynomial);
+  if (polynomial.size() <= 1) {
+    return {};
+  }
+
+  std::vector<long double> boundaries = derivativePolynomial(polynomial).size() <= 1
+      ? std::vector<long double>{0.0L, 1.0L}
+      : isolateNormalizedRoots(derivativePolynomial(polynomial));
+  boundaries.push_back(0.0L);
+  boundaries.push_back(1.0L);
+  std::sort(boundaries.begin(), boundaries.end());
+  boundaries.erase(std::unique(boundaries.begin(), boundaries.end(),
+                               [](long double left, long double right) {
+    return std::abs(left - right) <= kRootTimeTolerance;
+  }), boundaries.end());
+
+  std::vector<long double> roots;
+  for (const long double boundary : boundaries) {
+    if (std::abs(evaluatePolynomial(polynomial, boundary)) <= kRootValueTolerance) {
+      roots.push_back(boundary);
+    }
+  }
+  for (std::size_t index = 1; index < boundaries.size(); ++index) {
+    const long double left = boundaries[index - 1];
+    const long double right = boundaries[index];
+    const long double left_value = evaluatePolynomial(polynomial, left);
+    const long double right_value = evaluatePolynomial(polynomial, right);
+    if ((left_value < 0.0L && right_value > 0.0L) ||
+        (left_value > 0.0L && right_value < 0.0L)) {
+      roots.push_back(bisectNormalizedRoot(polynomial, left, right));
+    }
+  }
+  std::sort(roots.begin(), roots.end());
+  roots.erase(std::unique(roots.begin(), roots.end(),
+                          [](long double left, long double right) {
+    return std::abs(left - right) <= kRootTimeTolerance;
+  }), roots.end());
+  return roots;
+}
+
+/* ---------- Form speed squared minus threshold after safely normalizing t by piece duration. ---------- */
+Polynomial normalizedSpeedThresholdPolynomial(const MMController::Piece& piece,
+                                              double duration) {
+  if (!std::isfinite(duration) || duration <= 0.0) {
+    throw std::domain_error("candidate piece duration is invalid for root isolation");
+  }
   const int position_degree = piece.getDegree();
   const int velocity_degree = std::max(0, position_degree - 1);
-  Eigen::VectorXd vx = Eigen::VectorXd::Zero(velocity_degree + 1);
-  Eigen::VectorXd vy = Eigen::VectorXd::Zero(velocity_degree + 1);
+  Polynomial vx(velocity_degree + 1, 0.0L);
+  Polynomial vy(velocity_degree + 1, 0.0L);
   const MMController::Piece::CoefficientMat& coefficients = piece.getCoeffMat();
   for (int exponent = 1; exponent <= position_degree; ++exponent) {
     const int coefficient_column = position_degree - exponent;
-    vx(exponent - 1) = exponent * coefficients(0, coefficient_column);
-    vy(exponent - 1) = exponent * coefficients(1, coefficient_column);
+    const int velocity_power = exponent - 1;
+    const long double domain_scale = std::pow(static_cast<long double>(duration),
+                                              velocity_power);
+    vx[velocity_power] = static_cast<long double>(exponent) *
+        static_cast<long double>(coefficients(0, coefficient_column)) * domain_scale;
+    vy[velocity_power] = static_cast<long double>(exponent) *
+        static_cast<long double>(coefficients(1, coefficient_column)) * domain_scale;
+    if (!std::isfinite(vx[velocity_power]) || !std::isfinite(vy[velocity_power])) {
+      throw std::domain_error("candidate normalized speed coefficient overflows");
+    }
   }
 
-  Eigen::VectorXd speed_squared =
-      Eigen::VectorXd::Zero(2 * velocity_degree + 1);
+  Polynomial speed_squared(2 * velocity_degree + 1, 0.0L);
   for (int left = 0; left <= velocity_degree; ++left) {
     for (int right = 0; right <= velocity_degree; ++right) {
-      const double x_product = vx(left) * vx(right);
-      const double y_product = vy(left) * vy(right);
-      const double sum = speed_squared(left + right) + x_product + y_product;
+      const long double x_product = vx[left] * vx[right];
+      const long double y_product = vy[left] * vy[right];
+      const long double sum = speed_squared[left + right] + x_product + y_product;
       if (!std::isfinite(x_product) || !std::isfinite(y_product) ||
           !std::isfinite(sum)) {
-        throw std::domain_error("candidate speed polynomial is non-finite");
+        throw std::domain_error("candidate normalized speed polynomial is non-finite");
       }
-      speed_squared(left + right) = sum;
+      speed_squared[left + right] = sum;
     }
   }
-  speed_squared(0) -= kMinimumBaseSpeedSquared;
-  if (!std::isfinite(speed_squared(0))) {
-    throw std::domain_error("candidate speed threshold is non-finite");
+  speed_squared[0] -= static_cast<long double>(kMinimumBaseSpeedSquared);
+  if (!std::isfinite(speed_squared[0])) {
+    throw std::domain_error("candidate normalized speed threshold is non-finite");
   }
+  long double scale = 0.0L;
+  for (const long double coefficient : speed_squared) {
+    scale = std::max(scale, std::abs(coefficient));
+  }
+  if (scale == 0.0L) {
+    return {0.0L};
+  }
+  for (long double& coefficient : speed_squared) {
+    coefficient /= scale;
+  }
+  trimPolynomial(&speed_squared);
   return speed_squared;
-}
-
-/* ---------- Find all real speed-threshold roots in a piece with scale-aware filtering. ---------- */
-std::vector<double> speedThresholdRoots(const MMController::Piece& piece,
-                                        double upper_time) {
-  Eigen::VectorXd polynomial = speedThresholdPolynomial(piece);
-  double scale = 0.0;
-  for (Eigen::Index index = 0; index < polynomial.size(); ++index) {
-    scale = std::max(scale, std::abs(polynomial(index)));
-  }
-  if (scale == 0.0) {
-    return {};
-  }
-  const double coefficient_tolerance =
-      64.0 * std::numeric_limits<double>::epsilon() * scale;
-  Eigen::Index degree = polynomial.size() - 1;
-  while (degree > 0 && std::abs(polynomial(degree)) <= coefficient_tolerance) {
-    --degree;
-  }
-  if (degree == 0) {
-    return {};
-  }
-
-  Eigen::PolynomialSolver<double, Eigen::Dynamic> solver;
-  solver.compute(polynomial.head(degree + 1));
-
-  std::vector<double> roots;
-  for (Eigen::Index index = 0; index < solver.roots().size(); ++index) {
-    const std::complex<double> root = solver.roots()(index);
-    if (!std::isfinite(root.real()) || !std::isfinite(root.imag()) ||
-        std::abs(root.imag()) >
-            kPolynomialRootTolerance * std::max(1.0, std::abs(root.real()))) {
-      continue;
-    }
-    const double root_tolerance =
-        kPolynomialRootTolerance * std::max(1.0, std::abs(root.real()));
-    if (root.real() < -root_tolerance || root.real() > upper_time + root_tolerance) {
-      continue;
-    }
-    roots.push_back(std::min(std::max(0.0, root.real()), upper_time));
-  }
-  std::sort(roots.begin(), roots.end());
-  roots.erase(std::unique(roots.begin(), roots.end(), [](double left, double right) {
-    return std::abs(left - right) <=
-        kPolynomialRootTolerance * std::max(1.0, std::max(std::abs(left), std::abs(right)));
-  }), roots.end());
-  return roots;
 }
 
 /* ---------- Recover the latest valid heading by real-root interval partition, not grid probing. ---------- */
@@ -138,43 +227,63 @@ bool recoverHeadingAtOrBefore(const MMController::Piece& piece, double upper_tim
     return false;
   }
 
-  std::vector<double> boundaries = speedThresholdRoots(piece, upper_time);
-  boundaries.push_back(0.0);
-  boundaries.push_back(upper_time);
+  // ################################
+  // Normalized root isolation recovers yaw without sampling past the query time.
+  // ################################
+  const double piece_duration = piece.getDuration();
+  if (!std::isfinite(piece_duration) || piece_duration <= 0.0) {
+    throw std::domain_error("candidate piece duration is invalid for heading recovery");
+  }
+  const long double upper_u = static_cast<long double>(upper_time) /
+      static_cast<long double>(piece_duration);
+  if (!std::isfinite(upper_u)) {
+    throw std::domain_error("candidate normalized query time is non-finite");
+  }
+  std::vector<long double> boundaries = isolateNormalizedRoots(
+      normalizedSpeedThresholdPolynomial(piece, piece_duration));
+  // Never keep a root after the query, even when it exceeds upper_u by only a tolerance.
+  boundaries.erase(std::remove_if(boundaries.begin(), boundaries.end(),
+                                  [upper_u](long double root) {
+    return root > upper_u;
+  }), boundaries.end());
+  boundaries.push_back(0.0L);
+  boundaries.push_back(std::min(1.0L, std::max(0.0L, upper_u)));
   std::sort(boundaries.begin(), boundaries.end());
   boundaries.erase(std::unique(boundaries.begin(), boundaries.end(),
-                               [](double left, double right) {
-    return std::abs(left - right) <=
-        kPolynomialRootTolerance * std::max(1.0, std::max(std::abs(left), std::abs(right)));
+                               [](long double left, long double right) {
+    return std::abs(left - right) <= kRootTimeTolerance;
   }), boundaries.end());
 
   for (std::size_t index = boundaries.size(); index > 1; --index) {
-    const double left = boundaries[index - 2];
-    const double right = boundaries[index - 1];
-    if (headingFromPiece(piece, right, singul, yaw, &ignored_angular_velocity)) {
+    const long double left = boundaries[index - 2];
+    const long double right = boundaries[index - 1];
+    if (headingFromPiece(piece, static_cast<double>(right * piece_duration), singul,
+                         yaw, &ignored_angular_velocity)) {
       return true;
     }
-    const double midpoint = 0.5 * (left + right);
-    if (!headingFromPiece(piece, midpoint, singul, yaw,
+    const long double midpoint = 0.5L * (left + right);
+    if (!headingFromPiece(piece, static_cast<double>(midpoint * piece_duration), singul, yaw,
                           &ignored_angular_velocity)) {
       continue;
     }
 
-    double lower_bound = midpoint;
-    double upper_bound = right;
+    long double lower_bound = midpoint;
+    long double upper_bound = right;
     for (std::size_t iteration = 0;
          iteration < kHeadingBisectionIterations; ++iteration) {
-      const double candidate_time = 0.5 * (lower_bound + upper_bound);
-      if (headingFromPiece(piece, candidate_time, singul, yaw,
+      const long double candidate_time = 0.5L * (lower_bound + upper_bound);
+      if (headingFromPiece(piece,
+                           static_cast<double>(candidate_time * piece_duration), singul, yaw,
                            &ignored_angular_velocity)) {
         lower_bound = candidate_time;
       } else {
         upper_bound = candidate_time;
       }
     }
-    return headingFromPiece(piece, lower_bound, singul, yaw,
+    return headingFromPiece(piece, static_cast<double>(lower_bound * piece_duration), singul, yaw,
                             &ignored_angular_velocity);
   }
+  // ################################
   return headingFromPiece(piece, 0.0, singul, yaw, &ignored_angular_velocity);
 }
 
