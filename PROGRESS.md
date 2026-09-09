@@ -2,9 +2,9 @@
 
 **Goal:** Ranger + CR10 whole-body planning/visualization on branch `topay`.
 
-**Branch / HEAD:** `topay` (local uncommitted: whole-body traj hard gate).
+**Branch / HEAD:** `topay` @ `d436094`.
 
-**Current status:** Soft-opt traj could publish box-penetrating paths; added unified hard validator + wire into optimize/printConstraints/safeCallback.
+**Current status:** Soft-opt traj could publish box-penetrating paths; unified hard validator wired into optimize / printConstraints / safeCallback.
 
 **Verified:**
 - `test_trajectory_collision_checker` A/B/C PASS.
@@ -15,4 +15,4 @@
 - Do not change visual root / box grid / `obstacle_radius` / collision weights.
 - Hard safety = `checkWholeBodyTrajectoryCollision` → `GridMap::isWholeBodyCollision` only.
 
-**Open:** `map.pcd` local dirty — do not commit. Commit/push hard-gate when asked.
+**Open:** `map.pcd` local dirty — do not commit.
