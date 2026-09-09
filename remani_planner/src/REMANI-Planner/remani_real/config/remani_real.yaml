@@ -24,3 +24,24 @@ state_bridge:
 # ################################
 # YAML: remani_real State Bridge defaults end
 # ################################
+
+# ################################
+# YAML: remani_real candidate validation defaults begin
+# ################################
+candidate_validation:
+  validation_dt: 0.01
+  start_base_xy_tol: 0.05
+  start_base_yaw_tol_deg: 5.0
+  start_joint_tol_deg: 3.0
+  max_base_linear_speed: 0.10
+  max_base_angular_speed: 0.15
+  max_joint_speed: 0.10
+  continuity_pos_tol: 1.0e-4
+  continuity_vel_tol: 1.0e-3
+  continuity_acc_tol: 1.0e-2
+preview:
+  path_dt: 0.05
+  robot_dt: 0.25
+# ################################
+# YAML: remani_real candidate validation defaults end
+# ################################

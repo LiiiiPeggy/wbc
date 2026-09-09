@@ -3,6 +3,15 @@ project(remani_real)
 
 find_package(Eigen3 REQUIRED)
 find_package(catkin REQUIRED COMPONENTS
+  # ################################
+  # CMake: Task4 validation/preview deps begin
+  # ################################
+  mm_config
+  plan_env
+  visualization_msgs
+  # ################################
+  # CMake: Task4 validation/preview deps end
+  # ################################
   nav_msgs
   quadrotor_msgs
   remani_real_msgs
@@ -16,7 +25,7 @@ find_package(catkin REQUIRED COMPONENTS
 catkin_package(
   INCLUDE_DIRS include
   LIBRARIES remani_real_candidate remani_real_state_bridge
-  CATKIN_DEPENDS nav_msgs quadrotor_msgs remani_real_msgs roscpp sensor_msgs tf2 tf2_ros mm_controller
+  CATKIN_DEPENDS mm_config plan_env visualization_msgs nav_msgs quadrotor_msgs remani_real_msgs roscpp sensor_msgs tf2 tf2_ros mm_controller
   DEPENDS EIGEN3
 )
 
@@ -30,6 +39,15 @@ include_directories(
 add_library(remani_real_candidate
   src/candidate_trajectory.cpp
   src/candidate_assembler.cpp
+  # ################################
+  # CMake: Task4 validator/preview sources begin
+  # ################################
+  src/candidate_validator.cpp
+  src/preview_publisher.cpp
+  src/mm_config_validation_environment.cpp
+  # ################################
+  # CMake: Task4 validator/preview sources end
+  # ################################
 )
 target_compile_features(remani_real_candidate PUBLIC cxx_std_14)
 add_dependencies(remani_real_candidate ${catkin_EXPORTED_TARGETS})
@@ -104,6 +122,23 @@ if(CATKIN_ENABLE_TESTING)
   endif()
   # ################################
   # CMake: CandidateAssembler gtest end
+  # ################################
+
+  # ################################
+  # CMake: CandidateValidator gtest begin
+  # ################################
+  catkin_add_gtest(test_candidate_validator
+    test/test_candidate_validator.cpp
+  )
+  if(TARGET test_candidate_validator)
+    target_compile_features(test_candidate_validator PRIVATE cxx_std_14)
+    target_link_libraries(test_candidate_validator
+      remani_real_candidate
+      ${catkin_LIBRARIES}
+    )
+  endif()
+  # ################################
+  # CMake: CandidateValidator gtest end
   # ################################
 
   # ################################
