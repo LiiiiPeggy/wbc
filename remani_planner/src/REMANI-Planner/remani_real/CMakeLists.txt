@@ -12,6 +12,14 @@ find_package(catkin REQUIRED COMPONENTS
   # ################################
   # CMake: Task4 validation/preview deps end
   # ################################
+  # ################################
+  # CMake: Task5 motion-output deps begin
+  # ################################
+  geometry_msgs
+  trajectory_msgs
+  # ################################
+  # CMake: Task5 motion-output deps end
+  # ################################
   nav_msgs
   quadrotor_msgs
   remani_real_msgs
@@ -25,7 +33,7 @@ find_package(catkin REQUIRED COMPONENTS
 catkin_package(
   INCLUDE_DIRS include
   LIBRARIES remani_real_candidate remani_real_state_bridge
-  CATKIN_DEPENDS mm_config plan_env visualization_msgs nav_msgs quadrotor_msgs remani_real_msgs roscpp sensor_msgs tf2 tf2_ros mm_controller
+  CATKIN_DEPENDS mm_config plan_env visualization_msgs geometry_msgs trajectory_msgs nav_msgs quadrotor_msgs remani_real_msgs roscpp sensor_msgs tf2 tf2_ros mm_controller
   DEPENDS EIGEN3
 )
 
@@ -45,6 +53,13 @@ add_library(remani_real_candidate
   src/candidate_validator.cpp
   src/preview_publisher.cpp
   src/mm_config_validation_environment.cpp
+  # ################################
+  # CMake: Task5 deployment SM begin
+  # ################################
+  src/deployment_state_machine.cpp
+  # ################################
+  # CMake: Task5 deployment SM end
+  # ################################
   # ################################
   # CMake: Task4 validator/preview sources end
   # ################################
@@ -139,6 +154,23 @@ if(CATKIN_ENABLE_TESTING)
   endif()
   # ################################
   # CMake: CandidateValidator gtest end
+  # ################################
+
+  # ################################
+  # CMake: DeploymentStateMachine gtest begin
+  # ################################
+  catkin_add_gtest(test_deployment_state_machine
+    test/test_deployment_state_machine.cpp
+  )
+  if(TARGET test_deployment_state_machine)
+    target_compile_features(test_deployment_state_machine PRIVATE cxx_std_14)
+    target_link_libraries(test_deployment_state_machine
+      remani_real_candidate
+      ${catkin_LIBRARIES}
+    )
+  endif()
+  # ################################
+  # CMake: DeploymentStateMachine gtest end
   # ################################
 
   # ################################
