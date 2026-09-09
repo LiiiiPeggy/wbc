@@ -32,7 +32,7 @@ void VelocityEstimator::reset() {
 VelocityEstimate VelocityEstimator::update(
     const ros::Time& stamp, const Eigen::Matrix<double, 6, 1>& q) {
   VelocityEstimate invalid;
-  if (!stamp.isValid() || !q.allFinite()) {
+  if (stamp.isZero() || !q.allFinite()) {
     reset();
     return invalid;
   }

@@ -86,6 +86,16 @@ TEST(VelocityEstimator, RejectsNonFinitePositions) {
   EXPECT_FALSE(estimator.update(ros::Time(1.2), q).valid);
 }
 
+// ################################
+// C++: Reject zero timestamps that are "valid" as a ROS Time type but unusable.
+// ################################
+TEST(VelocityEstimator, RejectsZeroTimestamp) {
+  VelocityEstimator estimator(/*min_samples=*/3, /*max_abs_velocity=*/3.0,
+                              /*alpha=*/1.0);
+  Eigen::Matrix<double, 6, 1> q = Eigen::Matrix<double, 6, 1>::Zero();
+  EXPECT_FALSE(estimator.update(ros::Time(0.0), q).valid);
+}
+
 }  // namespace
 }  // namespace remani_real
 

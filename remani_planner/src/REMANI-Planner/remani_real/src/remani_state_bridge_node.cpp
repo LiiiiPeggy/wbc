@@ -129,10 +129,14 @@ class RemaniStateBridgeNode {
   }
 
   void onOdom(const nav_msgs::Odometry::ConstPtr& msg) {
+    // ################################
+    // C++: Reject non-finite odom pose including z before TF publish.
+    // ################################
     if (msg->header.frame_id != "world" ||
         msg->child_frame_id != "base_link" ||
         !std::isfinite(msg->pose.pose.position.x) ||
         !std::isfinite(msg->pose.pose.position.y) ||
+        !std::isfinite(msg->pose.pose.position.z) ||
         !std::isfinite(msg->pose.pose.orientation.x) ||
         !std::isfinite(msg->pose.pose.orientation.y) ||
         !std::isfinite(msg->pose.pose.orientation.z) ||
