@@ -78,7 +78,7 @@ void PreviewPublisher::publish(const FrozenCandidate& candidate,
   const bool rejected = !report.valid;
   int marker_id = 0;
 
-  auto appendSample = [&](double t, bool emit_robot) {
+  auto appendPathSample = [&](double t) {
     const WholeBodySample sample = candidate->sample(t);
     geometry_msgs::PoseStamped base_pose;
     base_pose.header = base_path.header;
@@ -101,17 +101,22 @@ void PreviewPublisher::publish(const FrozenCandidate& candidate,
       ee_pose.pose.position.z = ee(2, 3);
       ee_path.poses.push_back(ee_pose);
     }
+    return sample;
+  };
 
-    if (!emit_robot) {
-      return;
-    }
+  auto appendRobotMarker = [&](double t) {
+    const WholeBodySample sample = candidate->sample(t);
     visualization_msgs::Marker marker;
     marker.header = base_path.header;
     marker.ns = ns;
     marker.id = marker_id++;
     marker.type = visualization_msgs::Marker::ARROW;
     marker.action = visualization_msgs::Marker::ADD;
-    marker.pose = base_pose.pose;
+    marker.pose.position.x = sample.position(0);
+    marker.pose.position.y = sample.position(1);
+    marker.pose.position.z = 0.0;
+    marker.pose.orientation.z = std::sin(0.5 * sample.base_yaw);
+    marker.pose.orientation.w = std::cos(0.5 * sample.base_yaw);
     marker.scale.x = 0.35;
     marker.scale.y = 0.08;
     marker.scale.z = 0.08;
@@ -121,15 +126,21 @@ void PreviewPublisher::publish(const FrozenCandidate& candidate,
   };
 
   if (duration > 0.0) {
+    // ################################
+    // C++: path samples and sparse robot markers stay separate begin
+    // ################################
     for (double t = 0.0; t < duration; t += kPathDt) {
-      appendSample(t, false);
+      appendPathSample(t);
     }
-    appendSample(duration, false);
+    appendPathSample(duration);
 
     for (double t = 0.0; t < duration; t += kRobotDt) {
-      appendSample(t, true);
+      appendRobotMarker(t);
     }
-    appendSample(duration, true);
+    appendRobotMarker(duration);
+    // ################################
+    // C++: path samples and sparse robot markers stay separate end
+    // ################################
   }
 
   if (rejected) {
