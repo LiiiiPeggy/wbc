@@ -2,7 +2,7 @@
 
 **Goal:** Ranger + CR10 whole-body planning/visualization on branch `topay`.
 
-**Branch / HEAD:** `topay` (visual/box geometry follow-up in progress).
+**Branch / HEAD:** `topay` @ `b83bad7`.
 
 **Current status:** Diagnosed RViz Box/LiDAR “embed” + Box env collision; dual CAD marker deduped; box_obstacle densified for STL coverage; GridMap A–D redesigned.
 
@@ -16,4 +16,4 @@
 
 **Open:** `map.pcd` local dirty — do not commit.
 
-**Next:** commit/push when asked; optional interactive RViz re-check.
+**Next:** push when asked; optional interactive RViz re-check.
