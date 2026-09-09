@@ -19,6 +19,20 @@ bool MmConfigValidationEnvironment::samplesInMap(
     return false;
   }
   remani_planner::MMConfig& cfg = *config_;
+  // ################################
+  // C++: include mobile-base footprint samples in map bounds begin
+  // ################################
+  std::vector<Eigen::Vector3d> car_pts;
+  cfg.getCarPts(car_state, car_pts);
+  for (const Eigen::Vector3d& point : car_pts) {
+    if (!map_->isInMap(point)) {
+      return false;
+    }
+  }
+  // ################################
+  // C++: include mobile-base footprint samples in map bounds end
+  // ################################
+
   Eigen::Matrix4d T_car = Eigen::Matrix4d::Identity();
   T_car(0, 3) = car_state(0);
   T_car(1, 3) = car_state(1);

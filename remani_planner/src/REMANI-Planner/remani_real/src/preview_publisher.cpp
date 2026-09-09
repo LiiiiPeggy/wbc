@@ -139,14 +139,17 @@ void PreviewPublisher::publish(const FrozenCandidate& candidate,
     diag.id = marker_id++;
     diag.type = visualization_msgs::Marker::TEXT_VIEW_FACING;
     diag.action = visualization_msgs::Marker::ADD;
-    diag.pose.position.x =
-        report.final_base_xy.x() != 0.0 || !base_path.poses.empty()
-            ? (base_path.poses.empty() ? 0.0 : base_path.poses.front().pose.position.x)
-            : 0.0;
-    diag.pose.position.y =
-        base_path.poses.empty() ? 0.0 : base_path.poses.front().pose.position.y;
+    if (!base_path.poses.empty()) {
+      diag.pose = base_path.poses.front().pose;
+    } else if (candidate->duration() > 0.0) {
+      const WholeBodySample start = candidate->sample(0.0);
+      diag.pose.position.x = start.position(0);
+      diag.pose.position.y = start.position(1);
+      diag.pose.orientation.w = 1.0;
+    } else {
+      diag.pose.orientation.w = 1.0;
+    }
     diag.pose.position.z = 0.6;
-    diag.pose.orientation.w = 1.0;
     diag.scale.z = 0.2;
     diag.color = makeColor(1.0f, 0.1f, 0.1f);
     diag.text = report.error_code.empty() ? "REJECTED" : report.error_code;

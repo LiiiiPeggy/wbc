@@ -48,9 +48,11 @@ const char* collisionTypeName(int coll_type) {
   }
 }
 
-ValidationReport failReport(const std::string& code, const std::string& detail) {
+ValidationReport failReport(double duration, const std::string& code,
+                            const std::string& detail) {
   ValidationReport report;
   report.valid = false;
+  report.duration = duration;
   report.error_code = code;
   report.detail = detail;
   return report;
@@ -100,17 +102,20 @@ ValidationReport CandidateValidator::validate(
     const FrozenCandidate& candidate,
     const ActualStateSnapshot& actual) const {
   if (!candidate) {
-    return failReport("EMPTY_CANDIDATE", "frozen candidate is null");
+    return failReport(0.0, "EMPTY_CANDIDATE", "frozen candidate is null");
   }
+  const double duration = candidate->duration();
   if (environment_ == nullptr) {
-    return failReport("MISSING_ENVIRONMENT", "validation environment is null");
+    return failReport(duration, "MISSING_ENVIRONMENT",
+                      "validation environment is null");
   }
-  if (candidate->segments().empty() || !(candidate->duration() > 0.0)) {
-    return failReport("EMPTY_CANDIDATE", "candidate has no positive duration");
+  if (candidate->segments().empty() || !(duration > 0.0)) {
+    return failReport(duration, "EMPTY_CANDIDATE",
+                      "candidate has no positive duration");
   }
 
   ValidationReport report;
-  report.duration = candidate->duration();
+  report.duration = duration;
 
   std::string continuity_detail;
   const std::vector<CandidateSegment>& segments = candidate->segments();
@@ -128,7 +133,7 @@ ValidationReport CandidateValidator::validate(
                                right.getPos(0.0), right.getVel(0.0),
                                right.getAcc(0.0), limits_,
                                &continuity_detail)) {
-        return failReport("SEGMENT_CONTINUITY",
+        return failReport(duration, "SEGMENT_CONTINUITY",
                           "piece boundary: " + continuity_detail);
       }
     }
@@ -143,7 +148,7 @@ ValidationReport CandidateValidator::validate(
                                right.getPos(0.0), right.getVel(0.0),
                                right.getAcc(0.0), limits_,
                                &continuity_detail)) {
-        return failReport("SEGMENT_CONTINUITY",
+        return failReport(duration, "SEGMENT_CONTINUITY",
                           "ADD boundary: " + continuity_detail);
       }
     }
@@ -153,24 +158,27 @@ ValidationReport CandidateValidator::validate(
   try {
     start = candidate->sample(0.0);
   } catch (const std::exception& ex) {
-    return failReport("NON_FINITE_SAMPLE", ex.what());
+    return failReport(duration, "NON_FINITE_SAMPLE", ex.what());
   }
   if (!allFinite(start.position) || !allFinite(start.velocity) ||
       !allFinite(start.acceleration) || start.position.size() != 8) {
-    return failReport("NON_FINITE_SAMPLE", "start sample is invalid");
+    return failReport(duration, "NON_FINITE_SAMPLE", "start sample is invalid");
   }
 
   const Eigen::Vector2d start_xy = start.position.head<2>();
   if ((start_xy - actual.base_xy).norm() > limits_.start_base_xy_tol) {
-    return failReport("START_STATE_MISMATCH", "base xy exceeds tolerance");
+    return failReport(duration, "START_STATE_MISMATCH",
+                      "base xy exceeds tolerance");
   }
   if (std::abs(wrapAngle(start.base_yaw - actual.base_yaw)) >
       limits_.start_base_yaw_tol) {
-    return failReport("START_STATE_MISMATCH", "base yaw exceeds tolerance");
+    return failReport(duration, "START_STATE_MISMATCH",
+                      "base yaw exceeds tolerance");
   }
   const Eigen::Matrix<double, 6, 1> start_q = start.position.segment<6>(2);
   if ((start_q - actual.q).cwiseAbs().maxCoeff() > limits_.start_joint_tol) {
-    return failReport("START_STATE_MISMATCH", "joint error exceeds tolerance");
+    return failReport(duration, "START_STATE_MISMATCH",
+                      "joint error exceeds tolerance");
   }
 
   const double dt = limits_.validation_dt > 0.0 ? limits_.validation_dt : 0.01;
@@ -183,13 +191,14 @@ ValidationReport CandidateValidator::validate(
     try {
       sample = candidate->sample(sample_t);
     } catch (const std::exception& ex) {
-      return failReport("NON_FINITE_SAMPLE", ex.what());
+      return failReport(duration, "NON_FINITE_SAMPLE", ex.what());
     }
     if (!allFinite(sample.position) || !allFinite(sample.velocity) ||
         !allFinite(sample.acceleration) || sample.position.size() != 8 ||
         !std::isfinite(sample.base_yaw) ||
         !std::isfinite(sample.base_angular_velocity)) {
-      return failReport("NON_FINITE_SAMPLE", "sample contains non-finite values");
+      return failReport(duration, "NON_FINITE_SAMPLE",
+                        "sample contains non-finite values");
     }
 
     const double base_linear =
@@ -203,27 +212,30 @@ ValidationReport CandidateValidator::validate(
     report.max_joint_speed = std::max(report.max_joint_speed, joint_speed);
 
     if (base_linear > limits_.max_base_linear_speed) {
-      return failReport("BASE_SPEED_LIMIT", "base linear speed exceeded");
+      return failReport(duration, "BASE_SPEED_LIMIT",
+                        "base linear speed exceeded");
     }
     if (std::abs(sample.base_angular_velocity) >
         limits_.max_base_angular_speed) {
-      return failReport("BASE_SPEED_LIMIT", "base angular speed exceeded");
+      return failReport(duration, "BASE_SPEED_LIMIT",
+                        "base angular speed exceeded");
     }
     if (joint_speed > limits_.max_joint_speed) {
-      return failReport("JOINT_SPEED_LIMIT", "joint speed exceeded");
+      return failReport(duration, "JOINT_SPEED_LIMIT", "joint speed exceeded");
     }
 
     Eigen::Vector3d car_state;
     car_state << sample.position(0), sample.position(1), sample.base_yaw;
     const Eigen::VectorXd q = sample.position.segment(2, 6);
     if (!environment_->samplesInMap(car_state, q)) {
-      return failReport("MAP_BOUNDARY", "collision samples leave GridMap");
+      return failReport(duration, "MAP_BOUNDARY",
+                        "collision samples leave GridMap");
     }
     int coll_type = -1;
     if (environment_->inCollision(car_state, q, &coll_type)) {
       std::ostringstream detail;
       detail << "collision type=" << collisionTypeName(coll_type);
-      return failReport("WHOLE_BODY_COLLISION", detail.str());
+      return failReport(duration, "WHOLE_BODY_COLLISION", detail.str());
     }
 
     if (is_final) {

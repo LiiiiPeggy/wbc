@@ -185,6 +185,22 @@ TEST(CandidateValidator, RejectsBaseSpeedLimit) {
   EXPECT_EQ("BASE_SPEED_LIMIT", report.error_code);
 }
 
+TEST(CandidateValidator, RejectsBaseAngularSpeedLimit) {
+  FakeEnv env;
+  CandidateValidator validator(ValidationLimits{}, &env);
+  const Eigen::Matrix<double, 6, 1> q = Eigen::Matrix<double, 6, 1>::Zero();
+  MMController::Piece::CoefficientMat coeff = poseCoeff(0.0, 0.0, q, 0.05, 0.0);
+  // ay(0)=2*coeff(1,5); omega=(vx*ay)/vx^2 = ay/vx → 0.02/0.05=0.4 > 0.15.
+  coeff(1, 5) = 0.01;
+  const auto candidate =
+      makeCandidate(10, 0.0, {makeSegment(1, 1, 0.0, 1.0, coeff)});
+  const ValidationReport report =
+      validator.validate(candidate, matchingActual(candidate));
+  EXPECT_FALSE(report.valid);
+  EXPECT_EQ("BASE_SPEED_LIMIT", report.error_code);
+  EXPECT_NEAR(1.0, report.duration, 1e-12);
+}
+
 TEST(CandidateValidator, RejectsJointSpeedLimit) {
   FakeEnv env;
   CandidateValidator validator(ValidationLimits{}, &env);
@@ -288,6 +304,38 @@ TEST(CandidateValidator, RealEnvRejectsTinyMapBoundary) {
       validator.validate(candidate, matchingActual(candidate));
   EXPECT_FALSE(report.valid);
   EXPECT_EQ("MAP_BOUNDARY", report.error_code);
+}
+
+TEST(CandidateValidator, RealEnvRejectsCarFootprintMapBoundary) {
+  ros::NodeHandle nh("~car_footprint");
+  configureMm(nh);
+  // Prefer a pose where checkcollision already reports car-obs out-of-map, and
+  // samplesInMap must agree after including getCarPts.
+  auto env = makeMmEnv(nh, 3.0);
+  CandidateValidator validator(ValidationLimits{}, env.get());
+
+  const Eigen::Matrix<double, 6, 1> q = Eigen::Matrix<double, 6, 1>::Zero();
+  double chosen_x = 0.0;
+  bool found = false;
+  for (double x = 0.0; x <= 1.40; x += 0.05) {
+    Eigen::Vector3d car(x, 0.0, 0.0);
+    int coll_type = -1;
+    if (env->inCollision(car, q, &coll_type) && coll_type == 0 &&
+        !env->samplesInMap(car, q)) {
+      chosen_x = x;
+      found = true;
+      break;
+    }
+  }
+  ASSERT_TRUE(found) << "no car-footprint MAP_BOUNDARY fixture found";
+
+  const auto candidate = makeCandidate(
+      11, 0.0, {makeSegment(1, 1, 0.0, 0.5, poseCoeff(chosen_x, 0.0, q))});
+  const ValidationReport report =
+      validator.validate(candidate, matchingActual(candidate));
+  EXPECT_FALSE(report.valid);
+  EXPECT_EQ("MAP_BOUNDARY", report.error_code);
+  EXPECT_NEAR(0.5, report.duration, 1e-12);
 }
 
 TEST(PreviewPublisher, AdvertisesOnlyIsolatedPreviewTopics) {
