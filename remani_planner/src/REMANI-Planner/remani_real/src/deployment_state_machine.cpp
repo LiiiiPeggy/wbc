@@ -11,16 +11,24 @@ uint64_t DeploymentStateMachine::plannedCandidateId() const {
   return planned_candidate_id_;
 }
 
+uint64_t DeploymentStateMachine::planSessionId() const {
+  return plan_session_id_;
+}
+
 CommandPermissions DeploymentStateMachine::permissions() const {
   return permissionsFor(state_);
 }
 
 bool DeploymentStateMachine::newTransactionAllowed() const {
-  // Gate may accept START only outside an executing/paused frozen candidate.
-  return state_ != State::Executing && state_ != State::Paused;
+  // START is admitted only during an active Panel Plan session.
+  return state_ == State::Planning;
 }
 
 bool DeploymentStateMachine::readinessOk() const { return isReady(readiness_); }
+
+void DeploymentStateMachine::clearExecutionFlags() {
+  pause_requested_ = false;
+}
 
 void DeploymentStateMachine::updateReadiness(const ReadinessSnapshot& readiness) {
   readiness_ = readiness;
@@ -42,6 +50,7 @@ void DeploymentStateMachine::updateReadiness(const ReadinessSnapshot& readiness)
     case State::Paused:
       if (!ready) {
         planned_candidate_id_ = 0;
+        clearExecutionFlags();
         last_error_code_ = "READINESS_LOST";
         state_ = State::Error;
       }
@@ -70,7 +79,9 @@ CommandResult DeploymentStateMachine::requestPlan() {
     return reject("NOT_READY", "readiness snapshot is incomplete");
   }
   planned_candidate_id_ = 0;
+  clearExecutionFlags();
   last_error_code_.clear();
+  ++plan_session_id_;
   state_ = State::Planning;
   return accept();
 }
@@ -86,6 +97,7 @@ CommandResult DeploymentStateMachine::requestExecute(uint64_t candidate_id) {
       candidate_id != planned_candidate_id_) {
     return reject("STALE_CANDIDATE", "execute candidate_id mismatch");
   }
+  clearExecutionFlags();
   state_ = State::Executing;
   return accept();
 }
@@ -95,6 +107,7 @@ CommandResult DeploymentStateMachine::requestPause() {
     return reject("PAUSE_DENIED", "pause is not permitted in current state");
   }
   // Remain Executing until both devices confirm stopped.
+  pause_requested_ = true;
   return accept();
 }
 
@@ -108,6 +121,7 @@ CommandResult DeploymentStateMachine::requestResume(bool within_tolerance) {
   if (!isReady(readiness_)) {
     return reject("NOT_READY", "resume requires readiness");
   }
+  clearExecutionFlags();
   state_ = State::Executing;
   return accept();
 }
@@ -120,14 +134,20 @@ CommandResult DeploymentStateMachine::requestAbort() {
     return reject("NOT_READY", "error abort requires restored health");
   }
   planned_candidate_id_ = 0;
+  clearExecutionFlags();
   last_error_code_.clear();
+  // Bump the session so late Gate callbacks from the aborted Plan are ignored.
+  if (state_ == State::Planning) {
+    ++plan_session_id_;
+  }
   state_ = State::Ready;
   return accept();
 }
 
 void DeploymentStateMachine::onCandidateValidated(uint64_t candidate_id,
-                                                  bool valid) {
-  if (state_ != State::Planning) {
+                                                  bool valid,
+                                                  uint64_t plan_session_id) {
+  if (state_ != State::Planning || plan_session_id != plan_session_id_) {
     return;
   }
   if (!valid || candidate_id == 0) {
@@ -140,8 +160,9 @@ void DeploymentStateMachine::onCandidateValidated(uint64_t candidate_id,
 }
 
 void DeploymentStateMachine::onPlanningFailure(const std::string& error_code,
-                                               bool protocol_corruption) {
-  if (state_ != State::Planning) {
+                                               bool protocol_corruption,
+                                               uint64_t plan_session_id) {
+  if (state_ != State::Planning || plan_session_id != plan_session_id_) {
     return;
   }
   planned_candidate_id_ = 0;
@@ -150,13 +171,15 @@ void DeploymentStateMachine::onPlanningFailure(const std::string& error_code,
 }
 
 void DeploymentStateMachine::onPauseConfirmed() {
-  if (state_ == State::Executing) {
+  if (state_ == State::Executing && pause_requested_) {
+    pause_requested_ = false;
     state_ = State::Paused;
   }
 }
 
 void DeploymentStateMachine::onExecutionSucceeded() {
   if (state_ == State::Executing) {
+    clearExecutionFlags();
     state_ = State::Succeeded;
   }
 }
@@ -164,6 +187,7 @@ void DeploymentStateMachine::onExecutionSucceeded() {
 void DeploymentStateMachine::onExecutionFault(const std::string& error_code) {
   if (state_ == State::Executing || state_ == State::Paused) {
     planned_candidate_id_ = 0;
+    clearExecutionFlags();
     last_error_code_ = error_code;
     state_ = State::Error;
   }

@@ -91,7 +91,7 @@ TEST(DeploymentStateMachine, RequiresExplicitExecuteAfterValidFinal) {
   EXPECT_EQ(State::Ready, fsm.state());
   EXPECT_TRUE(fsm.requestPlan().accepted);
   EXPECT_EQ(State::Planning, fsm.state());
-  fsm.onCandidateValidated(7, true);
+  fsm.onCandidateValidated(7, true, fsm.planSessionId());
   EXPECT_EQ(State::Planned, fsm.state());
   EXPECT_TRUE(fsm.requestExecute(7).accepted);
   EXPECT_EQ(State::Executing, fsm.state());
@@ -101,7 +101,7 @@ TEST(DeploymentStateMachine, RejectsStaleIdAndNewStartWhileExecuting) {
   DeploymentStateMachine fsm;
   fsm.updateReadiness(readySnapshot());
   ASSERT_TRUE(fsm.requestPlan().accepted);
-  fsm.onCandidateValidated(8, true);
+  fsm.onCandidateValidated(8, true, fsm.planSessionId());
   EXPECT_FALSE(fsm.requestExecute(7).accepted);
   ASSERT_TRUE(fsm.requestExecute(8).accepted);
   EXPECT_FALSE(fsm.newTransactionAllowed());
@@ -112,7 +112,7 @@ TEST(DeploymentStateMachine, OrdinaryPlanningFailureReturnsReady) {
   DeploymentStateMachine fsm;
   fsm.updateReadiness(readySnapshot());
   ASSERT_TRUE(fsm.requestPlan().accepted);
-  fsm.onPlanningFailure("NO_PATH", false);
+  fsm.onPlanningFailure("NO_PATH", false, fsm.planSessionId());
   EXPECT_EQ(State::Ready, fsm.state());
   EXPECT_TRUE(fsm.permissions().plan);
 }
@@ -121,7 +121,7 @@ TEST(DeploymentStateMachine, ProtocolCorruptionEntersError) {
   DeploymentStateMachine fsm;
   fsm.updateReadiness(readySnapshot());
   ASSERT_TRUE(fsm.requestPlan().accepted);
-  fsm.onPlanningFailure("SEGMENT_SEQUENCE", true);
+  fsm.onPlanningFailure("SEGMENT_SEQUENCE", true, fsm.planSessionId());
   EXPECT_EQ(State::Error, fsm.state());
   EXPECT_TRUE(fsm.permissions().abort);
   EXPECT_FALSE(fsm.permissions().plan);
@@ -131,7 +131,7 @@ TEST(DeploymentStateMachine, PlannedPermissionsAndAbort) {
   DeploymentStateMachine fsm;
   fsm.updateReadiness(readySnapshot());
   ASSERT_TRUE(fsm.requestPlan().accepted);
-  fsm.onCandidateValidated(3, true);
+  fsm.onCandidateValidated(3, true, fsm.planSessionId());
   const CommandPermissions perms = fsm.permissions();
   EXPECT_TRUE(perms.plan);
   EXPECT_TRUE(perms.execute);
@@ -147,7 +147,7 @@ TEST(DeploymentStateMachine, PauseResumeAbortLifecycle) {
   DeploymentStateMachine fsm;
   fsm.updateReadiness(readySnapshot());
   ASSERT_TRUE(fsm.requestPlan().accepted);
-  fsm.onCandidateValidated(4, true);
+  fsm.onCandidateValidated(4, true, fsm.planSessionId());
   ASSERT_TRUE(fsm.requestExecute(4).accepted);
   EXPECT_TRUE(fsm.permissions().pause);
   ASSERT_TRUE(fsm.requestPause().accepted);
@@ -167,7 +167,7 @@ TEST(DeploymentStateMachine, ExecutionSuccessAndReplan) {
   DeploymentStateMachine fsm;
   fsm.updateReadiness(readySnapshot());
   ASSERT_TRUE(fsm.requestPlan().accepted);
-  fsm.onCandidateValidated(5, true);
+  fsm.onCandidateValidated(5, true, fsm.planSessionId());
   ASSERT_TRUE(fsm.requestExecute(5).accepted);
   fsm.onExecutionSucceeded();
   EXPECT_EQ(State::Succeeded, fsm.state());
@@ -181,7 +181,7 @@ TEST(DeploymentStateMachine, ReadinessLossDuringExecutionEntersError) {
   DeploymentStateMachine fsm;
   fsm.updateReadiness(readySnapshot());
   ASSERT_TRUE(fsm.requestPlan().accepted);
-  fsm.onCandidateValidated(6, true);
+  fsm.onCandidateValidated(6, true, fsm.planSessionId());
   ASSERT_TRUE(fsm.requestExecute(6).accepted);
   ReadinessSnapshot lost = readySnapshot();
   lost.odom = false;
@@ -197,9 +197,56 @@ TEST(DeploymentStateMachine, InvalidValidationReturnsReady) {
   DeploymentStateMachine fsm;
   fsm.updateReadiness(readySnapshot());
   ASSERT_TRUE(fsm.requestPlan().accepted);
-  fsm.onCandidateValidated(9, false);
+  fsm.onCandidateValidated(9, false, fsm.planSessionId());
   EXPECT_EQ(State::Ready, fsm.state());
   EXPECT_EQ(0u, fsm.plannedCandidateId());
+}
+
+TEST(DeploymentStateMachine, IgnoresStalePlanningCallbacksAfterAbortReplan) {
+  DeploymentStateMachine fsm;
+  fsm.updateReadiness(readySnapshot());
+  ASSERT_TRUE(fsm.requestPlan().accepted);
+  const uint64_t stale_session = fsm.planSessionId();
+  ASSERT_TRUE(fsm.requestAbort().accepted);
+  ASSERT_TRUE(fsm.requestPlan().accepted);
+  const uint64_t live_session = fsm.planSessionId();
+  EXPECT_NE(stale_session, live_session);
+
+  fsm.onCandidateValidated(7, true, stale_session);
+  EXPECT_EQ(State::Planning, fsm.state());
+  EXPECT_EQ(0u, fsm.plannedCandidateId());
+
+  fsm.onPlanningFailure("NO_PATH", false, stale_session);
+  EXPECT_EQ(State::Planning, fsm.state());
+
+  fsm.onCandidateValidated(11, true, live_session);
+  EXPECT_EQ(State::Planned, fsm.state());
+  EXPECT_EQ(11u, fsm.plannedCandidateId());
+}
+
+TEST(DeploymentStateMachine, NewTransactionAllowedOnlyWhilePlanning) {
+  DeploymentStateMachine fsm;
+  EXPECT_FALSE(fsm.newTransactionAllowed());
+  fsm.updateReadiness(readySnapshot());
+  EXPECT_FALSE(fsm.newTransactionAllowed());
+  ASSERT_TRUE(fsm.requestPlan().accepted);
+  EXPECT_TRUE(fsm.newTransactionAllowed());
+  fsm.onCandidateValidated(1, true, fsm.planSessionId());
+  EXPECT_FALSE(fsm.newTransactionAllowed());
+}
+
+TEST(DeploymentStateMachine, PauseConfirmRequiresAcceptedPause) {
+  DeploymentStateMachine fsm;
+  fsm.updateReadiness(readySnapshot());
+  ASSERT_TRUE(fsm.requestPlan().accepted);
+  fsm.onCandidateValidated(2, true, fsm.planSessionId());
+  ASSERT_TRUE(fsm.requestExecute(2).accepted);
+  fsm.onPauseConfirmed();
+  EXPECT_EQ(State::Executing, fsm.state());
+  ASSERT_TRUE(fsm.requestPause().accepted);
+  fsm.onPauseConfirmed();
+  EXPECT_EQ(State::Paused, fsm.state());
+  EXPECT_FALSE(fsm.newTransactionAllowed());
 }
 
 TEST(MotionOutputBoundary, ChannelsExposeHardwareEnableFlag) {
