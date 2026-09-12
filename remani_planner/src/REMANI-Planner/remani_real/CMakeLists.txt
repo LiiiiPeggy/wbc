@@ -61,6 +61,13 @@ add_library(remani_real_candidate
   # CMake: Task5 deployment SM end
   # ################################
   # ################################
+  # CMake: Task7 dry-run motion output begin
+  # ################################
+  src/dry_run_motion_output.cpp
+  # ################################
+  # CMake: Task7 dry-run motion output end
+  # ################################
+  # ################################
   # CMake: Task4 validator/preview sources end
   # ################################
 )
@@ -171,6 +178,23 @@ if(CATKIN_ENABLE_TESTING)
   endif()
   # ################################
   # CMake: DeploymentStateMachine gtest end
+  # ################################
+
+  # ################################
+  # CMake: DryRunMotionOutput gtest begin
+  # ################################
+  catkin_add_gtest(test_dry_run_output
+    test/test_dry_run_output.cpp
+  )
+  if(TARGET test_dry_run_output)
+    target_compile_features(test_dry_run_output PRIVATE cxx_std_14)
+    target_link_libraries(test_dry_run_output
+      remani_real_candidate
+      ${catkin_LIBRARIES}
+    )
+  endif()
+  # ################################
+  # CMake: DryRunMotionOutput gtest end
   # ################################
 
   # ################################
