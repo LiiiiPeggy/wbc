@@ -263,6 +263,21 @@ AssemblyEvent CandidateAssembler::consume(const quadrotor_msgs::PolynomialTraj& 
 FrozenCandidate CandidateAssembler::completedCandidate() const {
   return completed_;
 }
+
+// ################################
+// C++: poll assembly timeout without a candidate message begin
+// ################################
+AssemblyEvent CandidateAssembler::pollTimeout(const ros::SteadyTime& now) {
+  if (state_ != AssemblyState::Assembling || !timedOut(now)) {
+    return makeEvent(false, state_);
+  }
+  invalidate("ASSEMBLY_TIMEOUT");
+  return makeEvent(false, AssemblyState::Invalid, "ASSEMBLY_TIMEOUT",
+                   "assembly exceeded timeout before FINAL");
+}
+// ################################
+// C++: poll assembly timeout without a candidate message end
+// ################################
 // ################################
 // C++: CandidateAssembler implementation end
 // ################################

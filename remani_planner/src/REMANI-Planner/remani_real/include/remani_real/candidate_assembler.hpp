@@ -35,6 +35,13 @@ class CandidateAssembler {
                         double actual_start_yaw);
   FrozenCandidate completedCandidate() const;
   void invalidate(const std::string& reason);
+  // ################################
+  // C++: poll assembly timeout without a candidate message begin
+  // ################################
+  AssemblyEvent pollTimeout(const ros::SteadyTime& now);
+  // ################################
+  // C++: poll assembly timeout without a candidate message end
+  // ################################
 
  private:
   AssemblyEvent makeEvent(bool accepted, AssemblyState state,

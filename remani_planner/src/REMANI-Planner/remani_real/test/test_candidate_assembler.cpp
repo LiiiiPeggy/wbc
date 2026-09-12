@@ -249,6 +249,22 @@ TEST(CandidateAssembler, RejectsMalformedControlMessages) {
   EXPECT_FALSE(gate.consume(payload_abort, steadyAt(1), true, 0.0).accepted);
 }
 
+// ################################
+TEST(CandidateAssembler, PollTimeoutWithoutCandidateMessage) {
+  CandidateAssembler gate(60.0);
+  EXPECT_TRUE(gate.pollTimeout(steadyAt(0)).error_code.empty());
+  gate.consume(controlMessage(quadrotor_msgs::PolynomialTraj::ACTION_WARN_START),
+               steadyAt(0), true, 0.0);
+  gate.consume(validAdd(1), steadyAt(1), true, 0.0);
+  EXPECT_TRUE(gate.pollTimeout(steadyAt(30)).error_code.empty());
+  const AssemblyEvent timed_out = gate.pollTimeout(steadyAt(61));
+  EXPECT_FALSE(timed_out.accepted);
+  EXPECT_EQ(AssemblyState::Invalid, timed_out.state);
+  EXPECT_EQ("ASSEMBLY_TIMEOUT", timed_out.error_code);
+  EXPECT_TRUE(gate.pollTimeout(steadyAt(62)).error_code.empty());
+}
+// ################################
+
 }  // namespace
 }  // namespace remani_real
 

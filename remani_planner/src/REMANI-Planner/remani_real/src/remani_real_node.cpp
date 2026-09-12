@@ -250,6 +250,15 @@ class RemaniRealNode {
     if (!result.accepted) {
       ROS_WARN("Plan rejected: %s (%s)", result.error_code.c_str(),
                result.detail.c_str());
+    } else {
+      // ################################
+      // C++: capture plan session and isolate prior assembler begin
+      // ################################
+      active_plan_session_ = fsm_.planSessionId();
+      assembler_.invalidate("NEW_PLAN");
+      // ################################
+      // C++: capture plan session and isolate prior assembler end
+      // ################################
     }
     publishState();
   }
@@ -258,33 +267,68 @@ class RemaniRealNode {
     planner_state_ = msg->state;
   }
 
+  static bool isProtocolCorruption(const std::string& error_code) {
+    // ################################
+    // C++: protocol-corruption codes for Planning -> Error begin
+    // ################################
+    return error_code == "SEGMENT_SEQUENCE" ||
+           error_code == "UNKNOWN_ACTION" ||
+           error_code == "BAD_CONTROL" ||
+           error_code == "ASSEMBLY_TIMEOUT" ||
+           error_code == "INVALID_FINAL" ||
+           error_code == "INVALID_PIECE" ||
+           error_code == "INVALID_ABORT" ||
+           error_code == "INVALID_IMPOSSIBLE" ||
+           error_code == "INVALID_START" ||
+           error_code == "INVALID_START_YAW" ||
+           error_code == "EMPTY_ADD" ||
+           error_code == "INVALID_SINGUL" ||
+           error_code == "FINAL_WITHOUT_ADD" ||
+           error_code == "CANDIDATE_CONSTRUCT" ||
+           error_code == "DURATION_OVERFLOW";
+    // ################################
+    // C++: protocol-corruption codes for Planning -> Error end
+    // ################################
+  }
+
+  void applyPlanningFailure(const AssemblyEvent& event) {
+    if (event.error_code.empty()) {
+      return;
+    }
+    if (event.state != AssemblyState::Invalid && event.accepted) {
+      return;
+    }
+    // ################################
+    // C++: ignore idle/stale rejects after invalidate begin
+    // ################################
+    // After Plan/Abort invalidate, late ADD/FINAL must not kill the new session.
+    if (event.error_code == "ADD_WITHOUT_START" ||
+        event.error_code == "FINAL_WITHOUT_START" ||
+        event.error_code == "START_NOT_ALLOWED") {
+      return;
+    }
+    // ################################
+    // C++: ignore idle/stale rejects after invalidate end
+    // ################################
+    if (fsm_.state() != State::Planning) {
+      return;
+    }
+    fsm_.onPlanningFailure(event.error_code,
+                           isProtocolCorruption(event.error_code),
+                           active_plan_session_);
+  }
+
   void onPlannerCandidate(const quadrotor_msgs::PolynomialTraj::ConstPtr& msg) {
     fsm_.updateReadiness(readinessSnapshot());
     const bool allow = fsm_.newTransactionAllowed();
     const AssemblyEvent event = assembler_.consume(
         *msg, ros::SteadyTime::now(), allow, actual_.base_yaw);
     // ################################
-    // C++: planning failure includes accepted IMPOSSIBLE/ABORT Invalid begin
+    // C++: planning failure uses captured plan session begin
     // ################################
-    // Assembler returns accepted=true + Invalid for WARN_IMPOSSIBLE/ABORT;
-    // rejected events still carry error_code. Both must leave Planning.
-    const bool planning_invalid =
-        !event.error_code.empty() &&
-        (event.state == AssemblyState::Invalid || !event.accepted);
-    if (planning_invalid && fsm_.state() == State::Planning) {
-      const bool protocol =
-          event.error_code == "SEGMENT_SEQUENCE" ||
-          event.error_code == "UNKNOWN_ACTION" ||
-          event.error_code == "BAD_CONTROL" ||
-          event.error_code == "ASSEMBLY_TIMEOUT" ||
-          event.error_code == "INVALID_FINAL" ||
-          event.error_code == "INVALID_PIECE" ||
-          event.error_code == "INVALID_ABORT" ||
-          event.error_code == "INVALID_IMPOSSIBLE";
-      fsm_.onPlanningFailure(event.error_code, protocol, fsm_.planSessionId());
-    }
+    applyPlanningFailure(event);
     // ################################
-    // C++: planning failure includes accepted IMPOSSIBLE/ABORT Invalid end
+    // C++: planning failure uses captured plan session end
     // ################################
     if (event.accepted &&
         event.state == AssemblyState::Complete) {
@@ -292,7 +336,7 @@ class RemaniRealNode {
       report_ = validator_->validate(frozen_, actual_);
       preview_->publish(frozen_, report_, environment_.get());
       fsm_.onCandidateValidated(frozen_->id(), report_.valid,
-                                fsm_.planSessionId());
+                                active_plan_session_);
       if (!report_.valid) {
         ROS_WARN("Candidate validation failed: %s", report_.error_code.c_str());
       }
@@ -395,6 +439,13 @@ class RemaniRealNode {
     res.success = result.accepted;
     res.message = result.accepted ? "aborted" : result.error_code;
     if (result.accepted) {
+      // ################################
+      // C++: Abort isolates assembler from late FINAL begin
+      // ################################
+      assembler_.invalidate("ABORT");
+      // ################################
+      // C++: Abort isolates assembler from late FINAL end
+      // ################################
       paused_ = false;
       execution_progress_ = 0.0;
       dry_output_.stop();
@@ -405,6 +456,15 @@ class RemaniRealNode {
 
   void onTimer(const ros::TimerEvent&) {
     fsm_.updateReadiness(readinessSnapshot());
+    // ################################
+    // C++: poll assembler timeout while Planning begin
+    // ################################
+    if (fsm_.state() == State::Planning) {
+      applyPlanningFailure(assembler_.pollTimeout(ros::SteadyTime::now()));
+    }
+    // ################################
+    // C++: poll assembler timeout while Planning end
+    // ################################
     if (fsm_.state() == State::Executing && frozen_ && !paused_) {
       const double t =
           std::max(0.0, (ros::SteadyTime::now() - execute_start_).toSec());
@@ -461,6 +521,13 @@ class RemaniRealNode {
   ros::Timer timer_;
 
   uint8_t planner_state_{remani_real_msgs::PlannerStatus::IDLE};
+  // ################################
+  // C++: captured plan session for Gate callbacks begin
+  // ################################
+  uint64_t active_plan_session_{0};
+  // ################################
+  // C++: captured plan session for Gate callbacks end
+  // ################################
   bool have_odom_{false};
   bool have_joints_{false};
   bool have_status_{false};
