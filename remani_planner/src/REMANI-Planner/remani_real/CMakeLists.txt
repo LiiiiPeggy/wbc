@@ -20,6 +20,16 @@ find_package(catkin REQUIRED COMPONENTS
   # ################################
   # CMake: Task5 motion-output deps end
   # ################################
+  # ################################
+  # CMake: Task7 control-plane deps begin
+  # ################################
+  actionlib
+  control_msgs
+  std_msgs
+  std_srvs
+  # ################################
+  # CMake: Task7 control-plane deps end
+  # ################################
   nav_msgs
   quadrotor_msgs
   remani_real_msgs
@@ -33,7 +43,7 @@ find_package(catkin REQUIRED COMPONENTS
 catkin_package(
   INCLUDE_DIRS include
   LIBRARIES remani_real_candidate remani_real_state_bridge
-  CATKIN_DEPENDS mm_config plan_env visualization_msgs geometry_msgs trajectory_msgs nav_msgs quadrotor_msgs remani_real_msgs roscpp sensor_msgs tf2 tf2_ros mm_controller
+  CATKIN_DEPENDS mm_config plan_env visualization_msgs geometry_msgs trajectory_msgs actionlib control_msgs std_msgs std_srvs nav_msgs quadrotor_msgs remani_real_msgs roscpp sensor_msgs tf2 tf2_ros mm_controller
   DEPENDS EIGEN3
 )
 
@@ -103,7 +113,23 @@ target_link_libraries(remani_state_bridge_node
 # CMake: State Bridge mapping / velocity libraries end
 # ################################
 
-install(TARGETS remani_real_candidate remani_real_state_bridge remani_state_bridge_node
+# ################################
+# CMake: remani_real_node dry-run control plane begin
+# ################################
+add_executable(remani_real_node
+  src/remani_real_node.cpp
+)
+target_compile_features(remani_real_node PRIVATE cxx_std_14)
+add_dependencies(remani_real_node ${catkin_EXPORTED_TARGETS})
+target_link_libraries(remani_real_node
+  remani_real_candidate
+  ${catkin_LIBRARIES}
+)
+# ################################
+# CMake: remani_real_node dry-run control plane end
+# ################################
+
+install(TARGETS remani_real_candidate remani_real_state_bridge remani_state_bridge_node remani_real_node
   ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
   LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
   RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
@@ -115,6 +141,11 @@ install(DIRECTORY include/${PROJECT_NAME}/
 
 install(DIRECTORY config/
   DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}/config
+)
+
+install(DIRECTORY launch/
+  DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}/launch
+  OPTIONAL
 )
 
 if(CATKIN_ENABLE_TESTING)
@@ -225,8 +256,13 @@ if(CATKIN_ENABLE_TESTING)
   find_package(rostest REQUIRED)
   catkin_install_python(PROGRAMS
     test/test_state_bridge.py
+    test/fake_real_feedback_node.py
+    test/fake_ee_goal_marker.py
+    test/fake_candidate_planner.py
+    test/test_real_control_plane.py
     DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION})
   add_rostest(test/state_bridge.test)
+  add_rostest(test/real_control_plane.test)
   # ################################
   # CMake: State Bridge unit/rostests end
   # ################################

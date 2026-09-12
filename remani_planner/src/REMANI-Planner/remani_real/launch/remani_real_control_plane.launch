@@ -1,0 +1,20 @@
+<launch>
+  <!-- ################################ -->
+  <!-- Launch: Phase-2 dry-run control plane begin -->
+  <!-- ################################ -->
+  <arg name="dry_run" default="true"/>
+  <param name="/mode" value="real"/>
+  <param name="/execution_owner" value="external"/>
+  <param name="/environment_mode" value="static_empty"/>
+  <param name="/dry_run" value="$(arg dry_run)"/>
+
+  <rosparam command="load" file="$(find remani_real)/config/remani_real.yaml"/>
+
+  <node pkg="remani_real" type="remani_state_bridge_node"
+        name="remani_state_bridge" output="screen"/>
+  <node pkg="remani_real" type="remani_real_node"
+        name="remani_real_node" output="screen"/>
+  <!-- ################################ -->
+  <!-- Launch: Phase-2 dry-run control plane end -->
+  <!-- ################################ -->
+</launch>

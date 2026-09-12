@@ -52,6 +52,13 @@ class DeploymentStateMachine {
   CommandPermissions permissions() const;
   bool newTransactionAllowed() const;
   bool readinessOk() const;
+  // ################################
+  // C++: expose last fault code for ExecutionState begin
+  // ################################
+  const std::string& lastErrorCode() const;
+  // ################################
+  // C++: expose last fault code for ExecutionState end
+  // ################################
 
   void updateReadiness(const ReadinessSnapshot& readiness);
   CommandResult requestPlan();

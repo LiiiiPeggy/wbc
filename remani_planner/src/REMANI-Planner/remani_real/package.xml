@@ -30,6 +30,16 @@
   <!-- XML: Task5 motion-output deps end -->
   <!-- ################################ -->
   <!-- ################################ -->
+  <!-- XML: Task7 control-plane deps begin -->
+  <!-- ################################ -->
+  <build_depend>actionlib</build_depend>
+  <build_depend>control_msgs</build_depend>
+  <build_depend>std_msgs</build_depend>
+  <build_depend>std_srvs</build_depend>
+  <!-- ################################ -->
+  <!-- XML: Task7 control-plane deps end -->
+  <!-- ################################ -->
+  <!-- ################################ -->
   <!-- XML: State Bridge deps begin -->
   <!-- ################################ -->
   <build_depend>nav_msgs</build_depend>
@@ -61,6 +71,16 @@
   <build_export_depend>trajectory_msgs</build_export_depend>
   <!-- ################################ -->
   <!-- XML: Task5 motion-output export deps end -->
+  <!-- ################################ -->
+  <!-- ################################ -->
+  <!-- XML: Task7 control-plane export deps begin -->
+  <!-- ################################ -->
+  <build_export_depend>actionlib</build_export_depend>
+  <build_export_depend>control_msgs</build_export_depend>
+  <build_export_depend>std_msgs</build_export_depend>
+  <build_export_depend>std_srvs</build_export_depend>
+  <!-- ################################ -->
+  <!-- XML: Task7 control-plane export deps end -->
   <!-- ################################ -->
   <!-- ################################ -->
   <!-- XML: State Bridge export deps begin -->
@@ -96,6 +116,16 @@
   <!-- XML: Task5 motion-output exec deps end -->
   <!-- ################################ -->
   <!-- ################################ -->
+  <!-- XML: Task7 control-plane exec deps begin -->
+  <!-- ################################ -->
+  <exec_depend>actionlib</exec_depend>
+  <exec_depend>control_msgs</exec_depend>
+  <exec_depend>std_msgs</exec_depend>
+  <exec_depend>std_srvs</exec_depend>
+  <!-- ################################ -->
+  <!-- XML: Task7 control-plane exec deps end -->
+  <!-- ################################ -->
+  <!-- ################################ -->
   <!-- XML: State Bridge exec deps begin -->
   <!-- ################################ -->
   <exec_depend>nav_msgs</exec_depend>
@@ -116,6 +146,9 @@
   <test_depend>rostest</test_depend>
   <test_depend>rospy</test_depend>
   <test_depend>tf</test_depend>
+  <test_depend>actionlib</test_depend>
+  <test_depend>control_msgs</test_depend>
+  <test_depend>std_msgs</test_depend>
   <!-- ################################ -->
   <!-- XML: State Bridge test deps end -->
   <!-- ################################ -->

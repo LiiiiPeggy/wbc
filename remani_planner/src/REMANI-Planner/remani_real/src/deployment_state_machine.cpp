@@ -26,6 +26,16 @@ bool DeploymentStateMachine::newTransactionAllowed() const {
 
 bool DeploymentStateMachine::readinessOk() const { return isReady(readiness_); }
 
+// ################################
+// C++: expose last fault code for ExecutionState begin
+// ################################
+const std::string& DeploymentStateMachine::lastErrorCode() const {
+  return last_error_code_;
+}
+// ################################
+// C++: expose last fault code for ExecutionState end
+// ################################
+
 void DeploymentStateMachine::clearExecutionFlags() {
   pause_requested_ = false;
 }
