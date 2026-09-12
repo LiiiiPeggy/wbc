@@ -58,6 +58,13 @@ RemaniRealPanel::RemaniRealPanel(QWidget* parent) : rviz::Panel(parent) {
 
 void RemaniRealPanel::setBusy(bool busy) {
   click_busy_ = busy;
+  if (busy) {
+    // ################################
+    // C++: latch published state so busy clears only after a real transition
+    // ################################
+    busy_planner_state_ = latest_state_.planner_state;
+    busy_executor_state_ = latest_state_.executor_state;
+  }
   applyView();
 }
 
@@ -98,7 +105,14 @@ void RemaniRealPanel::onExecutionState(
     const remani_real_msgs::ExecutionState::ConstPtr& msg) {
   latest_state_ = *msg;
   have_state_ = true;
-  click_busy_ = false;
+  // ################################
+  // C++: clear click debounce only after planner/executor state changes begin
+  // ################################
+  if (click_busy_ &&
+      (msg->planner_state != busy_planner_state_ ||
+       msg->executor_state != busy_executor_state_)) {
+    click_busy_ = false;
+  }
   applyView();
 }
 

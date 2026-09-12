@@ -48,6 +48,8 @@ class RemaniRealPanel : public rviz::Panel {
   remani_real_msgs::ExecutionState latest_state_;
   bool have_state_{false};
   bool click_busy_{false};
+  uint8_t busy_planner_state_{0};
+  uint8_t busy_executor_state_{0};
 
   QPushButton* plan_button_{nullptr};
   QPushButton* execute_button_{nullptr};
