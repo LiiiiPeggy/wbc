@@ -88,6 +88,18 @@ TEST(PanelViewModel, ExecutingEnablesPauseAbort) {
   EXPECT_FALSE(view.execute_enabled);
 }
 
+TEST(PanelViewModel, PlannedInvalidKeepsAbortWithoutExecute) {
+  remani_real_msgs::ExecutionState msg = readyBase();
+  msg.executor_state = remani_real_msgs::ExecutionState::EXECUTOR_PLANNED;
+  msg.candidate_id = 21;
+  msg.candidate_complete = true;
+  msg.candidate_valid = false;
+  const auto view = PanelViewModel::from(msg);
+  EXPECT_TRUE(view.plan_enabled);
+  EXPECT_FALSE(view.execute_enabled);
+  EXPECT_TRUE(view.abort_enabled);
+}
+
 TEST(PanelViewModel, CopiesFeedbackFieldsWithoutInference) {
   remani_real_msgs::ExecutionState msg = readyBase();
   msg.execution_progress = 0.42;

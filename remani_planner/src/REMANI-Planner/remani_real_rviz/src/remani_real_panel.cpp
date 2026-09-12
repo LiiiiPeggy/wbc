@@ -72,7 +72,9 @@ void RemaniRealPanel::applyView() {
   execute_button_->setEnabled(allow && view.execute_enabled);
   pause_button_->setEnabled(allow && view.pause_enabled);
   resume_button_->setEnabled(allow && view.resume_enabled);
-  abort_button_->setEnabled(allow && view.abort_enabled);
+  // Abort stays available whenever the published state permits it, even while
+  // another command is waiting for the next ExecutionState update.
+  abort_button_->setEnabled(view.abort_enabled);
 
   warning_label_->setText(QString::fromStdString(view.environment_warning));
   if (!have_state_) {

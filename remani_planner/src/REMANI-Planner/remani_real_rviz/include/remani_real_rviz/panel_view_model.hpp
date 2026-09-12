@@ -92,11 +92,12 @@ inline PanelViewModel PanelViewModel::from(
     view.abort_enabled = true;
     return view;
   }
-  if (exec == remani_real_msgs::ExecutionState::EXECUTOR_PLANNED &&
-      msg.candidate_complete && msg.candidate_valid) {
+  if (exec == remani_real_msgs::ExecutionState::EXECUTOR_PLANNED) {
     view.plan_enabled = true;
-    view.execute_enabled = true;
     view.abort_enabled = true;
+    if (msg.candidate_complete && msg.candidate_valid) {
+      view.execute_enabled = true;
+    }
     return view;
   }
   if (exec == remani_real_msgs::ExecutionState::EXECUTOR_SUCCEEDED) {
