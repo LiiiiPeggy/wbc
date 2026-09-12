@@ -92,6 +92,10 @@ add_library(planner
   # CMake: Whole-body trajectory hard collision validator
   # ################################
   src/trajectory_collision_checker.cpp
+  # ################################
+  # CMake: Wall-clock plan stage timings → TopAY/src/logs
+  # ################################
+  src/plan_timing_logger.cpp
   src/planner.cpp
 )
 
@@ -136,6 +140,20 @@ target_link_libraries(test_optimizer_collision_gradient
 add_executable(test_trajectory_collision_checker src/test_trajectory_collision_checker.cpp)
 add_dependencies(test_trajectory_collision_checker ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 target_link_libraries(test_trajectory_collision_checker
+  planner
+  ${catkin_LIBRARIES}
+  ${OMPL_LIBRARIES}
+  ${PCL_LIBRARIES}
+  ${CASADI_LIBRARIES}
+  ${Boost_LIBRARIES}
+)
+
+# ################################
+# CMake: Bridge opening / lintel / pillar clearance Cases A–C
+# ################################
+add_executable(test_bridge_obstacle_clearance src/test_bridge_obstacle_clearance.cpp)
+add_dependencies(test_bridge_obstacle_clearance ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+target_link_libraries(test_bridge_obstacle_clearance
   planner
   ${catkin_LIBRARIES}
   ${OMPL_LIBRARIES}

@@ -2,7 +2,10 @@ map:
   # obs_num: [1, 0] # num of Wall, Float Box
   # obs_num: [20, 40] # num of Wall, Float Box
   # obs_num: [30, 50] # num of Wall, Float Box
-  obs_num: [80, 80] # num of Wall, Float Box
+  # ################################
+  # YAML: obs_num = [walls, floats, bridges]; bridges default 0 (use bridge map to enable)
+  # ################################
+  obs_num: [80, 80, 0]
 
   # obs_num: [200, 400] # num of Wall, Float Box
   wall_size_range: [0.2, 0.8]
@@ -22,3 +25,18 @@ map:
   desk_height_range: [0.5, 1.0]
   desk_arrangement_range: [1, 2] # [1, 3]
   case_id: 0 # 0: random, 1: real fly field, 2: map file
+  # ################################
+  # YAML: Bridge/arch off by default — enable only via dedicated bridge map
+  # ################################
+  bridge_enable: false
+  # ################################
+  # YAML: Wider span needed when clearance=1.5 m (tall pillars vs arm envelope)
+  # ################################
+  bridge_opening_width_range: [2.8, 3.5]
+  bridge_opening_depth_range: [0.20, 0.40]
+  # ################################
+  # YAML: Lintel bottom / opening clearance (m) — default 1.5
+  # ################################
+  bridge_clearance_range: [1.5, 1.5]
+  bridge_lintel_thickness_range: [0.08, 0.15]
+  bridge_pillar_width_range: [0.15, 0.30]

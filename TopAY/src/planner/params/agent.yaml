@@ -16,3 +16,8 @@ planner_node:
     startgoal_dist_range : [3.0, 8.0]
     stat_num: 1000
     scene: "tables" # cuboids / tables
+    # ################################
+    # YAML: safeCallback traj recheck denseness (减卡 vs continuous hard sweep)
+    # ################################
+    safe_check_resolution: 0.05   # seconds along traj
+    safe_check_period: 0.10       # wall seconds between full traj rechecks

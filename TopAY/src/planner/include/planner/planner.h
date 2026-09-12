@@ -37,6 +37,10 @@
 #include "planner/moma_traj_opt.h"
 #include "planner/mpc.h"
 #include "planner/ompc.h"
+// ################################
+// C++: Wall-clock plan stage logger (TopAY/src/logs)
+// ################################
+#include "planner/plan_timing_logger.h"
 
 // for plotting
 #include "planner/PlotState.h"
@@ -133,6 +137,12 @@ namespace nmoma_planner
             double planning_budget = 0.0;
             double replan_interval = 1.0;
             double planning_horizon = 6.0;
+            // ################################
+            // C++: safeCallback denseness from YAML (not hard-coded every-N)
+            // ################################
+            double safe_check_resolution_ = 0.05;
+            double safe_check_period_ = 0.10;
+            PlanTimingLogger timing_logger_;
             Eigen::VectorXd global_goal;
             MomaTraj global_traj;
             ros::Time begin_time; 

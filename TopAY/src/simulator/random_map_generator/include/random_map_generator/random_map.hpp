@@ -103,6 +103,16 @@ namespace random_map {
 
         uniform_int_distribution<int> rand_arragement;
 
+        // ################################
+        // C++: Bridge/arch random ranges (chassis passes; box/arm may hit lintel)
+        // ################################
+        uniform_real_distribution<double> rand_bridge_opening_width;
+        uniform_real_distribution<double> rand_bridge_opening_depth;
+        uniform_real_distribution<double> rand_bridge_clearance;
+        uniform_real_distribution<double> rand_bridge_lintel_thickness;
+        uniform_real_distribution<double> rand_bridge_pillar_width;
+        uniform_int_distribution<int> rand_bridge_axis;
+
         // params
         vector<int> obs_num = {1, 1};
         vector<double> wall_size_range = {0.1, 0.1};
@@ -120,6 +130,19 @@ namespace random_map {
         vector<double> desk_height_range={0.75, 1.5};
         vector<int> desk_arrangement_range = {1, 2};
 
+        // ################################
+        // C++: Bridge params — default disabled (count 0 / enable false)
+        // ################################
+        bool bridge_enable = false;
+        vector<double> bridge_opening_width_range = {2.8, 3.5};
+        vector<double> bridge_opening_depth_range = {0.20, 0.40};
+        // ################################
+        // C++: Lintel bottom (opening clearance) default 1.5 m
+        // ################################
+        vector<double> bridge_clearance_range = {1.5, 1.5};
+        vector<double> bridge_lintel_thickness_range = {0.08, 0.15};
+        vector<double> bridge_pillar_width_range = {0.15, 0.30};
+
         void init(
             const vector<int>& obs_num,
             const vector<double>& wall_size_range,
@@ -132,6 +155,11 @@ namespace random_map {
             double min_obs_dis
         );
         void init(ros::NodeHandle& nh);
+
+        inline int bridgeCount() const
+        {
+            return (obs_num.size() > 2) ? obs_num[2] : 0;
+        }
         
         pcl::PointCloud<pcl::PointXYZ> generateBox(const Eigen::Vector3d& size);
 
@@ -145,6 +173,18 @@ namespace random_map {
             const Eigen::Vector3d& size,
             double theta, 
             const Eigen::Vector2i& arrangement);
+
+        // ################################
+        // C++: Two pillars + lintel; opening free for chassis, lintel can hit box/arm
+        // ################################
+        std::pair<pcl::PointCloud<pcl::PointXYZ>, std::vector<Box::array_repr>> generateBridge(
+            const Eigen::Vector3d& pos,
+            double opening_width,
+            double opening_depth,
+            double clearance_height,
+            double lintel_thickness,
+            double pillar_width,
+            double yaw);
             
         std::pair<pcl::PointCloud<pcl::PointXYZ>, std::vector<Box::array_repr>> generateDeskCase();
         std::pair<pcl::PointCloud<pcl::PointXYZ>, std::vector<Box::array_repr>> generateDeskCase(std::vector<Box> obs);

@@ -15,7 +15,10 @@
 #include "utils/lbfgs.hpp"
 #include "map/grid_map.h"
 #include "fake_moma/moma_param.h"
-#include "planner/trajectory_collision_checker.h"
+// ################################
+// C++: Trajectory collision authority lives in planner.cpp success path
+//      (checkWholeBodyTrajectoryCollision), not inside printConstraintsSituations
+// ################################
 
 #include <boost/thread.hpp>
 
@@ -1289,16 +1292,9 @@ namespace nmoma_planner
         PRINTF_WHITE("\n");
 
         // ################################
-        // C++: Unified whole-body hard gate (chassis + arm + box + self)
+        // C++: Trajectory collision authority is checkWholeBodyTrajectoryCollision
+        //      on optimize success path — do not embed a second dense hard sweep here
         // ################################
-        if (!checkWholeBodyTrajectoryCollision(grid_map, traj, res))
-        {
-            feasible = false;
-            PRINT_RED("[Moma Opt] whole-body trajectory collision FAILED");
-        }
-        else
-            PRINT_GREEN("[Moma Opt] whole-body trajectory collision OK");
-
         return feasible;
     }
 

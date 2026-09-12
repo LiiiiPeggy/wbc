@@ -95,6 +95,27 @@ void nmoma_random_map::RandomPCGenerator::init(ros::NodeHandle& nh)
     rand_desk_height= uniform_real_distribution<double>(desk_height_range[0], desk_height_range[1]);
     rand_arragement = uniform_int_distribution<int>(desk_arrangement_range[0], desk_arrangement_range[1]);
 
+    // ################################
+    // C++: Bridge/arch ranges (default disabled via bridge_enable + count 0)
+    // ################################
+    nh.param("/map/bridge_enable", bridge_enable, false);
+    nh.param<std::vector<double>>("/map/bridge_opening_width_range", bridge_opening_width_range, bridge_opening_width_range);
+    nh.param<std::vector<double>>("/map/bridge_opening_depth_range", bridge_opening_depth_range, bridge_opening_depth_range);
+    nh.param<std::vector<double>>("/map/bridge_clearance_range", bridge_clearance_range, bridge_clearance_range);
+    nh.param<std::vector<double>>("/map/bridge_lintel_thickness_range", bridge_lintel_thickness_range, bridge_lintel_thickness_range);
+    nh.param<std::vector<double>>("/map/bridge_pillar_width_range", bridge_pillar_width_range, bridge_pillar_width_range);
+    rand_bridge_opening_width = uniform_real_distribution<double>(
+        bridge_opening_width_range[0], bridge_opening_width_range[1]);
+    rand_bridge_opening_depth = uniform_real_distribution<double>(
+        bridge_opening_depth_range[0], bridge_opening_depth_range[1]);
+    rand_bridge_clearance = uniform_real_distribution<double>(
+        bridge_clearance_range[0], bridge_clearance_range[1]);
+    rand_bridge_lintel_thickness = uniform_real_distribution<double>(
+        bridge_lintel_thickness_range[0], bridge_lintel_thickness_range[1]);
+    rand_bridge_pillar_width = uniform_real_distribution<double>(
+        bridge_pillar_width_range[0], bridge_pillar_width_range[1]);
+    rand_bridge_axis = uniform_int_distribution<int>(0, 1);
+
     eng = std::mt19937(rd());
 
     return;
@@ -191,6 +212,56 @@ std::pair<pcl::PointCloud<pcl::PointXYZ>, std::vector<Box::array_repr>> nmoma_ra
     }
 
     return std::make_pair(ret_cloud, ret_box);
+}
+
+// ################################
+// C++: Chassis-passable arch — pillars from ground; lintel above clearance (> chassis_height)
+// ################################
+std::pair<pcl::PointCloud<pcl::PointXYZ>, std::vector<Box::array_repr>>
+nmoma_random_map::RandomPCGenerator::generateBridge(
+    const Eigen::Vector3d& pos,
+    double opening_width,
+    double opening_depth,
+    double clearance_height,
+    double lintel_thickness,
+    double pillar_width,
+    double yaw)
+{
+    Eigen::Matrix3d R;
+    R << cos(yaw), -sin(yaw), 0.0,
+         sin(yaw),  cos(yaw), 0.0,
+         0.0,       0.0,      1.0;
+
+    const Eigen::Vector3d half_span(
+        0.5 * opening_width + pillar_width,
+        0.5 * opening_depth,
+        0.0);
+    const Eigen::Vector3d origin = pos - R * half_span;
+
+    const Eigen::Vector3d pillar_size(pillar_width, opening_depth, clearance_height);
+    const Eigen::Vector3d pillar_l_pos = origin;
+    const Eigen::Vector3d pillar_r_pos =
+        origin + R * Eigen::Vector3d(opening_width + pillar_width, 0.0, 0.0);
+    const Eigen::Vector3d lintel_pos =
+        origin + Eigen::Vector3d(0.0, 0.0, clearance_height);
+    const Eigen::Vector3d lintel_size(
+        opening_width + 2.0 * pillar_width, opening_depth, lintel_thickness);
+
+    std::vector<Box> boxes;
+    boxes.emplace_back(pillar_l_pos, pillar_size, yaw);
+    boxes.emplace_back(pillar_r_pos, pillar_size, yaw);
+    boxes.emplace_back(lintel_pos, lintel_size, yaw);
+
+    pcl::PointCloud<pcl::PointXYZ> cloud;
+    std::vector<Box::array_repr> reps;
+    reps.reserve(boxes.size());
+    for (const Box& box : boxes)
+    {
+        auto part = box.generatePCL(resolution);
+        cloud.points.insert(cloud.points.end(), part.points.begin(), part.points.end());
+        reps.push_back(box.toArray());
+    }
+    return std::make_pair(cloud, reps);
 }
 
 std::pair<pcl::PointCloud<pcl::PointXYZ>, std::vector<Box::array_repr>> 
@@ -427,6 +498,72 @@ nmoma_random_map::RandomPCGenerator::generataRandomCaseAux()
                 continue;
             }
             cloud_map.points.push_back(pt_random);
+        }
+    }
+
+    // ################################
+    // C++: Optional bridges — only when bridge_enable && obs_num[2] > 0
+    // ################################
+    if (bridge_enable)
+    {
+        const int n_bridge = bridgeCount();
+        for (int j = 0; j < n_bridge; ++j)
+        {
+            double x = rand_x(eng);
+            double y = rand_y(eng);
+            x = floor(x / resolution) * resolution + resolution / 2.0;
+            y = floor(y / resolution) * resolution + resolution / 2.0;
+
+            const double opening_width = rand_bridge_opening_width(eng);
+            const double opening_depth = rand_bridge_opening_depth(eng);
+            const double clearance = rand_bridge_clearance(eng);
+            const double lintel_th = rand_bridge_lintel_thickness(eng);
+            const double pillar_w = rand_bridge_pillar_width(eng);
+            const double yaw = (rand_bridge_axis(eng) == 0) ? 0.0 : (M_PI / 2.0);
+
+            const double foot_x = opening_width + 2.0 * pillar_w;
+            const double foot_y = opening_depth;
+            const double foot_z = clearance + lintel_th;
+            Eigen::Matrix3d R;
+            R << cos(yaw), -sin(yaw), 0.0,
+                 sin(yaw),  cos(yaw), 0.0,
+                 0.0,       0.0,      1.0;
+            const Eigen::Vector3d center(x, y, 0.0);
+            const Eigen::Vector3d aabb_origin =
+                center - R * Eigen::Vector3d(0.5 * foot_x, 0.5 * foot_y, 0.0);
+            Box footprint(aabb_origin, Eigen::Vector3d(foot_x, foot_y, foot_z), yaw);
+
+            bool collision = false;
+            for (auto& other : obs_boxes)
+            {
+                if ((collision = footprint.overlap(other)))
+                {
+                    break;
+                }
+            }
+            if (collision || footprint.overlap2d(spawn_box))
+            {
+                --j;
+                continue;
+            }
+
+            pcl::PointCloud<pcl::PointXYZ> cloud_bridge;
+            std::vector<Box::array_repr> bridge_reps;
+            std::tie(cloud_bridge, bridge_reps) = generateBridge(
+                center, opening_width, opening_depth, clearance, lintel_th, pillar_w, yaw);
+
+            obs_boxes.push_back(footprint);
+            for (size_t i = 0; i < cloud_bridge.points.size(); ++i)
+            {
+                pt_random = cloud_bridge.points[i];
+                float free_range = 0.5f;
+                if (pt_random.x > -free_range && pt_random.x < free_range &&
+                    pt_random.y > -free_range && pt_random.y < free_range)
+                {
+                    continue;
+                }
+                cloud_map.points.push_back(pt_random);
+            }
         }
     }
 

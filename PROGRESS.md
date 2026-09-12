@@ -2,17 +2,16 @@
 
 **Goal:** Ranger + CR10 whole-body planning/visualization on branch `topay`.
 
-**Branch / HEAD:** `topay` @ `d436094`.
+**Branch / HEAD:** `topay` (local uncommitted: bridge + plan timing + hard-gate 减卡).
 
-**Current status:** Soft-opt traj could publish box-penetrating paths; unified hard validator wired into optimize / printConstraints / safeCallback.
+**Current status:** Bridge clearance (lintel bottom) **1.5 m**; opening ~2.8–3.5 m. Wall-clock plan timings; hard-gate 减卡.
 
 **Verified:**
-- `test_trajectory_collision_checker` A/B/C PASS.
-- `test_base_obstacle_collision` A–D PASS; `test_optimizer_collision_gradient` PASS.
-- Headless smoke: `box_obstacle` params load + `Map ready` (timeout kill OK).
+- `test_bridge_obstacle_clearance` A/B/C PASS @ clearance=1.5 (2D free; home arm hits lintel; pillar collides).
+- Prior: traj checker PASS; ordinary/bridge smoke `Map ready`.
 
-**Rulings (unchanged this round):**
+**Rulings (unchanged):**
 - Do not change visual root / box grid / `obstacle_radius` / collision weights.
-- Hard safety = `checkWholeBodyTrajectoryCollision` → `GridMap::isWholeBodyCollision` only.
+- Traj collision authority = `checkWholeBodyTrajectoryCollision` only (not embedded in printConstraints).
 
-**Open:** `map.pcd` local dirty — do not commit.
+**Open:** `map.pcd` local dirty — do not commit. Commit/push when asked.

@@ -113,3 +113,29 @@ Path search already used `isWholeBodyCollision` (includes box). Traj opt only so
 ### Verification
 
 `test_trajectory_collision_checker` A/B/C PASS; prior GridMap/optimizer gates PASS; headless smoke `Map ready` + `box_obstacle` params.
+
+---
+
+## 2026-09-09/12 — Bridge obstacles + plan timing + hard-gate 减卡
+
+### Background
+
+Need chassis-passable bridge/arch maps (box/arm may hit lintel), stage latency logs under `TopAY/src/logs/`, and less lag after the hard-gate commit stacked dense whole-body sweeps.
+
+### Attempts / constraints
+
+- Binding long-term traj hard validation inside `printConstraintsSituations` rejected — duplicate authority + extra dense sweep on every print.
+- Summing parallel worker CPUs for timing rejected — report wall-clock plan latency.
+- Raising bridge count in ordinary smoke rejected — dedicated bridge map / `bridge_enable`.
+
+### Final design
+
+1. **Bridge:** `RandomPCGenerator::generateBridge`; `obs_num[2]` + `bridge_enable` (default off). Clearance > `chassis_height` so 2D search can pass; 3D whole-body sees lintel.
+2. **Timing:** `PlanTimingLogger` wall-clock stages to `src/logs/plan_*.log`; `[PlanTiming]` on console.
+3. **减卡:** remove `checkWholeBodyTrajectoryCollision` from `printConstraintsSituations`; keep one explicit call on optimize success path; YAML `safe_check_resolution` / `safe_check_period` for `safeCallback`.
+
+### Verification
+
+- `test_bridge_obstacle_clearance` A/B/C PASS; `test_trajectory_collision_checker` A/B/C PASS.
+- Ordinary smoke `obs_num=[30,10]` + `Map ready`; bridge launch `bridge_enable=True`, `obs_num=[20,5,4]` + `Map ready`.
+- Session `plan_*.log` files created (no plan lines until a plan runs).
