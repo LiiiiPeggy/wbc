@@ -1,0 +1,7 @@
+<library path="lib/libremani_real_rviz">
+  <class name="remani_real_rviz/RemaniRealPanel"
+         type="remani_real_rviz::RemaniRealPanel"
+         base_class_type="rviz::Panel">
+    <description>Manual Plan/Execute/Pause/Resume/Abort panel for REMANI real mode.</description>
+  </class>
+</library>
