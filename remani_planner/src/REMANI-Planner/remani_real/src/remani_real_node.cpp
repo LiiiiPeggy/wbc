@@ -21,6 +21,7 @@
 #include <plan_env/grid_map.h>
 
 #include <remani_real/actual_state.hpp>
+#include <remani_real/base_tracking_controller.hpp>
 #include <remani_real/candidate_assembler.hpp>
 #include <remani_real/candidate_validator.hpp>
 #include <remani_real/deployment_state_machine.hpp>
@@ -76,6 +77,27 @@ class RemaniRealNode {
     ValidationLimits limits;
     validator_.reset(new CandidateValidator(limits, environment_.get()));
     preview_.reset(new PreviewPublisher(nh_));
+    // ################################
+    // C++: load base tracking config begin
+    // ################################
+    BaseTrackingConfig tracking_config;
+    nh_.param("base_tracking/k_x", tracking_config.k_x, 1.0);
+    nh_.param("base_tracking/k_y", tracking_config.k_y, 1.0);
+    nh_.param("base_tracking/k_yaw", tracking_config.k_yaw, 1.0);
+    nh_.param("base_tracking/max_linear", tracking_config.max_linear, 0.10);
+    nh_.param("base_tracking/max_angular", tracking_config.max_angular, 0.15);
+    nh_.param("base_tracking/max_linear_correction",
+              tracking_config.max_linear_correction, 0.03);
+    nh_.param("base_tracking/max_angular_correction",
+              tracking_config.max_angular_correction, 0.05);
+    nh_.param("base_tracking/max_position_error",
+              tracking_config.max_position_error, 0.20);
+    nh_.param("base_tracking/max_yaw_error", tracking_config.max_yaw_error,
+              0.20);
+    base_tracker_.reset(new BaseTrackingController(tracking_config));
+    // ################################
+    // C++: load base tracking config end
+    // ################################
 
     state_pub_ = nh_.advertise<remani_real_msgs::ExecutionState>(
         "/remani/execution_state", 1, true);
@@ -486,12 +508,25 @@ class RemaniRealNode {
       execution_progress_ = duration > 0.0 ? sample_t / duration : 1.0;
       try {
         const WholeBodySample sample = frozen_->sample(sample_t);
+        // ################################
+        // C++: dry-run uses base tracker for command shaping begin
+        // ################################
+        const BaseTrackingResult tracked =
+            base_tracker_->compute(sample, actual_);
         geometry_msgs::Twist twist;
-        twist.linear.x = sample.velocity(0);
-        twist.linear.y = sample.velocity(1);
-        twist.angular.z = sample.base_angular_velocity;
+        if (tracked.valid) {
+          twist = tracked.command;
+        } else {
+          // Keep diagnostics zeroed and surface fault without hardware path.
+          fsm_.onExecutionFault(tracked.error_code.empty()
+                                    ? "BASE_TRACKING_ERROR"
+                                    : tracked.error_code);
+        }
         dry_output_.publish(twist);
         dry_preview_pub_.publish(twist);
+        // ################################
+        // C++: dry-run uses base tracker for command shaping end
+        // ################################
       } catch (const std::exception& ex) {
         fsm_.onExecutionFault(ex.what());
       }
@@ -509,6 +544,7 @@ class RemaniRealNode {
   std::unique_ptr<CandidateValidator> validator_;
   std::unique_ptr<PreviewPublisher> preview_;
   std::unique_ptr<MmConfigValidationEnvironment> environment_;
+  std::unique_ptr<BaseTrackingController> base_tracker_;
   std::shared_ptr<GridMap> grid_map_;
   std::shared_ptr<remani_planner::MMConfig> mm_config_;
   DryRunMotionOutput dry_output_;

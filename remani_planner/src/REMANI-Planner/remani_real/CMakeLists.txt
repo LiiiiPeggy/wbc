@@ -86,6 +86,13 @@ add_library(remani_real_candidate
   # CMake: Phase3 Ranger hardware channel end
   # ################################
   # ################################
+  # CMake: Phase3 base tracking controller begin
+  # ################################
+  src/base_tracking_controller.cpp
+  # ################################
+  # CMake: Phase3 base tracking controller end
+  # ################################
+  # ################################
   # CMake: Task4 validator/preview sources end
   # ################################
 )
@@ -251,6 +258,23 @@ if(CATKIN_ENABLE_TESTING)
   endif()
   # ################################
   # CMake: Phase3 topic ownership gtest/rostest end
+  # ################################
+
+  # ################################
+  # CMake: Phase3 base tracking gtest begin
+  # ################################
+  catkin_add_gtest(test_base_tracking_controller
+    test/test_base_tracking_controller.cpp
+  )
+  if(TARGET test_base_tracking_controller)
+    target_compile_features(test_base_tracking_controller PRIVATE cxx_std_14)
+    target_link_libraries(test_base_tracking_controller
+      remani_real_candidate
+      ${catkin_LIBRARIES}
+    )
+  endif()
+  # ################################
+  # CMake: Phase3 base tracking gtest end
   # ################################
 
   # ################################
