@@ -15,12 +15,39 @@ find_package(catkin REQUIRED COMPONENTS
   roslaunch
   sensor_msgs
   topic_tools
-  ugv_sdk
   tf2
   tf2_ros
   nav_msgs
 #  async_port
 )
+
+# ################################
+# CMake: optional hardware stack (ugv_sdk + standalone asio) begin
+# ################################
+# Full messenger/node belongs on the Ubuntu 18.04 robot host where agx
+# already built with asio. Laptop hosts without asio.hpp still build the
+# pure ranger_command library and its gtests. Do not find_package(ugv_sdk)
+# when asio is absent: a stale devel Config.cmake can FATAL_ERROR.
+find_path(RANGER_BASE_ASIO_INCLUDE NAMES asio.hpp)
+set(RANGER_BASE_BUILD_HARDWARE OFF)
+if(RANGER_BASE_ASIO_INCLUDE)
+  find_package(ugv_sdk QUIET)
+  if(ugv_sdk_FOUND)
+    set(RANGER_BASE_BUILD_HARDWARE ON)
+    list(APPEND catkin_INCLUDE_DIRS ${ugv_sdk_INCLUDE_DIRS})
+    list(APPEND catkin_LIBRARIES ${ugv_sdk_LIBRARIES})
+    message(STATUS "ranger_base: building hardware messenger/node")
+  endif()
+endif()
+if(NOT RANGER_BASE_BUILD_HARDWARE)
+  message(WARNING
+    "ranger_base: skipping hardware messenger/node "
+    "(need ugv_sdk + standalone asio.hpp); "
+    "building pure ranger_command library/tests only")
+endif()
+# ################################
+# CMake: optional hardware stack (ugv_sdk + standalone asio) end
+# ################################
 
 ## System dependencies are found with CMake's conventions
 # find_package(Boost REQUIRED COMPONENTS system)
@@ -136,12 +163,37 @@ target_include_directories(ascent INTERFACE
 	$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
 	$<INSTALL_INTERFACE:include>)
 
-add_library(ranger_messenger STATIC src/ranger_messenger.cpp)
-target_link_libraries(ranger_messenger ${catkin_LIBRARIES} ascent)
-add_dependencies(ranger_messenger ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+# ################################
+# CMake: pure Ranger command library + gtest begin
+# ################################
+add_library(ranger_command src/ranger_command.cpp)
+target_link_libraries(ranger_command ${catkin_LIBRARIES})
+add_dependencies(ranger_command ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 
-add_executable(ranger_base_node src/ranger_base_node.cpp)
-target_link_libraries(ranger_base_node ranger_messenger ascent ${catkin_LIBRARIES})
+if(CATKIN_ENABLE_TESTING)
+  catkin_add_gtest(test_ranger_command test/test_ranger_command.cpp)
+  if(TARGET test_ranger_command)
+    target_link_libraries(test_ranger_command ranger_command ${catkin_LIBRARIES})
+  endif()
+endif()
+# ################################
+# CMake: pure Ranger command library + gtest end
+# ################################
+
+# ################################
+# CMake: hardware messenger/node when asio+ugv_sdk present begin
+# ################################
+if(RANGER_BASE_BUILD_HARDWARE)
+  add_library(ranger_messenger STATIC src/ranger_messenger.cpp)
+  target_link_libraries(ranger_messenger ${catkin_LIBRARIES} ascent ranger_command)
+  add_dependencies(ranger_messenger ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+
+  add_executable(ranger_base_node src/ranger_base_node.cpp)
+  target_link_libraries(ranger_base_node ranger_messenger ascent ${catkin_LIBRARIES})
+endif()
+# ################################
+# CMake: hardware messenger/node when asio+ugv_sdk present end
+# ################################
 
 
 ## Rename C++ executable without prefix
