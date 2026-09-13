@@ -101,6 +101,14 @@ add_library(remani_real_candidate
   # CMake: Phase4 CR10 arm trajectory + hardware channel end
   # ################################
   # ################################
+  # CMake: Phase5 synchronized executor begin
+  # ################################
+  src/execution_clock.cpp
+  src/synchronized_executor.cpp
+  # ################################
+  # CMake: Phase5 synchronized executor end
+  # ################################
+  # ################################
   # CMake: Task4 validator/preview sources end
   # ################################
 )
@@ -300,6 +308,34 @@ if(CATKIN_ENABLE_TESTING)
   endif()
   # ################################
   # CMake: Phase4 arm trajectory builder gtest end
+  # ################################
+
+  # ################################
+  # CMake: Phase5 execution clock / synchronized start gtests begin
+  # ################################
+  catkin_add_gtest(test_execution_clock
+    test/test_execution_clock.cpp
+  )
+  if(TARGET test_execution_clock)
+    target_compile_features(test_execution_clock PRIVATE cxx_std_14)
+    target_link_libraries(test_execution_clock
+      remani_real_candidate
+      ${catkin_LIBRARIES}
+    )
+  endif()
+
+  catkin_add_gtest(test_synchronized_start
+    test/test_synchronized_start.cpp
+  )
+  if(TARGET test_synchronized_start)
+    target_compile_features(test_synchronized_start PRIVATE cxx_std_14)
+    target_link_libraries(test_synchronized_start
+      remani_real_candidate
+      ${catkin_LIBRARIES}
+    )
+  endif()
+  # ################################
+  # CMake: Phase5 execution clock / synchronized start gtests end
   # ################################
 
   # ################################
