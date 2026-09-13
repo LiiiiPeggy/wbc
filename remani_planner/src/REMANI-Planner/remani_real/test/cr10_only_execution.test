@@ -1,0 +1,18 @@
+<?xml version="1.0"?>
+<!-- ################################ -->
+<!-- XML: CR10-only execution rostest begin -->
+<!-- ################################ -->
+<launch>
+  <include file="$(find remani_real)/launch/cr10_only_low_speed.launch">
+    <arg name="enable_staged_test" value="true"/>
+    <arg name="dry_run" value="true"/>
+    <arg name="remani_prestart_hold_mode" value="true"/>
+  </include>
+  <test test-name="test_cr10_only_execution"
+        pkg="remani_real"
+        type="test_cr10_only_execution.py"
+        time-limit="120.0"/>
+</launch>
+<!-- ################################ -->
+<!-- XML: CR10-only execution rostest end -->
+<!-- ################################ -->

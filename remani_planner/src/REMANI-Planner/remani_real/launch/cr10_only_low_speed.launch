@@ -1,0 +1,37 @@
+<?xml version="1.0"?>
+<!-- ################################ -->
+<!-- XML: CR10-only staged low-speed launch begin -->
+<!-- ################################ -->
+<launch>
+  <arg name="enable_staged_test" default="false"/>
+  <arg name="dry_run" default="true"/>
+  <arg name="max_arm_speed" default="0.05"/>
+  <arg name="max_joint_delta" default="0.10"/>
+  <arg name="remani_prestart_hold_mode" default="true"/>
+
+  <param name="/mode" value="real"/>
+  <param name="/execution_owner" value="external"/>
+  <param name="/environment_mode" value="static_empty"/>
+  <param name="/dry_run" value="$(arg dry_run)"/>
+  <param name="cr10_only/max_arm_speed" value="$(arg max_arm_speed)"/>
+  <param name="cr10_only/max_joint_delta" value="$(arg max_joint_delta)"/>
+
+  <node unless="$(arg enable_staged_test)" pkg="rostopic" type="rostopic" name="cr10_only_gate_blocker"
+        args="echo /remani/execution_state" output="screen"
+        launch-prefix="bash -c 'echo ERROR: enable_staged_test must be true; exit 1'"/>
+
+  <!-- No Ranger hardware node/publisher in CR10-only staged gate. -->
+  <node pkg="remani_real" type="fake_cr10_action_server.py"
+        name="fake_cr10_action_server" output="screen" required="true">
+    <param name="remani_prestart_hold_mode" value="$(arg remani_prestart_hold_mode)"/>
+    <param name="servoj_period" value="0.05"/>
+    <param name="cr10_goal_joint_tol" value="0.02"/>
+    <param name="cr10_stop_velocity_tol" value="0.01"/>
+    <param name="completion_settle_timeout" value="2.0"/>
+    <param name="required_settle_samples" value="3"/>
+    <param name="force_settle_fail" value="false"/>
+  </node>
+</launch>
+<!-- ################################ -->
+<!-- XML: CR10-only staged low-speed launch end -->
+<!-- ################################ -->

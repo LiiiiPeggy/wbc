@@ -337,11 +337,14 @@ if(CATKIN_ENABLE_TESTING)
     test/test_ranger_topic_isolation.py
     test/fake_ranger_driver_node.py
     test/test_ranger_only_execution.py
+    test/fake_cr10_action_server.py
+    test/test_cr10_only_execution.py
     DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION})
   add_rostest(test/state_bridge.test)
   add_rostest(test/real_control_plane.test)
   add_rostest(test/ranger_topic_isolation.test)
   add_rostest(test/ranger_only_execution.test)
+  add_rostest(test/cr10_only_execution.test)
   # ################################
   # CMake: State Bridge unit/rostests end
   # ################################
