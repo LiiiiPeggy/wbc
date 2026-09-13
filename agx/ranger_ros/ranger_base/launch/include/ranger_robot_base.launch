@@ -15,6 +15,13 @@
     <!-- ################################ -->
     <!-- XML: cmd_vel watchdog launch args end -->
     <!-- ################################ -->
+    <!-- ################################ -->
+    <!-- XML: optional hardware topic remap (REMANI real overrides) begin -->
+    <!-- ################################ -->
+    <arg name="cmd_vel_remap" default="/cmd_vel"/>
+    <!-- ################################ -->
+    <!-- XML: optional hardware topic remap (REMANI real overrides) end -->
+    <!-- ################################ -->
 
     <node name="ranger_base_node" pkg="ranger_base" type="ranger_base_node" output="screen">
         <param name="port_name" type="string" value="$(arg port_name)" />
@@ -31,6 +38,13 @@
         <param name="command_zero_epsilon" value="$(arg command_zero_epsilon)"/>
         <!-- ################################ -->
         <!-- XML: pass watchdog params end -->
+        <!-- ################################ -->
+        <!-- ################################ -->
+        <!-- XML: remap absolute /cmd_vel begin -->
+        <!-- ################################ -->
+        <remap from="/cmd_vel" to="$(arg cmd_vel_remap)"/>
+        <!-- ################################ -->
+        <!-- XML: remap absolute /cmd_vel end -->
         <!-- ################################ -->
     </node>
 </launch>

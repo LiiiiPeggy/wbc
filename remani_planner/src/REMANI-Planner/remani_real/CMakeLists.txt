@@ -78,6 +78,14 @@ add_library(remani_real_candidate
   # CMake: Task7 dry-run motion output end
   # ################################
   # ################################
+  # CMake: Phase3 Ranger hardware channel begin
+  # ################################
+  src/topic_ownership_monitor.cpp
+  src/ranger_hardware_channel.cpp
+  # ################################
+  # CMake: Phase3 Ranger hardware channel end
+  # ################################
+  # ################################
   # CMake: Task4 validator/preview sources end
   # ################################
 )
@@ -229,6 +237,23 @@ if(CATKIN_ENABLE_TESTING)
   # ################################
 
   # ################################
+  # CMake: Phase3 topic ownership gtest/rostest begin
+  # ################################
+  catkin_add_gtest(test_topic_ownership
+    test/test_topic_ownership.cpp
+  )
+  if(TARGET test_topic_ownership)
+    target_compile_features(test_topic_ownership PRIVATE cxx_std_14)
+    target_link_libraries(test_topic_ownership
+      remani_real_candidate
+      ${catkin_LIBRARIES}
+    )
+  endif()
+  # ################################
+  # CMake: Phase3 topic ownership gtest/rostest end
+  # ################################
+
+  # ################################
   # CMake: State Bridge unit/rostests begin
   # ################################
   catkin_add_gtest(test_joint_state_mapper
@@ -260,9 +285,11 @@ if(CATKIN_ENABLE_TESTING)
     test/fake_ee_goal_marker.py
     test/fake_candidate_planner.py
     test/test_real_control_plane.py
+    test/test_ranger_topic_isolation.py
     DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION})
   add_rostest(test/state_bridge.test)
   add_rostest(test/real_control_plane.test)
+  add_rostest(test/ranger_topic_isolation.test)
   # ################################
   # CMake: State Bridge unit/rostests end
   # ################################
