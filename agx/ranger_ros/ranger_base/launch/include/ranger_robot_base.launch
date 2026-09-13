@@ -7,6 +7,14 @@
     <arg name="update_rate" default="50" />
     <arg name="odom_topic_name" default="odom" />
     <arg name="publish_odom_tf" default="false" />
+    <!-- ################################ -->
+    <!-- XML: cmd_vel watchdog launch args begin -->
+    <!-- ################################ -->
+    <arg name="cmd_vel_timeout" default="0.20"/>
+    <arg name="command_zero_epsilon" default="0.0001"/>
+    <!-- ################################ -->
+    <!-- XML: cmd_vel watchdog launch args end -->
+    <!-- ################################ -->
 
     <node name="ranger_base_node" pkg="ranger_base" type="ranger_base_node" output="screen">
         <param name="port_name" type="string" value="$(arg port_name)" />
@@ -16,5 +24,13 @@
         <param name="update_rate" type="int" value="$(arg update_rate)" />
         <param name="odom_topic_name" type="string" value="$(arg odom_topic_name)" />  
         <param name="publish_odom_tf" type="bool" value="$(arg publish_odom_tf)" />
+        <!-- ################################ -->
+        <!-- XML: pass watchdog params begin -->
+        <!-- ################################ -->
+        <param name="cmd_vel_timeout" value="$(arg cmd_vel_timeout)"/>
+        <param name="command_zero_epsilon" value="$(arg command_zero_epsilon)"/>
+        <!-- ################################ -->
+        <!-- XML: pass watchdog params end -->
+        <!-- ################################ -->
     </node>
 </launch>

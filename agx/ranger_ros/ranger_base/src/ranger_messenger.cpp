@@ -10,6 +10,7 @@
 #include "ranger_base/ranger_messenger.hpp"
 
 #include <cmath>
+#include <exception>
 
 #include <ros/ros.h>
 
@@ -24,6 +25,7 @@
 
 #include "ranger_base/ranger_params.hpp"
 #include "ranger_base/kinematics_model.hpp"
+#include "ranger_base/ranger_command.hpp"
 
 using namespace ros;
 using namespace ranger_msgs;
@@ -37,6 +39,7 @@ double DegreeToRadian(double x) { return x * M_PI / 180.0; }
 
 RangerROSMessenger::RangerROSMessenger(ros::NodeHandle* nh) : nh_(nh) {
   LoadParameters();
+  watchdog_ = CommandWatchdog(cmd_vel_timeout_);
 
   // connect to robot and setup ROS subscription
   if (robot_type_ == RangerSubType::kRangerMiniV1) {
@@ -51,21 +54,48 @@ RangerROSMessenger::RangerROSMessenger(ros::NodeHandle* nh) : nh_(nh) {
       ros::shutdown();
     }
     robot_->EnableCommandedMode();
+    // ################################
+    // C++: startup stop + arm watchdog begin
+    // ################################
+    StopRobot("startup commanded mode");
+    watchdog_.arm(ros::SteadyTime::now().toSec());
+    // ################################
+    // C++: startup stop + arm watchdog end
+    // ################################
   } else {
     ROS_ERROR("Invalid port name: %s", port_name_.c_str());
     ros::shutdown();
   }
 
   SetupSubscription();
+  PublishWatchdogStatus(true);
 }
+
+// ################################
+// C++: destructor explicit stop begin
+// ################################
+RangerROSMessenger::~RangerROSMessenger() {
+  StopRobot("destructor");
+}
+// ################################
+// C++: destructor explicit stop end
+// ################################
 
 void RangerROSMessenger::Run() {
   ros::Rate rate(update_rate_);
   while (ros::ok()) {
+    // ################################
+    // C++: poll watchdog every update cycle begin
+    // ################################
+    EnforceCommandWatchdog();
+    // ################################
+    // C++: poll watchdog every update cycle end
+    // ################################
     PublishStateToROS();
     ros::spinOnce();
     rate.sleep();
   }
+  StopRobot("ros shutdown");
 }
 
 void RangerROSMessenger::LoadParameters() {
@@ -78,15 +108,24 @@ void RangerROSMessenger::LoadParameters() {
   nh_->param<std::string>("odom_topic_name", odom_topic_name_,
                           std::string("odom"));
   nh_->param<bool>("publish_odom_tf", publish_odom_tf_, false);
+  // ################################
+  // C++: load watchdog + zero-epsilon params begin
+  // ################################
+  nh_->param<double>("cmd_vel_timeout", cmd_vel_timeout_, 0.20);
+  nh_->param<double>("command_zero_epsilon", command_zero_epsilon_, 0.0001);
+  // ################################
+  // C++: load watchdog + zero-epsilon params end
+  // ################################
 
   ROS_INFO(
       "Successfully loaded the following parameters: \n port_name: %s\n "
       "robot_model: %s\n odom_frame: %s\n base_frame: %s\n "
       "update_rate: %d\n odom_topic_name: %s\n "
-      "publish_odom_tf: %d\n",
+      "publish_odom_tf: %d\n cmd_vel_timeout: %.3f\n "
+      "command_zero_epsilon: %.6f\n",
       port_name_.c_str(), robot_model_.c_str(), odom_frame_.c_str(),
       base_frame_.c_str(), update_rate_, odom_topic_name_.c_str(),
-      publish_odom_tf_);
+      publish_odom_tf_, cmd_vel_timeout_, command_zero_epsilon_);
 
   // load robot parameters
   if (robot_model_ == "ranger_mini_v1") {
@@ -147,6 +186,16 @@ void RangerROSMessenger::SetupSubscription() {
   odom_pub_ = nh_->advertise<nav_msgs::Odometry>(odom_topic_name_, 10);
   battery_state_pub_ =
       nh_->advertise<sensor_msgs::BatteryState>("/battery_state", 10);
+  // ################################
+  // C++: advertise watchdog status topics begin
+  // ################################
+  watchdog_ready_pub_ =
+      nh_->advertise<std_msgs::Bool>("/remani/ranger_watchdog_ready", 1, true);
+  watchdog_timed_out_pub_ = nh_->advertise<std_msgs::Bool>(
+      "/remani/ranger_watchdog_timed_out", 1, true);
+  // ################################
+  // C++: advertise watchdog status topics end
+  // ################################
 
   // subscriber
   motion_cmd_sub_ = nh_->subscribe<geometry_msgs::Twist>(
@@ -374,83 +423,126 @@ void RangerROSMessenger::UpdateOdometry(double linear, double angular,
   }
 }
 
+// ################################
+// C++: Twist callback via ComputeRangerCommand begin
+// ################################
 void RangerROSMessenger::TwistCmdCallback(
     const geometry_msgs::Twist::ConstPtr& msg) {
-  double steer_cmd;
-  double radius;
-
-  // analyze Twist msg and switch motion_mode
-  if (msg->linear.y != 0) {
-    if (msg->linear.x == 0.0 && robot_type_ == RangerSubType::kRangerMiniV1) {
-      motion_mode_ = MotionState::MOTION_MODE_SIDE_SLIP;
-      robot_->SetMotionMode(MotionState::MOTION_MODE_SIDE_SLIP);
-    } else {
-      motion_mode_ = MotionState::MOTION_MODE_PARALLEL;
-      robot_->SetMotionMode(MotionState::MOTION_MODE_PARALLEL);
-    }
-  } else {
-    steer_cmd = CalculateSteeringAngle(*msg, radius);
-    // Use minimum turn radius to switch between dual ackerman and spinning mode
-    if (radius < robot_params_.min_turn_radius) {
-      motion_mode_ = MotionState::MOTION_MODE_SPINNING;
-      robot_->SetMotionMode(MotionState::MOTION_MODE_SPINNING);
-    } else {
-      motion_mode_ = MotionState::MOTION_MODE_DUAL_ACKERMAN;
-      robot_->SetMotionMode(MotionState::MOTION_MODE_DUAL_ACKERMAN);
-    }
+  const RangerCommandDecision decision =
+      ComputeRangerCommand(*msg, CurrentCommandLimits(), command_zero_epsilon_);
+  if (!decision.valid) {
+    StopRobot("invalid cmd_vel");
+    return;
   }
+  watchdog_.noteCommand(ros::SteadyTime::now().toSec());
+  PublishWatchdogStatus(false);
+  ApplyRangerCommand(decision);
+}
 
-  // send motion command to robot
-  switch (motion_mode_) {
-    case MotionState::MOTION_MODE_DUAL_ACKERMAN: {
-      if (steer_cmd > robot_params_.max_steer_angle_central) {
-        steer_cmd = robot_params_.max_steer_angle_central;
-      }
-      if (steer_cmd < -robot_params_.max_steer_angle_central) {
-        steer_cmd = -robot_params_.max_steer_angle_central;
-      }
-      double phi_i = ConvertCentralAngleToInner(steer_cmd);
-      robot_->SetMotionCommand(msg->linear.x, phi_i);
-      break;
-    }
-    case MotionState::MOTION_MODE_PARALLEL: {
-      steer_cmd = atan(msg->linear.y / msg->linear.x);
-      if (steer_cmd > robot_params_.max_steer_angle_parallel) {
-        steer_cmd = robot_params_.max_steer_angle_parallel;
-      }
-      if (steer_cmd < -robot_params_.max_steer_angle_parallel) {
-        steer_cmd = -robot_params_.max_steer_angle_parallel;
-      }
-      double vel = msg->linear.x >= 0 ? 1.0 : -1.0;
-      robot_->SetMotionCommand(vel * sqrt(msg->linear.x * msg->linear.x +
-                                          msg->linear.y * msg->linear.y),
-                               steer_cmd);
-      break;
-    }
-    case MotionState::MOTION_MODE_SPINNING: {
-      double a_v = msg->angular.z;
-      if (a_v > robot_params_.max_angular_speed) {
-        a_v = robot_params_.max_angular_speed;
-      }
-      if (a_v < -robot_params_.max_angular_speed) {
-        a_v = -robot_params_.max_angular_speed;
-      }
-      robot_->SetMotionCommand(0.0, 0.0, a_v);
-      break;
-    }
-    case MotionState::MOTION_MODE_SIDE_SLIP: {
-      double l_v = msg->linear.y;
-      if (l_v > robot_params_.max_linear_speed) {
-        l_v = robot_params_.max_linear_speed;
-      }
-      if (l_v < -robot_params_.max_linear_speed) {
-        l_v = -robot_params_.max_linear_speed;
-      }
-      robot_->SetMotionCommand(0.0, 0.0, l_v);
-      break;
-    }
+void RangerROSMessenger::StopRobot(const char* reason) {
+  if (!robot_) {
+    return;
+  }
+  try {
+    robot_->SetMotionMode(MotionState::MOTION_MODE_DUAL_ACKERMAN);
+    robot_->SetMotionCommand(0.0, 0.0);
+    motion_mode_ = MotionState::MOTION_MODE_DUAL_ACKERMAN;
+  } catch (const std::exception& ex) {
+    ROS_ERROR("StopRobot(%s) failed: %s", reason ? reason : "unknown",
+              ex.what());
+    return;
+  }
+  ROS_WARN_THROTTLE(1.0, "Ranger stop applied (%s)",
+                    reason ? reason : "unknown");
+}
+
+void RangerROSMessenger::EnforceCommandWatchdog() {
+  const WatchdogUpdate update =
+      watchdog_.update(ros::SteadyTime::now().toSec());
+  if (update.request_stop) {
+    StopRobot("cmd_vel watchdog timeout");
+  }
+  if (update.timed_out != last_watchdog_timed_out_ || update.request_stop) {
+    last_watchdog_timed_out_ = update.timed_out;
+    PublishWatchdogStatus(true);
   }
 }
+
+RangerCommandLimits RangerROSMessenger::CurrentCommandLimits() const {
+  RangerCommandLimits limits;
+  limits.track = robot_params_.track;
+  limits.wheelbase = robot_params_.wheelbase;
+  limits.max_linear_speed = robot_params_.max_linear_speed;
+  limits.max_angular_speed = robot_params_.max_angular_speed;
+  limits.max_speed_cmd = robot_params_.max_speed_cmd;
+  limits.max_steer_angle_central = robot_params_.max_steer_angle_central;
+  limits.max_steer_angle_parallel = robot_params_.max_steer_angle_parallel;
+  limits.max_round_angle = robot_params_.max_round_angle;
+  limits.min_turn_radius = robot_params_.min_turn_radius;
+  limits.allow_side_slip = (robot_type_ == RangerSubType::kRangerMiniV1);
+  return limits;
+}
+
+void RangerROSMessenger::ApplyRangerCommand(
+    const RangerCommandDecision& decision) {
+  if (!robot_) {
+    return;
+  }
+  if (decision.stop) {
+    StopRobot("explicit zero twist");
+    return;
+  }
+
+  try {
+    motion_mode_ = decision.motion_mode;
+    robot_->SetMotionMode(decision.motion_mode);
+    switch (decision.motion_mode) {
+      case MotionState::MOTION_MODE_DUAL_ACKERMAN: {
+        const double phi_i = ConvertCentralAngleToInner(decision.steering);
+        robot_->SetMotionCommand(decision.linear, phi_i);
+        break;
+      }
+      case MotionState::MOTION_MODE_PARALLEL: {
+        robot_->SetMotionCommand(decision.linear, decision.steering);
+        break;
+      }
+      case MotionState::MOTION_MODE_SPINNING: {
+        robot_->SetMotionCommand(0.0, 0.0, decision.angular);
+        break;
+      }
+      case MotionState::MOTION_MODE_SIDE_SLIP: {
+        robot_->SetMotionCommand(0.0, 0.0, decision.angular);
+        break;
+      }
+      default: {
+        StopRobot("unsupported motion mode");
+        break;
+      }
+    }
+  } catch (const std::exception& ex) {
+    ROS_ERROR("ApplyRangerCommand failed: %s", ex.what());
+    StopRobot("communication exception");
+  }
+}
+
+void RangerROSMessenger::PublishWatchdogStatus(bool force) {
+  std_msgs::Bool ready;
+  ready.data = true;
+  if (force || !watchdog_ready_published_) {
+    watchdog_ready_pub_.publish(ready);
+    watchdog_ready_published_ = true;
+  }
+
+  std_msgs::Bool timed_out;
+  timed_out.data = watchdog_.timedOut();
+  if (force || timed_out.data != last_watchdog_timed_out_) {
+    watchdog_timed_out_pub_.publish(timed_out);
+    last_watchdog_timed_out_ = timed_out.data;
+  }
+}
+// ################################
+// C++: Twist callback via ComputeRangerCommand end
+// ################################
 
 double RangerROSMessenger::CalculateSteeringAngle(geometry_msgs::Twist msg,
                                                   double& radius) {

@@ -23,12 +23,16 @@
 
 using namespace westonrobot;
 
-std::shared_ptr<RangerRobot> robot;
-
 void SignalHandler(int s)
 {
-  printf("Caught signal %d, program exit\n", s);
-  exit(EXIT_FAILURE);
+  // ################################
+  // C++: request ros::shutdown so messenger destructor can stop begin
+  // ################################
+  printf("Caught signal %d, requesting ros::shutdown\n", s);
+  ros::shutdown();
+  // ################################
+  // C++: request ros::shutdown so messenger destructor can stop end
+  // ################################
 }
 
 void controlSingal()
@@ -48,24 +52,8 @@ int main(int argc, char** argv)
 
   controlSingal();
 
-  // instantiate a robot object
-  // robot = std::make_shared<RangerRobot>();
   RangerROSMessenger messenger(&node);
   messenger.Run();
-
-  // // publish robot state at 50Hz while listening to twist commands
-  // ros::Rate rate(50);
-  // while (ros::ok()) {
-  //   if (!messenger.simulated_robot_) {
-  //     messenger.PublishStateToROS();
-  //   } else {
-  //     double linear, angular;
-  //     messenger.GetCurrentMotionCmdForSim(linear, angular);
-  //     messenger.PublishSimStateToROS(linear, angular);
-  //   }
-  //   ros::spinOnce();
-  //   rate.sleep();
-  // }
 
   return 0;
 }

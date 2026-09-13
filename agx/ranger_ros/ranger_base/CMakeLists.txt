@@ -10,6 +10,7 @@ add_compile_options(-std=c++11)
 find_package(catkin REQUIRED COMPONENTS
   controller_manager
   geometry_msgs
+  std_msgs
   ranger_msgs
   roscpp
   roslaunch
@@ -170,10 +171,18 @@ add_library(ranger_command src/ranger_command.cpp)
 target_link_libraries(ranger_command ${catkin_LIBRARIES})
 add_dependencies(ranger_command ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 
+add_library(command_watchdog src/command_watchdog.cpp)
+target_link_libraries(command_watchdog ${catkin_LIBRARIES})
+add_dependencies(command_watchdog ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+
 if(CATKIN_ENABLE_TESTING)
   catkin_add_gtest(test_ranger_command test/test_ranger_command.cpp)
   if(TARGET test_ranger_command)
     target_link_libraries(test_ranger_command ranger_command ${catkin_LIBRARIES})
+  endif()
+  catkin_add_gtest(test_command_watchdog test/test_command_watchdog.cpp)
+  if(TARGET test_command_watchdog)
+    target_link_libraries(test_command_watchdog command_watchdog ${catkin_LIBRARIES})
   endif()
 endif()
 # ################################
@@ -185,7 +194,7 @@ endif()
 # ################################
 if(RANGER_BASE_BUILD_HARDWARE)
   add_library(ranger_messenger STATIC src/ranger_messenger.cpp)
-  target_link_libraries(ranger_messenger ${catkin_LIBRARIES} ascent ranger_command)
+  target_link_libraries(ranger_messenger ${catkin_LIBRARIES} ascent ranger_command command_watchdog)
   add_dependencies(ranger_messenger ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 
   add_executable(ranger_base_node src/ranger_base_node.cpp)

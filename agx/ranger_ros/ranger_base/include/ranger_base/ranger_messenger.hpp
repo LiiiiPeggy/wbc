@@ -23,11 +23,14 @@
 #include <geometry_msgs/Twist.h>
 #include <nav_msgs/Odometry.h>
 #include <sensor_msgs/BatteryState.h>
+#include <std_msgs/Bool.h>
 
 #include <ranger_msgs/SystemState.h>
 #include <ranger_msgs/MotionState.h>
 #include <ranger_msgs/ActuatorStateArray.h>
 
+#include "ranger_base/command_watchdog.hpp"
+#include "ranger_base/ranger_command.hpp"
 #include "ranger_base/ranger_params.hpp"
 #include "ugv_sdk/mobile_robot/ranger_robot.hpp"
 
@@ -51,6 +54,13 @@ class RangerROSMessenger {
 
  public:
   RangerROSMessenger(ros::NodeHandle* nh);
+  // ################################
+  // C++: destructor issues explicit stop begin
+  // ################################
+  ~RangerROSMessenger();
+  // ################################
+  // C++: destructor issues explicit stop end
+  // ################################
 
   void Run();
 
@@ -64,6 +74,18 @@ class RangerROSMessenger {
   void UpdateOdometry(double linear, double angular, double angle, double dt);
   double ConvertInnerAngleToCentral(double angle);
   double ConvertCentralAngleToInner(double angle);
+
+  // ################################
+  // C++: watchdog + finite command apply API begin
+  // ################################
+  void StopRobot(const char* reason);
+  void EnforceCommandWatchdog();
+  void ApplyRangerCommand(const RangerCommandDecision& decision);
+  RangerCommandLimits CurrentCommandLimits() const;
+  void PublishWatchdogStatus(bool force);
+  // ################################
+  // C++: watchdog + finite command apply API end
+  // ################################
 
   ros::NodeHandle* nh_;
   std::shared_ptr<RangerRobot> robot_;
@@ -82,6 +104,18 @@ class RangerROSMessenger {
   int update_rate_;
   bool publish_odom_tf_;
 
+  // ################################
+  // C++: watchdog params/state members begin
+  // ################################
+  double cmd_vel_timeout_{0.20};
+  double command_zero_epsilon_{1e-4};
+  CommandWatchdog watchdog_{0.20};
+  bool watchdog_ready_published_{false};
+  bool last_watchdog_timed_out_{false};
+  // ################################
+  // C++: watchdog params/state members end
+  // ################################
+
   uint8_t motion_mode_ = 0;
 
   ros::Publisher system_state_pub_;
@@ -89,6 +123,14 @@ class RangerROSMessenger {
   ros::Publisher actuator_state_pub_;
   ros::Publisher odom_pub_;
   ros::Publisher battery_state_pub_;
+  // ################################
+  // C++: watchdog status publishers begin
+  // ################################
+  ros::Publisher watchdog_ready_pub_;
+  ros::Publisher watchdog_timed_out_pub_;
+  // ################################
+  // C++: watchdog status publishers end
+  // ################################
 
   ros::Subscriber motion_cmd_sub_;
 
