@@ -9,12 +9,35 @@
   <arg name="robotIp" doc="IP of the controller" default="192.168.5.1"/>
   <arg name="robotName" doc="Name of the controller" default=""/>
 
+  <!-- ################################ -->
+  <!-- XML: non-blocking Action runner params begin -->
+  <!-- ################################ -->
+  <arg name="servoj_period" default="0.10"/>
+  <arg name="cr10_goal_joint_tol" default="0.02"/>
+  <arg name="cr10_stop_velocity_tol" default="0.01"/>
+  <arg name="completion_settle_timeout" default="2.0"/>
+  <arg name="remani_prestart_hold_mode" default="false"/>
+  <!-- ################################ -->
+  <!-- XML: non-blocking Action runner params end -->
+  <!-- ################################ -->
+
   <node name="$(arg robotName)$(env DOBOT_TYPE)_robot" pkg="dobot_v4_bringup" type="dobot_v4_bringup" output="screen" >
     <param name="num_nodes" type="int" value="1" />
     <param name="robot_node_name" type="str" value="$(arg robotName)"/>
     <param name="joint_publish_rate" type="double" value="10" />
     <param name="trajectory_duration" type="double" value="0.1" />
     <param name="robot_ip_address" type="str" value="$(arg robotIp)"/>
+    <!-- ################################ -->
+    <!-- XML: pass runner params into node begin -->
+    <!-- ################################ -->
+    <param name="servoj_period" type="double" value="$(arg servoj_period)"/>
+    <param name="cr10_goal_joint_tol" type="double" value="$(arg cr10_goal_joint_tol)"/>
+    <param name="cr10_stop_velocity_tol" type="double" value="$(arg cr10_stop_velocity_tol)"/>
+    <param name="completion_settle_timeout" type="double" value="$(arg completion_settle_timeout)"/>
+    <param name="remani_prestart_hold_mode" type="bool" value="$(arg remani_prestart_hold_mode)"/>
+    <!-- ################################ -->
+    <!-- XML: pass runner params into node end -->
+    <!-- ################################ -->
   </node>
 
 </launch>

@@ -114,6 +114,8 @@
 #include <dobot_v4_bringup/ServoJ.h>
 #include <dobot_v4_bringup/ServoP.h>
 #include <dobot_v4_bringup/TcpDashboard.h>
+#include <dobot_v4_bringup/follow_joint_trajectory_adapter.hpp>
+#include <std_msgs/Float64.h>
 
 using namespace actionlib;
 using namespace control_msgs;
@@ -137,6 +139,18 @@ private:
     uint16_t last_robot_mode_;
     std::thread threadPubFeedBackInfo;
     ros::Publisher pubFeedInfo;
+    // ################################
+    // C++: non-blocking FollowJointTrajectory adapter members begin
+    // ################################
+    ros::Publisher first_non_hold_pub_;
+    std::unique_ptr<dobot_v4_bringup::FollowJointTrajectoryAdapter> traj_adapter_;
+    std::unique_ptr<dobot_v4_bringup::Cr10CommandSink> command_sink_;
+    actionlib::ActionServer<FollowJointTrajectoryAction>::GoalHandle active_handle_;
+    bool have_active_handle_{false};
+    dobot_v4_bringup::RunnerConfig runner_config_;
+    // ################################
+    // C++: non-blocking FollowJointTrajectory adapter members end
+    // ################################
 
 public:
     /**
@@ -323,7 +337,13 @@ protected:
 private:
     void feedbackHandle(const ros::TimerEvent& tm,
                         actionlib::ActionServer<FollowJointTrajectoryAction>::GoalHandle handle);
-    void moveHandle(const ros::TimerEvent& tm, actionlib::ActionServer<FollowJointTrajectoryAction>::GoalHandle handle);
+    // ################################
+    // C++: replace blocking moveHandle with one-tick timer begin
+    // ################################
+    void servoTimerHandle(const ros::TimerEvent& tm);
+    // ################################
+    // C++: replace blocking moveHandle with one-tick timer end
+    // ################################
     void goalHandle(actionlib::ActionServer<FollowJointTrajectoryAction>::GoalHandle handle);
     void cancelHandle(actionlib::ActionServer<FollowJointTrajectoryAction>::GoalHandle handle);
     std::string parseString(const std::string& str);

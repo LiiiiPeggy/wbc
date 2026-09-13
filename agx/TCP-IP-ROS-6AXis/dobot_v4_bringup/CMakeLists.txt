@@ -248,9 +248,7 @@ add_executable(${PROJECT_NAME}
 add_dependencies(${PROJECT_NAME} ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 
 ## Specify libraries to link a library or executable target against
-target_link_libraries(${PROJECT_NAME}
-  ${catkin_LIBRARIES}
-)
+# Linked after Phase4 libraries are declared below.
 
 #############
 ## Install ##
@@ -299,7 +297,7 @@ target_link_libraries(${PROJECT_NAME}
 #############
 
 # ################################
-# CMake: Phase4 trajectory goal validator begin
+# CMake: Phase4 trajectory libraries begin
 # ################################
 add_library(trajectory_goal_validator src/trajectory_goal_validator.cpp)
 target_link_libraries(trajectory_goal_validator ${catkin_LIBRARIES})
@@ -308,6 +306,17 @@ add_dependencies(trajectory_goal_validator ${${PROJECT_NAME}_EXPORTED_TARGETS} $
 add_library(trajectory_runner src/trajectory_runner.cpp)
 target_link_libraries(trajectory_runner trajectory_goal_validator ${catkin_LIBRARIES})
 add_dependencies(trajectory_runner ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+
+add_library(follow_joint_trajectory_adapter src/follow_joint_trajectory_adapter.cpp)
+target_link_libraries(follow_joint_trajectory_adapter trajectory_runner ${catkin_LIBRARIES})
+add_dependencies(follow_joint_trajectory_adapter ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+
+target_link_libraries(${PROJECT_NAME}
+  follow_joint_trajectory_adapter
+  trajectory_runner
+  trajectory_goal_validator
+  ${catkin_LIBRARIES}
+)
 
 if(CATKIN_ENABLE_TESTING)
   catkin_add_gtest(test_trajectory_goal_validator test/test_trajectory_goal_validator.cpp)
@@ -319,12 +328,21 @@ if(CATKIN_ENABLE_TESTING)
   endif()
   catkin_add_gtest(test_trajectory_runner test/test_trajectory_runner.cpp)
   if(TARGET test_trajectory_runner)
+    target_include_directories(test_trajectory_runner PRIVATE
+      ${CMAKE_CURRENT_SOURCE_DIR}/test)
     target_link_libraries(test_trajectory_runner
       trajectory_runner ${catkin_LIBRARIES})
   endif()
+  catkin_add_gtest(test_action_adapter test/test_action_adapter.cpp)
+  if(TARGET test_action_adapter)
+    target_include_directories(test_action_adapter PRIVATE
+      ${CMAKE_CURRENT_SOURCE_DIR}/test)
+    target_link_libraries(test_action_adapter
+      follow_joint_trajectory_adapter ${catkin_LIBRARIES})
+  endif()
 endif()
 # ################################
-# CMake: Phase4 trajectory goal validator end
+# CMake: Phase4 trajectory libraries end
 # ################################
 
 ## Add gtest based cpp test target and link libraries

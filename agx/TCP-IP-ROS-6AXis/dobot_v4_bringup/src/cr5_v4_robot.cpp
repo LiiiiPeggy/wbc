@@ -14,6 +14,66 @@
 #include <ros/ros.h>
 #include <ros/param.h>
 #include <dobot_v4_bringup/cr5_v4_robot.h>
+#include <chrono>
+#include <cmath>
+#include <cstdio>
+#include <memory>
+
+namespace {
+
+// ################################
+// C++: production CR10 sink wrapping CR5Commander begin
+// ################################
+class CommanderCr10Sink : public dobot_v4_bringup::Cr10CommandSink {
+ public:
+  explicit CommanderCr10Sink(std::shared_ptr<CR5Commander> commander)
+      : commander_(std::move(commander)) {}
+
+  bool sendServoJ(const std::array<double, 6>& q_rad,
+                  double duration_sec) override {
+    try {
+      char cmd[160];
+      std::snprintf(
+          cmd, sizeof(cmd),
+          "servoj(%0.3f,%0.3f,%0.3f,%0.3f,%0.3f,%0.3f,t=%0.3f)",
+          q_rad[0] * 180.0 / M_PI, q_rad[1] * 180.0 / M_PI,
+          q_rad[2] * 180.0 / M_PI, q_rad[3] * 180.0 / M_PI,
+          q_rad[4] * 180.0 / M_PI, q_rad[5] * 180.0 / M_PI, duration_sec);
+      int32_t err_id = 0;
+      commander_->motionDoCmd(cmd, err_id);
+      return err_id == 0;
+    } catch (...) {
+      return false;
+    }
+  }
+
+  bool stop() override {
+    try {
+      commander_->Stop();
+      return true;
+    } catch (...) {
+      return false;
+    }
+  }
+
+  std::array<double, 6> actualQ() override {
+    double joints[6] = {0, 0, 0, 0, 0, 0};
+    commander_->getCurrentJointStatus(joints);
+    std::array<double, 6> q{};
+    for (std::size_t i = 0; i < 6; ++i) {
+      q[i] = joints[i];
+    }
+    return q;
+  }
+
+ private:
+  std::shared_ptr<CR5Commander> commander_;
+};
+// ################################
+// C++: production CR10 sink wrapping CR5Commander end
+// ################################
+
+}  // namespace
 
 // #include <dobot_v4_bringup/parseTool.h>
 
@@ -36,7 +96,23 @@ void CRRobot::init()
 {
     std::string ip = control_nh_.param<std::string>("robot_ip_address", "192.168.5.1");
     trajectory_duration_ = control_nh_.param("trajectory_duration", 0.3);
-    ROS_INFO("trajectory_duration : %0.2f", trajectory_duration_);
+    // ################################
+    // C++: load non-blocking Action runner params begin
+    // ################################
+    runner_config_.servoj_period = control_nh_.param("servoj_period", 0.10);
+    runner_config_.goal_joint_tol = control_nh_.param("cr10_goal_joint_tol", 0.02);
+    runner_config_.stop_velocity_tol =
+        control_nh_.param("cr10_stop_velocity_tol", 0.01);
+    runner_config_.settle_timeout =
+        control_nh_.param("completion_settle_timeout", 2.0);
+    runner_config_.required_settle_samples = 3;
+    runner_config_.remani_prestart_hold_mode =
+        control_nh_.param("remani_prestart_hold_mode", false);
+    // ################################
+    // C++: load non-blocking Action runner params end
+    // ################################
+    ROS_INFO("trajectory_duration : %0.2f servoj_period : %0.2f",
+             trajectory_duration_, runner_config_.servoj_period);
 
     int numRobotNodes = control_nh_.param("num_nodes", 1);
     std::string serviceRobotName{ "" };
@@ -145,6 +221,17 @@ void CRRobot::init()
 
     commander_ = std::make_shared<CR5Commander>(ip);
     commander_->init();
+    // ################################
+    // C++: construct non-blocking Action adapter begin
+    // ################################
+    command_sink_.reset(new CommanderCr10Sink(commander_));
+    traj_adapter_.reset(new dobot_v4_bringup::FollowJointTrajectoryAdapter(
+        command_sink_.get(), runner_config_));
+    first_non_hold_pub_ = control_nh_.advertise<std_msgs::Float64>(
+        "/remani/cr10_first_non_hold_servoj_steady", 1, true);
+    // ################################
+    // C++: construct non-blocking Action adapter end
+    // ################################
     server_tbl_.push_back(control_nh_.advertiseService(serviceEnableRobot, &CRRobot::enableRobot, this));
     server_tbl_.push_back(control_nh_.advertiseService(serviceDisableRobot, &CRRobot::disableRobot, this));
     server_tbl_.push_back(control_nh_.advertiseService(serviceClearError, &CRRobot::clearError, this));
@@ -523,77 +610,129 @@ std::vector<double> CRRobot::sample_traj(const trajectory_msgs::JointTrajectoryP
     return interp_traj;
 }
 
-void CRRobot::moveHandle(const ros::TimerEvent& tm,
-                         ActionServer<control_msgs::FollowJointTrajectoryAction>::GoalHandle handle)
-{
-    control_msgs::FollowJointTrajectoryGoalConstPtr goal = handle.getGoal();
+// ################################
+// C++: non-blocking FollowJointTrajectory Action path begin
+// ################################
+namespace {
+double steadyNowSec() {
+  using clock = std::chrono::steady_clock;
+  return std::chrono::duration<double>(clock::now().time_since_epoch()).count();
+}
+}  // namespace
 
-    static const double SERVOJ_DURATION = 0.4;
-    double t = SERVOJ_DURATION * 1.5;
-    ros::Rate timer(1.0 / SERVOJ_DURATION);    // servoj发布频率
-    double t0 = ros::Time::now().toSec();
+void CRRobot::servoTimerHandle(const ros::TimerEvent& /*tm*/) {
+  if (!traj_adapter_ || !have_active_handle_) {
+    return;
+  }
+  const dobot_v4_bringup::AdapterDecision decision =
+      traj_adapter_->timerTick(steadyNowSec());
 
-    try {
-        for (int i = 0; i < goal->trajectory.points.size() - 1; i++) {
-            trajectory_msgs::JointTrajectoryPoint interp_traj_begin = goal->trajectory.points[i];
-            trajectory_msgs::JointTrajectoryPoint interp_traj_end = goal->trajectory.points[i + 1];
-            double real_time;    // 实际间隔时间
-            double t1;
-            t1 = ros::Time::now().toSec();
-            real_time = t1 - t0;
-            while (real_time < interp_traj_end.time_from_start.toSec() - SERVOJ_DURATION) {
-                double time_index = real_time - interp_traj_begin.time_from_start.toSec();
-                std::vector<double> tmp = sample_traj(interp_traj_begin, interp_traj_end, time_index);
-                char cmd[100];
-                sprintf(cmd, "servoj(%0.3f,%0.3f,%0.3f,%0.3f,%0.3f,%0.3f,t=%0.3f)", tmp[0], tmp[1], tmp[2], tmp[3],
-                        tmp[4], tmp[5], t);
-                int32_t err_id;
-                commander_->motionDoCmd(cmd, err_id);
-                timer.sleep();
-                t1 = ros::Time::now().toSec();
-                real_time = t1 - t0;
-            }
-        }
-        std::vector<double> last_traj;
-        int point_num = goal->trajectory.points.size();
-        for (int i = 0; i < 6; i++) {
-            last_traj.push_back(goal->trajectory.points[point_num - 1].positions[i] * 180 / M_PI);
-        }
-        char cmd[100];
-        sprintf(cmd, "servoj(%0.3f,%0.3f,%0.3f,%0.3f,%0.3f,%0.3f,t=%0.3f)", last_traj[0], last_traj[1], last_traj[2],
-                last_traj[3], last_traj[4], last_traj[5], t);
-        int32_t err_id;
-        commander_->motionDoCmd(cmd, err_id);
-    } catch (const TcpClientException& err) {
-        ROS_ERROR("%s", err.what());
-        return;
+  if (decision.first_non_hold_servoj) {
+    std_msgs::Float64 stamp;
+    stamp.data = decision.first_non_hold_steady_sec;
+    first_non_hold_pub_.publish(stamp);
+  }
+
+  if (decision.publish_feedback) {
+    feedbackHandle(ros::TimerEvent(), active_handle_);
+  }
+
+  if (!decision.terminal) {
+    return;
+  }
+
+  control_msgs::FollowJointTrajectoryResult result;
+  if (decision.state == dobot_v4_bringup::RunnerState::Succeeded) {
+    active_handle_.setSucceeded(result, "settled");
+  } else if (decision.state == dobot_v4_bringup::RunnerState::Canceled) {
+    active_handle_.setCanceled(result, "stopped");
+  } else {
+    if (decision.error_code == "SETTLE_TIMEOUT") {
+      result.error_code =
+          control_msgs::FollowJointTrajectoryResult::GOAL_TOLERANCE_VIOLATED;
+      active_handle_.setAborted(result, "completion tolerance");
+    } else {
+      result.error_code =
+          control_msgs::FollowJointTrajectoryResult::INVALID_GOAL;
+      active_handle_.setAborted(
+          result, decision.error_code.empty() ? "aborted" : decision.error_code);
     }
-
-    timer_.stop();
-    movj_timer_.stop();
-    handle.setSucceeded();
+  }
+  have_active_handle_ = false;
+  movj_timer_.stop();
+  timer_.stop();
 }
 
-void CRRobot::goalHandle(ActionServer<control_msgs::FollowJointTrajectoryAction>::GoalHandle handle)
-{
-    index_ = 0;
-    for (uint32_t i = 0; i < 6; i++) {
-        goal_[i] = handle.getGoal()->trajectory.points[handle.getGoal()->trajectory.points.size() - 1].positions[i];
-    }
-    timer_ = control_nh_.createTimer(ros::Duration(1.0), boost::bind(&CRRobot::feedbackHandle, this, _1, handle));
-    movj_timer_ = control_nh_.createTimer(ros::Duration(trajectory_duration_),
-                                          boost::bind(&CRRobot::moveHandle, this, _1, handle));
-    timer_.start();
-    movj_timer_.start();
-    handle.setAccepted();
+void CRRobot::goalHandle(
+    ActionServer<control_msgs::FollowJointTrajectoryAction>::GoalHandle handle) {
+  control_msgs::FollowJointTrajectoryResult result;
+  if (!traj_adapter_) {
+    result.error_code =
+        control_msgs::FollowJointTrajectoryResult::INVALID_GOAL;
+    handle.setRejected(result, "adapter unavailable");
+    return;
+  }
+  if (traj_adapter_->hasActiveGoal() || have_active_handle_) {
+    result.error_code =
+        control_msgs::FollowJointTrajectoryResult::INVALID_GOAL;
+    handle.setRejected(result, "GOAL_ACTIVE");
+    return;
+  }
+
+  const dobot_v4_bringup::AdapterDecision accepted = traj_adapter_->accept(
+      handle.getGoal()->trajectory, steadyNowSec());
+  if (!accepted.accepted) {
+    result.error_code =
+        control_msgs::FollowJointTrajectoryResult::INVALID_GOAL;
+    handle.setRejected(result, accepted.error_code.empty() ? "rejected"
+                                                           : accepted.error_code);
+    return;
+  }
+
+  index_ = 0;
+  const auto& points = handle.getGoal()->trajectory.points;
+  for (uint32_t i = 0; i < 6; i++) {
+    goal_[i] = points[points.size() - 1].positions[i];
+  }
+  active_handle_ = handle;
+  have_active_handle_ = true;
+  handle.setAccepted();
+
+  movj_timer_ = control_nh_.createTimer(
+      ros::Duration(runner_config_.servoj_period), &CRRobot::servoTimerHandle,
+      this, false, false);
+  movj_timer_.start();
 }
 
-void CRRobot::cancelHandle(ActionServer<control_msgs::FollowJointTrajectoryAction>::GoalHandle handle)
-{
-    timer_.stop();
-    movj_timer_.stop();
-    handle.setSucceeded();
+void CRRobot::cancelHandle(
+    ActionServer<control_msgs::FollowJointTrajectoryAction>::GoalHandle handle) {
+  if (!traj_adapter_ || !have_active_handle_) {
+    return;
+  }
+  if (handle.getGoalID().id != active_handle_.getGoalID().id) {
+    return;
+  }
+  const dobot_v4_bringup::AdapterDecision decision =
+      traj_adapter_->requestCancel(steadyNowSec());
+  if (!decision.terminal) {
+    return;
+  }
+  control_msgs::FollowJointTrajectoryResult result;
+  if (decision.state == dobot_v4_bringup::RunnerState::Canceled) {
+    active_handle_.setCanceled(result, "stopped");
+  } else {
+    result.error_code =
+        control_msgs::FollowJointTrajectoryResult::INVALID_GOAL;
+    active_handle_.setAborted(
+        result, decision.error_code.empty() ? "aborted" : decision.error_code);
+  }
+  have_active_handle_ = false;
+  movj_timer_.stop();
+  timer_.stop();
 }
+// ################################
+// C++: non-blocking FollowJointTrajectory Action path end
+// ################################
 
 void CRRobot::getJointState(double* point)
 {
