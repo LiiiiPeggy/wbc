@@ -10,7 +10,13 @@ find_package(catkin REQUIRED COMPONENTS
 )
 
 add_message_files(FILES PlannerStatus.msg ExecutionState.msg ExecutionResult.msg FrozenCandidate.msg Cr10Status.msg)
-add_service_files(FILES ExecuteCandidate.srv)
+# ################################
+# CMake: CR10 Stop/E-Stop srv mirrors (MD5-compatible with dobot) begin
+# ################################
+add_service_files(FILES ExecuteCandidate.srv Cr10Stop.srv Cr10EmergencyStop.srv)
+# ################################
+# CMake: CR10 Stop/E-Stop srv mirrors end
+# ################################
 generate_messages(DEPENDENCIES geometry_msgs nav_msgs quadrotor_msgs std_msgs)
 
 catkin_package(CATKIN_DEPENDS geometry_msgs message_runtime nav_msgs quadrotor_msgs std_msgs)

@@ -93,6 +93,14 @@ add_library(remani_real_candidate
   # CMake: Phase3 base tracking controller end
   # ################################
   # ################################
+  # CMake: Phase4 CR10 arm trajectory + hardware channel begin
+  # ################################
+  src/arm_trajectory_builder.cpp
+  src/cr10_hardware_channel.cpp
+  # ################################
+  # CMake: Phase4 CR10 arm trajectory + hardware channel end
+  # ################################
+  # ################################
   # CMake: Task4 validator/preview sources end
   # ################################
 )
@@ -275,6 +283,23 @@ if(CATKIN_ENABLE_TESTING)
   endif()
   # ################################
   # CMake: Phase3 base tracking gtest end
+  # ################################
+
+  # ################################
+  # CMake: Phase4 arm trajectory builder gtest begin
+  # ################################
+  catkin_add_gtest(test_arm_trajectory_builder
+    test/test_arm_trajectory_builder.cpp
+  )
+  if(TARGET test_arm_trajectory_builder)
+    target_compile_features(test_arm_trajectory_builder PRIVATE cxx_std_14)
+    target_link_libraries(test_arm_trajectory_builder
+      remani_real_candidate
+      ${catkin_LIBRARIES}
+    )
+  endif()
+  # ################################
+  # CMake: Phase4 arm trajectory builder gtest end
   # ################################
 
   # ################################
