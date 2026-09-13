@@ -12,6 +12,9 @@ find_package(catkin REQUIRED COMPONENTS
   roscpp
   actionlib
   std_msgs
+  trajectory_msgs
+  control_msgs
+  actionlib_msgs
   message_generation
 )
 
@@ -294,6 +297,26 @@ target_link_libraries(${PROJECT_NAME}
 #############
 ## Testing ##
 #############
+
+# ################################
+# CMake: Phase4 trajectory goal validator begin
+# ################################
+add_library(trajectory_goal_validator src/trajectory_goal_validator.cpp)
+target_link_libraries(trajectory_goal_validator ${catkin_LIBRARIES})
+add_dependencies(trajectory_goal_validator ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+
+if(CATKIN_ENABLE_TESTING)
+  catkin_add_gtest(test_trajectory_goal_validator test/test_trajectory_goal_validator.cpp)
+  if(TARGET test_trajectory_goal_validator)
+    target_include_directories(test_trajectory_goal_validator PRIVATE
+      ${CMAKE_CURRENT_SOURCE_DIR}/test)
+    target_link_libraries(test_trajectory_goal_validator
+      trajectory_goal_validator ${catkin_LIBRARIES})
+  endif()
+endif()
+# ################################
+# CMake: Phase4 trajectory goal validator end
+# ################################
 
 ## Add gtest based cpp test target and link libraries
 # catkin_add_gtest(${PROJECT_NAME}-test test/test_dobot_v4_bringup.cpp)
