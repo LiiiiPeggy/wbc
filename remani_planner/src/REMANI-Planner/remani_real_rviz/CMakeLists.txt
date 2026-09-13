@@ -66,6 +66,16 @@ install(FILES plugin_description.xml
   DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}
 )
 
+# ################################
+# CMake: install real RViz config begin
+# ################################
+install(DIRECTORY config/
+  DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}/config
+)
+# ################################
+# CMake: install real RViz config end
+# ################################
+
 if(CATKIN_ENABLE_TESTING)
   # ################################
   # CMake: PanelViewModel gtest begin

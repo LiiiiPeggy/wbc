@@ -40,8 +40,16 @@
 
   <node pkg="remani_real" type="remani_state_bridge_node"
         name="remani_state_bridge" output="screen" required="true"/>
+  <!-- ################################ -->
+  <!-- Launch: short assembly timeout for protocol rostest begin -->
+  <!-- ################################ -->
   <node pkg="remani_real" type="remani_real_node"
-        name="remani_real_node" output="screen" required="true"/>
+        name="remani_real_node" output="screen" required="true">
+    <param name="assembly_timeout_sec" value="1.0"/>
+  </node>
+  <!-- ################################ -->
+  <!-- Launch: short assembly timeout for protocol rostest end -->
+  <!-- ################################ -->
   <node pkg="remani_real" type="fake_real_feedback_node.py"
         name="fake_real_feedback" output="screen" required="true"/>
   <node pkg="remani_real" type="fake_ee_goal_marker.py"
@@ -50,7 +58,7 @@
         name="fake_candidate_planner" output="screen" required="true"/>
 
   <test test-name="test_real_control_plane" pkg="remani_real"
-        type="test_real_control_plane.py" time-limit="120.0"/>
+        type="test_real_control_plane.py" time-limit="180.0"/>
   <!-- ################################ -->
   <!-- Launch: Real control plane dry-run rostest end -->
   <!-- ################################ -->

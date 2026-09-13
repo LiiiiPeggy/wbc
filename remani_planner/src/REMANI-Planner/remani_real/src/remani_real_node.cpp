@@ -37,11 +37,24 @@ namespace {
 using FollowJointTrajectoryClient =
     actionlib::SimpleActionClient<control_msgs::FollowJointTrajectoryAction>;
 
+double loadAssemblyTimeoutSec() {
+  // ################################
+  // C++: private assembly_timeout_sec for rostest begin
+  // ################################
+  double timeout_sec = 60.0;
+  ros::NodeHandle private_nh("~");
+  private_nh.param("assembly_timeout_sec", timeout_sec, 60.0);
+  return timeout_sec;
+  // ################################
+  // C++: private assembly_timeout_sec for rostest end
+  // ################################
+}
+
 class RemaniRealNode {
  public:
   RemaniRealNode()
       : private_nh_("~"),
-        assembler_(60.0),
+        assembler_(loadAssemblyTimeoutSec()),
         action_client_("/cr10_robot/joint_controller/follow_joint_trajectory",
                        true) {
     std::string mode;
