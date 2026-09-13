@@ -187,10 +187,14 @@ TEST(DeploymentStateMachine, ReadinessLossDuringExecutionEntersError) {
   lost.odom = false;
   fsm.updateReadiness(lost);
   EXPECT_EQ(State::Error, fsm.state());
-  EXPECT_FALSE(fsm.requestAbort().accepted);
-  fsm.updateReadiness(readySnapshot());
+  // ################################
+  // C++: Abort recovers from Error without waiting for readiness begin
+  // ################################
   ASSERT_TRUE(fsm.requestAbort().accepted);
   EXPECT_EQ(State::Ready, fsm.state());
+  // ################################
+  // C++: Abort recovers from Error without waiting for readiness end
+  // ################################
 }
 
 TEST(DeploymentStateMachine, InvalidValidationReturnsReady) {

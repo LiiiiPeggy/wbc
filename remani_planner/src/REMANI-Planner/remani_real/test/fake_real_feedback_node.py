@@ -19,6 +19,8 @@ from std_msgs.msg import Bool, UInt32
 class FakeRealFeedbackNode(object):
     def __init__(self):
         self._goal_count = 0
+        self._publish_odom = rospy.get_param("~publish_odom", True)
+        self._publish_watchdog = rospy.get_param("~publish_watchdog", True)
         self._count_pub = rospy.Publisher(
             "/remani/test/cr10_action_goal_count", UInt32, queue_size=1, latch=True)
         self._odom_pub = rospy.Publisher("/odom", Odometry, queue_size=1)
@@ -38,8 +40,9 @@ class FakeRealFeedbackNode(object):
             auto_start=False)
         self._action_server.start()
 
-        self._watchdog_ready_pub.publish(Bool(data=True))
-        self._watchdog_timeout_pub.publish(Bool(data=False))
+        if self._publish_watchdog:
+            self._watchdog_ready_pub.publish(Bool(data=True))
+            self._watchdog_timeout_pub.publish(Bool(data=False))
         self._publish_goal_count()
 
         self._timer = rospy.Timer(rospy.Duration(0.05), self._on_timer)
@@ -55,15 +58,16 @@ class FakeRealFeedbackNode(object):
     def _on_timer(self, _event):
         stamp = rospy.Time.now()
 
-        odom = Odometry()
-        odom.header.stamp = stamp
-        odom.header.frame_id = "world"
-        odom.child_frame_id = "base_link"
-        odom.pose.pose.position.x = 0.0
-        odom.pose.pose.position.y = 0.0
-        odom.pose.pose.position.z = 0.0
-        odom.pose.pose.orientation = Quaternion(0.0, 0.0, 0.0, 1.0)
-        self._odom_pub.publish(odom)
+        if self._publish_odom:
+            odom = Odometry()
+            odom.header.stamp = stamp
+            odom.header.frame_id = "world"
+            odom.child_frame_id = "base_link"
+            odom.pose.pose.position.x = 0.0
+            odom.pose.pose.position.y = 0.0
+            odom.pose.pose.position.z = 0.0
+            odom.pose.pose.orientation = Quaternion(0.0, 0.0, 0.0, 1.0)
+            self._odom_pub.publish(odom)
 
         raw = JointState()
         raw.header.stamp = stamp

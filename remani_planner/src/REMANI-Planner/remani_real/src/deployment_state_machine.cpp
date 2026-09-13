@@ -140,9 +140,14 @@ CommandResult DeploymentStateMachine::requestAbort() {
   if (!permissionsFor(state_).abort) {
     return reject("ABORT_DENIED", "abort is not permitted in current state");
   }
-  if (state_ == State::Error && !isReady(readiness_)) {
-    return reject("NOT_READY", "error abort requires restored health");
-  }
+  // ################################
+  // C++: operator Abort always recovers from Error begin
+  // ################################
+  // Do not require readiness to leave Error: Abort is the recovery path
+  // after watchdog/ownership/tracking faults.
+  // ################################
+  // C++: operator Abort always recovers from Error end
+  // ################################
   planned_candidate_id_ = 0;
   clearExecutionFlags();
   last_error_code_.clear();

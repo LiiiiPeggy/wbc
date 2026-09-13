@@ -27,7 +27,9 @@
 #include <remani_real/deployment_state_machine.hpp>
 #include <remani_real/dry_run_motion_output.hpp>
 #include <remani_real/mm_config_validation_environment.hpp>
+#include <remani_real/motion_output.hpp>
 #include <remani_real/preview_publisher.hpp>
+#include <remani_real/ranger_hardware_channel.hpp>
 
 namespace remani_real {
 namespace {
@@ -62,19 +64,34 @@ class RemaniRealNode {
     std::string owner;
     std::string environment_mode;
     bool dry_run = false;
+    bool enable_staged_test = false;
     nh_.param<std::string>("mode", mode, "sim");
     nh_.param<std::string>("execution_owner", owner, "internal");
     nh_.param<std::string>("environment_mode", environment_mode, "simulated");
     nh_.param("dry_run", dry_run, false);
+    private_nh_.param("enable_staged_test", enable_staged_test, false);
+    // ################################
+    // C++: Phase3 staged non-dry gate begin
+    // ################################
     if (mode != "real" || owner != "external" ||
-        environment_mode != "static_empty" || !dry_run) {
+        environment_mode != "static_empty") {
       throw std::runtime_error(
-          "remani_real_node Phase-2 requires mode=real, "
-          "execution_owner=external, environment_mode=static_empty, dry_run=true");
+          "remani_real_node requires mode=real, "
+          "execution_owner=external, environment_mode=static_empty");
     }
+    if (!dry_run && !enable_staged_test) {
+      throw std::runtime_error(
+          "dry_run=false requires ~enable_staged_test=true "
+          "(Ranger-only staged gate)");
+    }
+    dry_run_ = dry_run;
+    // ################################
+    // C++: Phase3 staged non-dry gate end
+    // ################################
 
     configureEnvironment();
     ValidationLimits limits;
+    // Staged Ranger-only gate keeps validation limits; tracking clamp is 0.05.
     validator_.reset(new CandidateValidator(limits, environment_.get()));
     preview_.reset(new PreviewPublisher(nh_));
     // ################################
@@ -94,9 +111,24 @@ class RemaniRealNode {
               tracking_config.max_position_error, 0.20);
     nh_.param("base_tracking/max_yaw_error", tracking_config.max_yaw_error,
               0.20);
+    if (enable_staged_test) {
+      tracking_config.max_linear = 0.05;
+      tracking_config.max_angular = 0.10;
+    }
     base_tracker_.reset(new BaseTrackingController(tracking_config));
     // ################################
     // C++: load base tracking config end
+    // ################################
+
+    // ################################
+    // C++: compose Ranger output channel begin
+    // ################################
+    if (!dry_run_) {
+      ranger_hw_.reset(new RangerHardwareChannel(
+          nh_, kRangerHardwareCmdVelTopic, ros::this_node::getName()));
+    }
+    // ################################
+    // C++: compose Ranger output channel end
     // ################################
 
     state_pub_ = nh_.advertise<remani_real_msgs::ExecutionState>(
@@ -194,7 +226,7 @@ class RemaniRealNode {
     msg.header.stamp = ros::Time::now();
     msg.mode = remani_real_msgs::ExecutionState::MODE_REAL;
     msg.execution_owner = remani_real_msgs::ExecutionState::OWNER_EXTERNAL;
-    msg.dry_run = true;
+    msg.dry_run = dry_run_;
     msg.environment_mode = remani_real_msgs::ExecutionState::ENV_STATIC_EMPTY;
     msg.planner_state = planner_state_;
 
@@ -484,10 +516,39 @@ class RemaniRealNode {
       paused_ = false;
       execution_progress_ = 0.0;
       dry_output_.stop();
+      geometry_msgs::Twist zero;
+      publishRangerCommand(zero);
     }
     publishState();
     return true;
   }
+
+  // ################################
+  // C++: publish Ranger command to dry or hardware channel begin
+  // ################################
+  void publishRangerCommand(const geometry_msgs::Twist& twist) {
+    if (dry_run_) {
+      dry_output_.publish(twist);
+      dry_preview_pub_.publish(twist);
+      return;
+    }
+    if (!ranger_hw_) {
+      fsm_.onExecutionFault("RANGER_HW_MISSING");
+      return;
+    }
+    if (!ranger_hw_->ownershipHealthy()) {
+      geometry_msgs::Twist zero;
+      ranger_hw_->publishStopUnchecked(zero);
+      fsm_.onExecutionFault("TOPIC_OWNERSHIP");
+      return;
+    }
+    if (!ranger_hw_->publish(twist)) {
+      fsm_.onExecutionFault("TOPIC_OWNERSHIP");
+    }
+  }
+  // ################################
+  // C++: publish Ranger command to dry or hardware channel end
+  // ################################
 
   void onTimer(const ros::TimerEvent&) {
     fsm_.updateReadiness(readinessSnapshot());
@@ -516,14 +577,15 @@ class RemaniRealNode {
         geometry_msgs::Twist twist;
         if (tracked.valid) {
           twist = tracked.command;
+          publishRangerCommand(twist);
         } else {
           // Keep diagnostics zeroed and surface fault without hardware path.
+          geometry_msgs::Twist zero;
+          publishRangerCommand(zero);
           fsm_.onExecutionFault(tracked.error_code.empty()
                                     ? "BASE_TRACKING_ERROR"
                                     : tracked.error_code);
         }
-        dry_output_.publish(twist);
-        dry_preview_pub_.publish(twist);
         // ################################
         // C++: dry-run uses base tracker for command shaping end
         // ################################
@@ -548,6 +610,8 @@ class RemaniRealNode {
   std::shared_ptr<GridMap> grid_map_;
   std::shared_ptr<remani_planner::MMConfig> mm_config_;
   DryRunMotionOutput dry_output_;
+  std::unique_ptr<RangerHardwareChannel> ranger_hw_;
+  bool dry_run_{true};
   FrozenCandidate frozen_;
   ValidationReport report_;
   ActualStateSnapshot actual_;

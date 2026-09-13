@@ -37,6 +37,11 @@ class RangerHardwareChannel : public RangerCommandChannel {
     return true;
   }
 
+  // Emergency stop path: still emit when ownership is already unhealthy.
+  void publishStopUnchecked(const geometry_msgs::Twist& zero_command) {
+    publisher_.publish(zero_command);
+  }
+
   bool hardwareOutputEnabled() const override { return true; }
 
   bool ownershipHealthy() const;

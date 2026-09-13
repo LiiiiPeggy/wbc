@@ -1,0 +1,18 @@
+<?xml version="1.0"?>
+<!-- ################################ -->
+<!-- XML: ranger-only execution rostest begin -->
+<!-- ################################ -->
+<launch>
+  <include file="$(find remani_real)/launch/ranger_only_low_speed.launch">
+    <arg name="enable_staged_test" value="true"/>
+    <arg name="dry_run" value="false"/>
+    <arg name="max_test_duration" value="3.0"/>
+  </include>
+  <test test-name="test_ranger_only_execution"
+        pkg="remani_real"
+        type="test_ranger_only_execution.py"
+        time-limit="120.0"/>
+</launch>
+<!-- ################################ -->
+<!-- XML: ranger-only execution rostest end -->
+<!-- ################################ -->
