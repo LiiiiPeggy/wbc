@@ -305,6 +305,10 @@ add_library(trajectory_goal_validator src/trajectory_goal_validator.cpp)
 target_link_libraries(trajectory_goal_validator ${catkin_LIBRARIES})
 add_dependencies(trajectory_goal_validator ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 
+add_library(trajectory_runner src/trajectory_runner.cpp)
+target_link_libraries(trajectory_runner trajectory_goal_validator ${catkin_LIBRARIES})
+add_dependencies(trajectory_runner ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+
 if(CATKIN_ENABLE_TESTING)
   catkin_add_gtest(test_trajectory_goal_validator test/test_trajectory_goal_validator.cpp)
   if(TARGET test_trajectory_goal_validator)
@@ -312,6 +316,11 @@ if(CATKIN_ENABLE_TESTING)
       ${CMAKE_CURRENT_SOURCE_DIR}/test)
     target_link_libraries(test_trajectory_goal_validator
       trajectory_goal_validator ${catkin_LIBRARIES})
+  endif()
+  catkin_add_gtest(test_trajectory_runner test/test_trajectory_runner.cpp)
+  if(TARGET test_trajectory_runner)
+    target_link_libraries(test_trajectory_runner
+      trajectory_runner ${catkin_LIBRARIES})
   endif()
 endif()
 # ################################
