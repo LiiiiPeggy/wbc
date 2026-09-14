@@ -9,6 +9,7 @@
 #include <quadrotor_msgs/PolynomialTraj.h>
 #include <remani_real_msgs/Cr10Status.h>
 #include <remani_real_msgs/ExecuteCandidate.h>
+#include <remani_real_msgs/ExecutionResult.h>
 #include <remani_real_msgs/ExecutionState.h>
 #include <remani_real_msgs/PlannerStatus.h>
 #include <ros/ros.h>
@@ -29,7 +30,9 @@
 #include <remani_real/mm_config_validation_environment.hpp>
 #include <remani_real/motion_output.hpp>
 #include <remani_real/preview_publisher.hpp>
+#include <remani_real/completion_verifier.hpp>
 #include <remani_real/ranger_hardware_channel.hpp>
+#include <remani_real/runtime_safety_monitor.hpp>
 
 namespace remani_real {
 namespace {
@@ -131,8 +134,34 @@ class RemaniRealNode {
     // C++: compose Ranger output channel end
     // ################################
 
+    // ################################
+    // C++: construct RuntimeSafetyMonitor begin
+    // ################################
+    RuntimeSafetyConfig safety_config;
+    safety_config.dry_run = dry_run_;
+    safety_config.expected_ranger_publisher = ros::this_node::getName();
+    nh_.param("executor/odom_timeout", safety_config.odom_timeout, 0.30);
+    nh_.param("executor/joint_feedback_timeout", safety_config.joint_timeout,
+              0.30);
+    nh_.param("executor/tf_timeout", safety_config.tf_timeout, 0.30);
+    nh_.param("executor/max_base_linear_speed",
+              safety_config.max_base_linear_speed, 0.10);
+    nh_.param("executor/max_base_angular_speed",
+              safety_config.max_base_angular_speed, 0.15);
+    nh_.param("executor/max_joint_speed", safety_config.max_joint_speed, 0.10);
+    nh_.param("executor/max_base_tracking_error",
+              safety_config.max_base_tracking_error, 0.20);
+    nh_.param("executor/max_joint_tracking_error",
+              safety_config.max_joint_tracking_error, 0.10);
+    safety_monitor_.reset(new RuntimeSafetyMonitor(safety_config));
+    // ################################
+    // C++: construct RuntimeSafetyMonitor end
+    // ################################
+
     state_pub_ = nh_.advertise<remani_real_msgs::ExecutionState>(
         "/remani/execution_state", 1, true);
+    result_pub_ = nh_.advertise<remani_real_msgs::ExecutionResult>(
+        "/remani/execution_result", 1, true);
     dry_preview_pub_ = nh_.advertise<geometry_msgs::Twist>(
         "/remani/dry_run/ranger_cmd_vel_preview", 1, false);
 
@@ -206,6 +235,9 @@ class RemaniRealNode {
     mm_config_->setParam(mm_nh, grid_map_);
     environment_.reset(
         new MmConfigValidationEnvironment(grid_map_, mm_config_));
+    ee_kinematics_.reset(new MmConfigEeKinematics(mm_config_.get()));
+    completion_verifier_.reset(
+        new CompletionVerifier(CompletionThresholds(), ee_kinematics_.get()));
   }
 
   ReadinessSnapshot readinessSnapshot() const {
@@ -418,6 +450,8 @@ class RemaniRealNode {
     const double w = msg->pose.pose.orientation.w;
     actual_.base_yaw = std::atan2(2.0 * w * z, 1.0 - 2.0 * z * z);
     actual_.odom_valid = true;
+    actual_.tf_valid = true;
+    actual_.captured_at = ros::SteadyTime::now();
     have_odom_ = true;
   }
 
@@ -429,6 +463,7 @@ class RemaniRealNode {
       actual_.q(i) = msg->position[i];
     }
     actual_.joints_valid = true;
+    actual_.captured_at = ros::SteadyTime::now();
     have_joints_ = true;
   }
 
@@ -577,6 +612,20 @@ class RemaniRealNode {
         geometry_msgs::Twist twist;
         if (tracked.valid) {
           twist = tracked.command;
+          // ################################
+          // C++: evaluate runtime safety before output begin
+          // ################################
+          const SafetyDecision safety = evaluateRuntimeSafety(tracked);
+          if (!safety.safe) {
+            geometry_msgs::Twist zero;
+            publishRangerCommand(zero);
+            fsm_.onExecutionFault(safety.error_code);
+            publishState();
+            return;
+          }
+          // ################################
+          // C++: evaluate runtime safety before output end
+          // ################################
           publishRangerCommand(twist);
         } else {
           // Keep diagnostics zeroed and surface fault without hardware path.
@@ -593,11 +642,82 @@ class RemaniRealNode {
         fsm_.onExecutionFault(ex.what());
       }
       if (t >= duration) {
-        fsm_.onExecutionSucceeded();
+        if (dry_run_) {
+          fsm_.onExecutionSucceeded();
+        } else {
+          const WholeBodySample expected = frozen_->sample(duration);
+          CompletionInput input;
+          input.expected_base_xy = expected.position.head<2>();
+          input.expected_base_yaw = expected.base_yaw;
+          input.expected_q = expected.position.tail<6>();
+          input.expected_ee = ee_kinematics_->pose(
+              Eigen::Vector3d(expected.position(0), expected.position(1),
+                              expected.base_yaw),
+              input.expected_q);
+          input.actual = actual_;
+          input.arm_action_succeeded = true;
+          input.feedback_fresh = true;
+          input.robot_status_healthy = status_ok_;
+          const CompletionDecision done =
+              completion_verifier_->verify(input);
+          remani_real_msgs::ExecutionResult result;
+          result.header.stamp = ros::Time::now();
+          result.candidate_id = frozen_->id();
+          result.final_base_position_error = done.final_base_position_error;
+          result.final_base_yaw_error = done.final_base_yaw_error;
+          result.final_joint_error = done.final_joint_error;
+          result.final_ee_pos_error = done.final_ee_pos_error;
+          result.final_ee_rot_error = done.final_ee_rot_error;
+          result.message = done.error_code;
+          if (done.succeeded) {
+            result.result = remani_real_msgs::ExecutionResult::SUCCEEDED;
+            result_pub_.publish(result);
+            fsm_.onExecutionSucceeded();
+          } else {
+            result.result =
+                remani_real_msgs::ExecutionResult::TERMINAL_TOLERANCE_FAILURE;
+            result_pub_.publish(result);
+            fsm_.onExecutionFault(done.error_code);
+          }
+        }
       }
     }
     publishState();
   }
+
+  // ################################
+  // C++: build RuntimeSafetyInput from latest snapshot begin
+  // ################################
+  SafetyDecision evaluateRuntimeSafety(const BaseTrackingResult& tracked) {
+    RuntimeSafetyInput input;
+    const double now = ros::SteadyTime::now().toSec();
+    const double captured = actual_.captured_at.toSec();
+    const double age = (captured > 0.0) ? std::max(0.0, now - captured) : 0.0;
+    input.odom_age = age;
+    input.joint_age = age;
+    input.tf_age = age;
+    input.joint_velocity_valid = dry_run_ || actual_.velocity_valid;
+    input.robot_connected = status_connected_;
+    input.robot_enabled = status_enabled_;
+    input.robot_fault = (status_error_ != 0);
+    input.action_state =
+        action_client_.isServerConnected() ? ArmGoalState::Active
+                                           : ArmGoalState::Unavailable;
+    input.ranger_watchdog_ready = watchdog_ready_;
+    input.ranger_watchdog_timed_out = watchdog_timed_out_;
+    input.base_tracking_error = tracked.position_error;
+    input.joint_tracking_error = 0.0;
+    input.desired_base_linear_speed = std::abs(tracked.command.linear.x);
+    input.desired_base_angular_speed = std::abs(tracked.command.angular.z);
+    input.desired_max_joint_speed = 0.0;
+    if (!dry_run_) {
+      input.hardware_topic_publishers = {ros::this_node::getName()};
+    }
+    return safety_monitor_->evaluate(input);
+  }
+  // ################################
+  // C++: build RuntimeSafetyInput from latest snapshot end
+  // ################################
 
   ros::NodeHandle nh_;
   ros::NodeHandle private_nh_;
@@ -611,6 +731,9 @@ class RemaniRealNode {
   std::shared_ptr<remani_planner::MMConfig> mm_config_;
   DryRunMotionOutput dry_output_;
   std::unique_ptr<RangerHardwareChannel> ranger_hw_;
+  std::unique_ptr<RuntimeSafetyMonitor> safety_monitor_;
+  std::unique_ptr<MmConfigEeKinematics> ee_kinematics_;
+  std::unique_ptr<CompletionVerifier> completion_verifier_;
   bool dry_run_{true};
   FrozenCandidate frozen_;
   ValidationReport report_;
@@ -618,6 +741,7 @@ class RemaniRealNode {
 
   FollowJointTrajectoryClient action_client_;
   ros::Publisher state_pub_;
+  ros::Publisher result_pub_;
   ros::Publisher dry_preview_pub_;
   ros::Subscriber plan_sub_;
   ros::Subscriber candidate_sub_;

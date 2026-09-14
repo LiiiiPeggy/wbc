@@ -106,6 +106,8 @@ add_library(remani_real_candidate
   src/execution_clock.cpp
   src/synchronized_executor.cpp
   src/remaining_candidate.cpp
+  src/runtime_safety_monitor.cpp
+  src/completion_verifier.cpp
   # ################################
   # CMake: Phase5 synchronized executor end
   # ################################
@@ -365,6 +367,40 @@ if(CATKIN_ENABLE_TESTING)
   endif()
   # ################################
   # CMake: Phase5 remaining / pause-resume gtests end
+  # ################################
+
+  # ################################
+  # CMake: Phase5 runtime safety monitor gtest begin
+  # ################################
+  catkin_add_gtest(test_runtime_safety_monitor
+    test/test_runtime_safety_monitor.cpp
+  )
+  if(TARGET test_runtime_safety_monitor)
+    target_compile_features(test_runtime_safety_monitor PRIVATE cxx_std_14)
+    target_link_libraries(test_runtime_safety_monitor
+      remani_real_candidate
+      ${catkin_LIBRARIES}
+    )
+  endif()
+  # ################################
+  # CMake: Phase5 runtime safety monitor gtest end
+  # ################################
+
+  # ################################
+  # CMake: Phase5 completion verifier gtest begin
+  # ################################
+  catkin_add_gtest(test_completion_verifier
+    test/test_completion_verifier.cpp
+  )
+  if(TARGET test_completion_verifier)
+    target_compile_features(test_completion_verifier PRIVATE cxx_std_14)
+    target_link_libraries(test_completion_verifier
+      remani_real_candidate
+      ${catkin_LIBRARIES}
+    )
+  endif()
+  # ################################
+  # CMake: Phase5 completion verifier gtest end
   # ################################
 
   # ################################

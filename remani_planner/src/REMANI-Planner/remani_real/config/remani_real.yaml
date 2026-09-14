@@ -62,3 +62,38 @@ base_tracking:
 # ################################
 # YAML: Phase3 base tracking defaults end
 # ################################
+
+# ################################
+# YAML: Phase5 executor timing/safety/completion begin
+# ################################
+executor:
+  tick_rate: 50.0
+  start_lead_time: 1.0
+  arm_accept_guard: 0.20
+  max_start_skew: 0.10
+  odom_timeout: 0.30
+  joint_feedback_timeout: 0.30
+  tf_timeout: 0.30
+  stop_timeout: 2.0
+  ranger_stop_linear_velocity: 0.01
+  ranger_stop_angular_velocity: 0.02
+  cr10_stop_velocity: 0.01
+  max_base_linear_speed: 0.10
+  max_base_angular_speed: 0.15
+  max_joint_speed: 0.10
+  max_base_tracking_error: 0.20
+  max_joint_tracking_error: 0.10
+  execute_start_base_position: 0.05
+  execute_start_base_yaw: 0.0872664626
+  execute_start_arm_joint: 0.0523598776
+  resume_base_position: 0.02
+  resume_base_yaw: 0.0349065850
+  resume_arm_joint: 0.0174532925
+  completion_base_position: 0.05
+  completion_base_yaw: 0.0872664626
+  completion_arm_joint: 0.02
+  completion_ee_position: 0.02
+  completion_ee_rotation: 0.0698131701
+# ################################
+# YAML: Phase5 executor timing/safety/completion end
+# ################################
