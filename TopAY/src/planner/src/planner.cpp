@@ -637,27 +637,40 @@ namespace nmoma_planner
     {
         Planner *tsvr = reinterpret_cast<Planner *>(obj);
         // ################################
-        // C++: Period/resolution from YAML — skip heavy recheck between periods
+        // C++: Period/resolution from YAML; throttle uses WallTime (not /clock)
         // ################################
-        ros::Time last_check(0.0);
+        ros::WallTime last_check(0.0);
         while (true)
         {
-            ros::Time start_time = ros::Time::now();
+            ros::WallTime start_time = ros::WallTime::now();
             if (tsvr->has_goal && tsvr->has_traj && tsvr->is_safe && (!tsvr->in_plan) )
             {
                 if ((start_time - last_check).toSec() >= tsvr->safe_check_period_)
                 {
                     last_check = start_time;
+                    const ros::WallTime safe_t0 = ros::WallTime::now();
                     if (!checkWholeBodyTrajectoryCollision(
                             tsvr->grid_map, tsvr->end_traj, tsvr->safe_check_resolution_))
                     {
                         tsvr->is_safe = false;
                     }
+                    const double safe_ms =
+                        (ros::WallTime::now() - safe_t0).toSec() * 1000.0;
+                    // ################################
+                    // C++: Conditional cost log only (do not spam every tick)
+                    // ################################
+                    if (safe_ms > 5.0)
+                    {
+                        ROS_WARN_THROTTLE(
+                            1.0,
+                            "[SafeCheck] whole-body trajectory check %.2f ms",
+                            safe_ms);
+                    }
                 }
             }
 
             int cmd_mm_num = 1000.0 / tsvr->mpc->ctrl_freq;
-            std::chrono::milliseconds dura(max(cmd_mm_num - (int)((ros::Time::now() - start_time).toSec() * 1000), 1));
+            std::chrono::milliseconds dura(max(cmd_mm_num - (int)((ros::WallTime::now() - start_time).toSec() * 1000), 1));
             std::this_thread::sleep_for(dura);
         }
     }
@@ -819,19 +832,24 @@ namespace nmoma_planner
                                     const Eigen::VectorXd& start_v)
     {
         // ################################
-        // C++: PlanTiming uses wall-clock latency (parallel barrier), not sum of worker CPUs
+        // C++: PlanTiming uses ros::WallTime latency (parallel barrier), not /clock
+        //      total_ms = user-perceived plan wall time; stages = winning-path components
         // ################################
-        const ros::Time plan_t0 = ros::Time::now();
+        const ros::WallTime plan_t0 = ros::WallTime::now();
         double topo_ms = 0.0;
-        double mcrrt_ms = 0.0;
+        double front_ms = 0.0;
         double opt_ms = 0.0;
         double hard_ms = 0.0;
+        std::string front_kind = "mcrrt";
         auto finish_timing = [&](bool ok, const std::string& tag) {
-            const double total_ms = (ros::Time::now() - plan_t0).toSec() * 1000.0;
-            timing_logger_.logPlan(tag, topo_ms, mcrrt_ms, opt_ms, hard_ms, total_ms, ok);
-            PRINT_GREEN("[PlanTiming] topo=" << topo_ms << " mcrrt=" << mcrrt_ms
+            const double total_ms = (ros::WallTime::now() - plan_t0).toSec() * 1000.0;
+            timing_logger_.logPlan(tag, front_kind, topo_ms, front_ms, opt_ms, hard_ms,
+                                   total_ms, ok);
+            PRINT_GREEN("[PlanTiming] topo=" << topo_ms << " front=" << front_kind
+                        << " front_ms=" << front_ms
                         << " opt=" << opt_ms << " hard=" << hard_ms
-                        << " total=" << total_ms << " ms succ=" << ok);
+                        << " total=" << total_ms << " ms succ=" << ok
+                        << " (total is wall latency, not stage sum)");
         };
 
         bool succ = false;                              // flag for successful optimization
@@ -839,7 +857,7 @@ namespace nmoma_planner
         std::vector<Eigen::Vector4d> colors;            // colors of prm paths
         std::vector<std::pair<bool, MomaTraj>> results; // storing results of optimization
         std::vector<std::vector<Eigen::VectorXd>> front_paths;       // storing pre-optimized paths
-        std::vector<double> stage_mcrrt, stage_opt, stage_hard;
+        std::vector<double> stage_front, stage_opt, stage_hard;
         MomaTraj ret_traj;
         do {
             // start first trial with non-critical
@@ -852,7 +870,7 @@ namespace nmoma_planner
                 std::vector<Eigen::Vector3d> start_pts, end_pts;
                 start_pts.push_back(topo_start);
                 end_pts.push_back(topo_end);
-                const ros::Time topo_t0 = ros::Time::now();
+                const ros::WallTime topo_t0 = ros::WallTime::now();
                 topo_prm->findTopoPaths(topo_start, topo_end, start_pts, end_pts, graph,
                                        raw_paths, filtered_paths, topo_select_paths, _critical);
                 if (!_critical) {
@@ -865,7 +883,7 @@ namespace nmoma_planner
                         topo_select_paths.push_back(jps3_res);
                     }
                 }
-                topo_ms = (ros::Time::now() - topo_t0).toSec() * 1000.0;
+                topo_ms = (ros::WallTime::now() - topo_t0).toSec() * 1000.0;
                 
                 if (topo_select_paths.empty())
                 {
@@ -881,7 +899,7 @@ namespace nmoma_planner
         
                 results.resize(topo_select_paths.size());
                 front_paths.resize(topo_select_paths.size());
-                stage_mcrrt.assign(topo_select_paths.size(), 0.0);
+                stage_front.assign(topo_select_paths.size(), 0.0);
                 stage_opt.assign(topo_select_paths.size(), 0.0);
                 stage_hard.assign(topo_select_paths.size(), 0.0);
                 for (auto res : results) { res.first = false; }
@@ -895,14 +913,14 @@ namespace nmoma_planner
                 std::atomic_flag rdy_flag = ATOMIC_FLAG_INIT;
                 std::atomic<int> completed_threads{0};
                 auto worker = [this, &results, &front_paths, &mtx, &promise_succ, &cv_first, &cv_all, &completed_threads, &rdy_flag,
-                               &stage_mcrrt, &stage_opt, &stage_hard] (
+                               &stage_front, &stage_opt, &stage_hard] (
                     int idx, 
                     std::vector<Eigen::Vector3d>& topo_path, 
                     const Eigen::VectorXd& start, 
                     const Eigen::VectorXd& end, 
                     const Eigen::VectorXd& start_v)
                 {
-                    ros::Time start_time = ros::Time::now();
+                    ros::WallTime start_time = ros::WallTime::now();
                     std::vector<Eigen::Vector2d> in_path;
                     for(auto &wp : topo_path)
                         in_path.push_back(wp.head(2));
@@ -914,15 +932,16 @@ namespace nmoma_planner
                     bool _succ = false;
                     do
                     {
-                        const ros::Time mc_t0 = ros::Time::now();
+                        const ros::WallTime mc_t0 = ros::WallTime::now();
                         if (!mc_rrtsers[idx]->plan(start, end, dense_result, front_paths[idx]) || front_paths[idx].empty())
                         {
-                            stage_mcrrt[idx] = (ros::Time::now() - mc_t0).toSec() * 1000.0;
+                            stage_front[idx] = (ros::WallTime::now() - mc_t0).toSec() * 1000.0;
+                            stage_hard[idx] = 0.0;
                             _succ = false;
                             PRINT_RED("MCRRT fail.");
                             break;
                         }
-                        stage_mcrrt[idx] = (ros::Time::now() - mc_t0).toSec() * 1000.0;
+                        stage_front[idx] = (ros::WallTime::now() - mc_t0).toSec() * 1000.0;
                         boost::this_thread::interruption_point();
                         // ################################
                         // C++: Whole-body state dimension from dof_num
@@ -932,47 +951,37 @@ namespace nmoma_planner
                         Eigen::MatrixXd boundary_acc = Eigen::MatrixXd::Zero(state_dim, 2);
                         boundary_vel.col(0) = start_v;
     
-                        const ros::Time opt_t0 = ros::Time::now();
+                        const ros::WallTime opt_t0 = ros::WallTime::now();
                         const bool opt_ok =
                             this->traj_opters[idx]->optimizeTraj(front_paths[idx], boundary_vel, boundary_acc)
                             && this->traj_opters[idx]->printConstraintsSituations(traj_opters[idx]->getTraj());
-                        stage_opt[idx] = (ros::Time::now() - opt_t0).toSec() * 1000.0;
+                        stage_opt[idx] = (ros::WallTime::now() - opt_t0).toSec() * 1000.0;
 
-                        const ros::Time hard_t0 = ros::Time::now();
+                        const MomaTraj& traj = this->traj_opters[idx]->getTraj();
+                        bool hard_ok = false;
+                        stage_hard[idx] = 0.0;
                         // ################################
-                        // C++: Sole whole-body traj hard gate (trajectory_collision_checker)
+                        // C++: Hard gate only if opt+print succeeded and traj initialized
                         // ################################
-                        const bool hard_ok = checkWholeBodyTrajectoryCollision(
-                            this->grid_map, traj_opters[idx]->getTraj(), 0.01);
-                        stage_hard[idx] = (ros::Time::now() - hard_t0).toSec() * 1000.0;
+                        if (shouldRunWholeBodyTrajHardGate(opt_ok, traj.is_init))
+                        {
+                            const ros::WallTime hard_t0 = ros::WallTime::now();
+                            hard_ok = checkWholeBodyTrajectoryCollision(
+                                this->grid_map, traj, 0.01);
+                            stage_hard[idx] = (ros::WallTime::now() - hard_t0).toSec() * 1000.0;
+                        }
 
-                        _succ = opt_ok && hard_ok && this->traj_opters[idx]->getTraj().is_init;
+                        _succ = opt_ok && traj.is_init && hard_ok;
                         
                     } while(false);
                     
                     results[idx].first = _succ;
                     if(_succ) results[idx].second = this->traj_opters[idx]->getTraj();
-                    // results[idx] = std::make_pair(_succ, this->traj_opters[idx]->getTraj());
                     
                     if (_succ && !rdy_flag.test_and_set()) {
-                        // boost::lock_guard<boost::mutex> lock(mtx);
-                        // if (!first_success.exchange(true)) {  // Atomic check-and-set
-                        //     cv_first.notify_all();  // Notify all waiters
-                        // }
                         promise_succ.set_value(true);
                     }
-                    // MomaTraj traj = this->traj_opters[idx]->getTraj();
-                    // PRINT_RED("[Thread] Successful optimization with duration: " << traj.getTotalDuration() << std::endl);
-                    // promise_traj.set_value(traj);
-                    // promise_traj.set_value(this->traj_opters[idx]->getTraj());
-                    // optim_time = (ros::Time::now() - start_time).toSec() * 1000.0;
-                    // try {
-                    // } catch (boost::thread_interrupted&) {
-        
-                    // } catch (...) {
-        
-                    // }
-                    ros::Time end_time = ros::Time::now();
+                    ros::WallTime end_time = ros::WallTime::now();
                     PRINT_GREEN("[Thread] ID: " << idx << " Optimization time: " << (end_time - start_time).toSec() * 1000.0 << " ms");
                     {
                         PRINT_GREEN("[Threads] Thread " << completed_threads+1 << " / " << topo_select_paths.size() << " completed");
@@ -1050,9 +1059,10 @@ namespace nmoma_planner
         bool ompl_succ = false; // flag for OMPL optimization success
         if (!succ) {
         do {
-            const ros::Time ompl_t0 = ros::Time::now();
+            front_kind = "ompl";
+            const ros::WallTime ompl_t0 = ros::WallTime::now();
             auto ompl_path = planOmpls(start, end, start_v);
-            mcrrt_ms = (ros::Time::now() - ompl_t0).toSec() * 1000.0;
+            front_ms = (ros::WallTime::now() - ompl_t0).toSec() * 1000.0;
             if (ompl_path.empty()) break; // OMPL failed
             // ################################
             // C++: Whole-body state dimension from dof_num
@@ -1061,21 +1071,27 @@ namespace nmoma_planner
             Eigen::MatrixXd boundary_vel = Eigen::MatrixXd::Zero(state_dim, 2);
             Eigen::MatrixXd boundary_acc = Eigen::MatrixXd::Zero(state_dim, 2);
             boundary_vel.col(0) = start_v;
-            const ros::Time opt_t0 = ros::Time::now();
+            const ros::WallTime opt_t0 = ros::WallTime::now();
             const bool opt_ok =
                 this->traj_opters[0]->optimizeTraj(ompl_path, boundary_vel, boundary_acc)
                 && this->traj_opters[0]->printConstraintsSituations(traj_opters[0]->getTraj());
-            opt_ms = (ros::Time::now() - opt_t0).toSec() * 1000.0;
-            const ros::Time hard_t0 = ros::Time::now();
+            opt_ms = (ros::WallTime::now() - opt_t0).toSec() * 1000.0;
+            const MomaTraj& ompl_traj = this->traj_opters[0]->getTraj();
+            bool hard_ok = false;
+            hard_ms = 0.0;
             // ################################
-            // C++: Sole whole-body traj hard gate (trajectory_collision_checker)
+            // C++: Hard gate only if opt+print succeeded and traj initialized
             // ################################
-            const bool hard_ok = checkWholeBodyTrajectoryCollision(
-                this->grid_map, traj_opters[0]->getTraj(), 0.01);
-            hard_ms = (ros::Time::now() - hard_t0).toSec() * 1000.0;
-            if (!opt_ok || !hard_ok || !this->traj_opters[0]->getTraj().is_init)
+            if (shouldRunWholeBodyTrajHardGate(opt_ok, ompl_traj.is_init))
+            {
+                const ros::WallTime hard_t0 = ros::WallTime::now();
+                hard_ok = checkWholeBodyTrajectoryCollision(
+                    this->grid_map, ompl_traj, 0.01);
+                hard_ms = (ros::WallTime::now() - hard_t0).toSec() * 1000.0;
+            }
+            if (!opt_ok || !ompl_traj.is_init || !hard_ok)
                 break; // OMPL optimization failed
-            end_traj = traj_opters[0]->getTraj();
+            end_traj = ompl_traj;
             succ = true;
             results.resize(1);
             results[0].first = true;
@@ -1099,11 +1115,12 @@ namespace nmoma_planner
                     shortest_idx = idx;
             }
             PRINT_YELLOW("Shortest path index: " << shortest_idx+1);
-            // Winning-path wall stages (not sum across workers)
+            // Winning-path wall stages (not sum across workers; total_ms is separate)
             if (!ompl_succ && shortest_idx >= 0
-                && static_cast<size_t>(shortest_idx) < stage_mcrrt.size())
+                && static_cast<size_t>(shortest_idx) < stage_front.size())
             {
-                mcrrt_ms = stage_mcrrt[shortest_idx];
+                front_kind = "mcrrt";
+                front_ms = stage_front[shortest_idx];
                 opt_ms = stage_opt[shortest_idx];
                 hard_ms = stage_hard[shortest_idx];
             }
@@ -1232,15 +1249,23 @@ namespace nmoma_planner
                     Eigen::MatrixXd boundary_acc = Eigen::MatrixXd::Zero(state_dim, 2);
                     boundary_vel.col(0) = start_v;
 
-                    bool _succ = 
-                        this->traj_opters[idx]->optimizeTraj(full_path, boundary_vel, boundary_acc)
-                        && this->traj_opters[idx]->printConstraintsSituations(traj_opters[idx]->getTraj())
+                    bool _succ = false;
+                    {
+                        const bool opt_ok =
+                            this->traj_opters[idx]->optimizeTraj(full_path, boundary_vel, boundary_acc)
+                            && this->traj_opters[idx]->printConstraintsSituations(traj_opters[idx]->getTraj());
+                        const MomaTraj& traj = this->traj_opters[idx]->getTraj();
+                        bool hard_ok = false;
                         // ################################
-                        // C++: Reject soft-opt residual whole-body (box) penetration
+                        // C++: Hard gate only after opt+print and initialized traj
                         // ################################
-                        && checkWholeBodyTrajectoryCollision(
-                               this->grid_map, traj_opters[idx]->getTraj(), 0.01)
-                        && this->traj_opters[idx]->getTraj().is_init;
+                        if (shouldRunWholeBodyTrajHardGate(opt_ok, traj.is_init))
+                        {
+                            hard_ok = checkWholeBodyTrajectoryCollision(
+                                this->grid_map, traj, 0.01);
+                        }
+                        _succ = opt_ok && traj.is_init && hard_ok;
+                    }
                         
                     results[idx] = std::make_pair(_succ, this->traj_opters[idx]->getTraj());
                 };
@@ -1287,15 +1312,23 @@ namespace nmoma_planner
             Eigen::MatrixXd boundary_vel = Eigen::MatrixXd::Zero(state_dim, 2);
             Eigen::MatrixXd boundary_acc = Eigen::MatrixXd::Zero(state_dim, 2);
             boundary_vel.col(0) = start_v;
-            if (!this->traj_opters[0]->optimizeTraj(ompl_path, boundary_vel, boundary_acc)
-                || !this->traj_opters[0]->printConstraintsSituations(traj_opters[0]->getTraj())
+            {
+                const bool opt_ok =
+                    this->traj_opters[0]->optimizeTraj(ompl_path, boundary_vel, boundary_acc)
+                    && this->traj_opters[0]->printConstraintsSituations(traj_opters[0]->getTraj());
+                const MomaTraj& traj = this->traj_opters[0]->getTraj();
+                bool hard_ok = false;
                 // ################################
-                // C++: Reject soft-opt residual whole-body (box) penetration
+                // C++: Hard gate only after opt+print and initialized traj
                 // ################################
-                || !checkWholeBodyTrajectoryCollision(
-                       this->grid_map, traj_opters[0]->getTraj(), 0.01)
-                || !this->traj_opters[0]->getTraj().is_init
-            ) break; // OMPL optimization failed
+                if (shouldRunWholeBodyTrajHardGate(opt_ok, traj.is_init))
+                {
+                    hard_ok = checkWholeBodyTrajectoryCollision(
+                        this->grid_map, traj, 0.01);
+                }
+                if (!opt_ok || !traj.is_init || !hard_ok)
+                    break; // OMPL optimization failed
+            }
             end_traj = traj_opters[0]->getTraj();
             succ = true;
             results.resize(1);
@@ -1437,15 +1470,20 @@ namespace nmoma_planner
                         Eigen::MatrixXd boundary_acc = Eigen::MatrixXd::Zero(state_dim, 2);
                         boundary_vel.col(0) = start_v;
     
-                        _succ = 
+                        const bool opt_ok =
                             this->traj_opters[idx]->optimizeTraj(full_path, boundary_vel, boundary_acc)
-                            && this->traj_opters[idx]->printConstraintsSituations(traj_opters[idx]->getTraj())
-                            // ################################
-                            // C++: Reject soft-opt residual whole-body (box) penetration
-                            // ################################
-                            && checkWholeBodyTrajectoryCollision(
-                                   this->grid_map, traj_opters[idx]->getTraj(), 0.01)
-                            && this->traj_opters[idx]->getTraj().is_init;
+                            && this->traj_opters[idx]->printConstraintsSituations(traj_opters[idx]->getTraj());
+                        const MomaTraj& traj = this->traj_opters[idx]->getTraj();
+                        bool hard_ok = false;
+                        // ################################
+                        // C++: Hard gate only after opt+print and initialized traj
+                        // ################################
+                        if (shouldRunWholeBodyTrajHardGate(opt_ok, traj.is_init))
+                        {
+                            hard_ok = checkWholeBodyTrajectoryCollision(
+                                this->grid_map, traj, 0.01);
+                        }
+                        _succ = opt_ok && traj.is_init && hard_ok;
                         
                     } while(false);
                     
@@ -1519,15 +1557,23 @@ namespace nmoma_planner
             Eigen::MatrixXd boundary_vel = Eigen::MatrixXd::Zero(state_dim, 2);
             Eigen::MatrixXd boundary_acc = Eigen::MatrixXd::Zero(state_dim, 2);
             boundary_vel.col(0) = start_v;
-            if (!this->traj_opters[0]->optimizeTraj(ompl_path, boundary_vel, boundary_acc)
-                || !this->traj_opters[0]->printConstraintsSituations(traj_opters[0]->getTraj())
+            {
+                const bool opt_ok =
+                    this->traj_opters[0]->optimizeTraj(ompl_path, boundary_vel, boundary_acc)
+                    && this->traj_opters[0]->printConstraintsSituations(traj_opters[0]->getTraj());
+                const MomaTraj& traj = this->traj_opters[0]->getTraj();
+                bool hard_ok = false;
                 // ################################
-                // C++: Reject soft-opt residual whole-body (box) penetration
+                // C++: Hard gate only after opt+print and initialized traj
                 // ################################
-                || !checkWholeBodyTrajectoryCollision(
-                       this->grid_map, traj_opters[0]->getTraj(), 0.01)
-                || !this->traj_opters[0]->getTraj().is_init
-            ) break; // OMPL optimization failed
+                if (shouldRunWholeBodyTrajHardGate(opt_ok, traj.is_init))
+                {
+                    hard_ok = checkWholeBodyTrajectoryCollision(
+                        this->grid_map, traj, 0.01);
+                }
+                if (!opt_ok || !traj.is_init || !hard_ok)
+                    break; // OMPL optimization failed
+            }
             end_traj = traj_opters[0]->getTraj();
             succ = true;
             results.resize(1);
@@ -1596,21 +1642,24 @@ namespace nmoma_planner
         Eigen::MatrixXd boundary_vel = Eigen::MatrixXd::Zero(3+moma_param.dof_num, 2);
         Eigen::MatrixXd boundary_acc = Eigen::MatrixXd::Zero(3+moma_param.dof_num, 2);
         boundary_vel.col(0) = start_v;
-        if (!traj_opters[idx]->optimizeTraj(full_path, boundary_vel, boundary_acc)
-            || !traj_opters[idx]->printConstraintsSituations(traj_opters[idx]->getTraj())
-            // ################################
-            // C++: Reject soft-opt residual whole-body (box) penetration
-            // ################################
-            || !checkWholeBodyTrajectoryCollision(
-                   this->grid_map, traj_opters[idx]->getTraj(), 0.01)
-            )
-            return false;
-        else
         {
-            parallel_ends[idx] = traj_opters[idx]->getTraj();
+            const bool opt_ok =
+                traj_opters[idx]->optimizeTraj(full_path, boundary_vel, boundary_acc)
+                && traj_opters[idx]->printConstraintsSituations(traj_opters[idx]->getTraj());
+            const MomaTraj& traj = traj_opters[idx]->getTraj();
+            bool hard_ok = false;
+            // ################################
+            // C++: Hard gate only after opt+print and initialized traj
+            // ################################
+            if (shouldRunWholeBodyTrajHardGate(opt_ok, traj.is_init))
+            {
+                hard_ok = checkWholeBodyTrajectoryCollision(this->grid_map, traj, 0.01);
+            }
+            if (!opt_ok || !traj.is_init || !hard_ok)
+                return false;
+            parallel_ends[idx] = traj;
             return true;
         }
-        return true;
     }
 
     bool Planner::optDenseOnce(const std::vector<Eigen::VectorXd>& full_path, int idx, 
@@ -1620,21 +1669,24 @@ namespace nmoma_planner
         Eigen::MatrixXd boundary_vel = Eigen::MatrixXd::Zero(3+moma_param.dof_num, 2);
         Eigen::MatrixXd boundary_acc = Eigen::MatrixXd::Zero(3+moma_param.dof_num, 2);
         boundary_vel.col(0) = start_v;
-        if (!traj_opters[idx]->optimizeTraj(full_path, boundary_vel, boundary_acc)
-            || !traj_opters[idx]->printConstraintsSituations(traj_opters[idx]->getTraj())
-            // ################################
-            // C++: Reject soft-opt residual whole-body (box) penetration
-            // ################################
-            || !checkWholeBodyTrajectoryCollision(
-                   this->grid_map, traj_opters[idx]->getTraj(), 0.01)
-            )
-            return false;
-        else
         {
-            parallel_ends[idx] = traj_opters[idx]->getTraj();
+            const bool opt_ok =
+                traj_opters[idx]->optimizeTraj(full_path, boundary_vel, boundary_acc)
+                && traj_opters[idx]->printConstraintsSituations(traj_opters[idx]->getTraj());
+            const MomaTraj& traj = traj_opters[idx]->getTraj();
+            bool hard_ok = false;
+            // ################################
+            // C++: Hard gate only after opt+print and initialized traj
+            // ################################
+            if (shouldRunWholeBodyTrajHardGate(opt_ok, traj.is_init))
+            {
+                hard_ok = checkWholeBodyTrajectoryCollision(this->grid_map, traj, 0.01);
+            }
+            if (!opt_ok || !traj.is_init || !hard_ok)
+                return false;
+            parallel_ends[idx] = traj;
             return true;
         }
-        return true;
     }
 
 

@@ -216,8 +216,9 @@ std::pair<pcl::PointCloud<pcl::PointXYZ>, std::vector<Box::array_repr>> nmoma_ra
 
 // ################################
 // C++: Chassis-passable arch — pillars from ground; lintel above clearance (> chassis_height)
+//      Returns physical left/right pillar + lintel (not placement AABB footprint)
 // ################################
-std::pair<pcl::PointCloud<pcl::PointXYZ>, std::vector<Box::array_repr>>
+std::pair<pcl::PointCloud<pcl::PointXYZ>, std::vector<Box>>
 nmoma_random_map::RandomPCGenerator::generateBridge(
     const Eigen::Vector3d& pos,
     double opening_width,
@@ -253,15 +254,12 @@ nmoma_random_map::RandomPCGenerator::generateBridge(
     boxes.emplace_back(lintel_pos, lintel_size, yaw);
 
     pcl::PointCloud<pcl::PointXYZ> cloud;
-    std::vector<Box::array_repr> reps;
-    reps.reserve(boxes.size());
     for (const Box& box : boxes)
     {
         auto part = box.generatePCL(resolution);
         cloud.points.insert(cloud.points.end(), part.points.begin(), part.points.end());
-        reps.push_back(box.toArray());
     }
-    return std::make_pair(cloud, reps);
+    return std::make_pair(cloud, boxes);
 }
 
 std::pair<pcl::PointCloud<pcl::PointXYZ>, std::vector<Box::array_repr>> 
@@ -503,10 +501,12 @@ nmoma_random_map::RandomPCGenerator::generataRandomCaseAux()
 
     // ################################
     // C++: Optional bridges — only when bridge_enable && obs_num[2] > 0
+    //      placement footprint = overlap only; physical boxes = pillars+lintel
     // ################################
     if (bridge_enable)
     {
         const int n_bridge = bridgeCount();
+        std::vector<Box> bridge_placement_envelopes;
         for (int j = 0; j < n_bridge; ++j)
         {
             double x = rand_x(eng);
@@ -541,6 +541,16 @@ nmoma_random_map::RandomPCGenerator::generataRandomCaseAux()
                     break;
                 }
             }
+            if (!collision)
+            {
+                for (auto& other : bridge_placement_envelopes)
+                {
+                    if ((collision = footprint.overlap(other)))
+                    {
+                        break;
+                    }
+                }
+            }
             if (collision || footprint.overlap2d(spawn_box))
             {
                 --j;
@@ -548,11 +558,18 @@ nmoma_random_map::RandomPCGenerator::generataRandomCaseAux()
             }
 
             pcl::PointCloud<pcl::PointXYZ> cloud_bridge;
-            std::vector<Box::array_repr> bridge_reps;
-            std::tie(cloud_bridge, bridge_reps) = generateBridge(
+            std::vector<Box> bridge_boxes;
+            std::tie(cloud_bridge, bridge_boxes) = generateBridge(
                 center, opening_width, opening_depth, clearance, lintel_th, pillar_w, yaw);
 
-            obs_boxes.push_back(footprint);
+            // ################################
+            // C++: Physical representation = three boxes; footprint stays placement-only
+            // ################################
+            bridge_placement_envelopes.push_back(footprint);
+            for (const Box& part : bridge_boxes)
+            {
+                obs_boxes.push_back(part);
+            }
             for (size_t i = 0; i < cloud_bridge.points.size(); ++i)
             {
                 pt_random = cloud_bridge.points[i];

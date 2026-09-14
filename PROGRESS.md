@@ -2,16 +2,18 @@
 
 **Goal:** Ranger + CR10 whole-body planning/visualization on branch `topay`.
 
-**Branch / HEAD:** `topay` (local uncommitted: bridge + plan timing + hard-gate 减卡).
+**Branch / HEAD:** `topay` @ `3c8b3fe` (local uncommitted short-circuit / WallTime / B1+B2 / physical boxes).
 
-**Current status:** Bridge clearance (lintel bottom) **1.5 m**; opening ~2.8–3.5 m. Wall-clock plan timings; hard-gate 减卡.
+**Current status:** Hard-gate runs only when `shouldRunWholeBodyTrajHardGate`; timings use `ros::WallTime`; bridge gate A/B1/B2/C; physical bridge boxes ≠ placement footprint.
 
 **Verified:**
-- `test_bridge_obstacle_clearance` A/B/C PASS @ clearance=1.5 (2D free; home arm hits lintel; pillar collides).
-- Prior: traj checker PASS; ordinary/bridge smoke `Map ready`.
+- `test_hard_gate_short_circuit` PASS
+- `test_bridge_obstacle_clearance` A / B1 / B2 / C PASS
+- `test_trajectory_collision_checker` A/B/C PASS
+- `test_base_obstacle_collision` A–D PASS
+- `test_optimizer_collision_gradient` PASS
+- Smoke 5-goal: ≥2 succ with `[PlanTiming] ... hard=...`; `[SafeCheck]` WARN ~5–7 ms when >5 ms
 
-**Rulings (unchanged):**
-- Do not change visual root / box grid / `obstacle_radius` / collision weights.
-- Traj collision authority = `checkWholeBodyTrajectoryCollision` only (not embedded in printConstraints).
+**Rulings (unchanged):** no visual/box envelope/weight changes.
 
-**Open:** `map.pcd` local dirty — do not commit. Commit/push when asked.
+**Open:** do not commit `map.pcd` / `bin/` / `topay_current_review2.txt`. Commit when asked.

@@ -176,8 +176,9 @@ namespace random_map {
 
         // ################################
         // C++: Two pillars + lintel; opening free for chassis, lintel can hit box/arm
+        //      Returns physical boxes (not placement footprint)
         // ################################
-        std::pair<pcl::PointCloud<pcl::PointXYZ>, std::vector<Box::array_repr>> generateBridge(
+        std::pair<pcl::PointCloud<pcl::PointXYZ>, std::vector<Box>> generateBridge(
             const Eigen::Vector3d& pos,
             double opening_width,
             double opening_depth,

@@ -162,6 +162,16 @@ target_link_libraries(test_bridge_obstacle_clearance
   ${Boost_LIBRARIES}
 )
 
+# ################################
+# CMake: Hard-gate short-circuit helper (opt fail skips dense sweep)
+# ################################
+add_executable(test_hard_gate_short_circuit src/test_hard_gate_short_circuit.cpp)
+add_dependencies(test_hard_gate_short_circuit ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+target_link_libraries(test_hard_gate_short_circuit
+  planner
+  ${catkin_LIBRARIES}
+)
+
 # pybind_add_module(data 
 #   MODULE
 #   src/utils/data.cpp)

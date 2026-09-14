@@ -139,3 +139,26 @@ Need chassis-passable bridge/arch maps (box/arm may hit lintel), stage latency l
 - `test_bridge_obstacle_clearance` A/B/C PASS; `test_trajectory_collision_checker` A/B/C PASS.
 - Ordinary smoke `obs_num=[30,10]` + `Map ready`; bridge launch `bridge_enable=True`, `obs_num=[20,5,4]` + `Map ready`.
 - Session `plan_*.log` files created (no plan lines until a plan runs).
+
+---
+
+## 2026-09-13 — Hard-gate short-circuit + WallTime + bridge B1/B2 + physical boxes
+
+### Problems
+
+1. Opt/print fail still ran dense `checkWholeBodyTrajectoryCollision`.
+2. Stage timing / safeCallback throttle used `ros::Time` (breaks under `/use_sim_time`).
+3. Bridge regression covered arm-vs-1.5m lintel only, not cargo-box.
+4. Bridge placement AABB was pushed into `obs_boxes` (filled arch opening in box reps).
+
+### Final design
+
+- `shouldRunWholeBodyTrajHardGate(opt_ok, traj.is_init)` gates all hard sweeps; skipped → `hard_ms=0`.
+- Plan + safeCallback durations/throttle use `ros::WallTime`; log stamp stays system_clock.
+- Logger fields: `front=mcrrt|ompl`, `front_ms`, `total_ms` = whole-plan wall (not stage sum).
+- `generateBridge` returns physical pillars+lintel `Box`es; placement footprint only for overlap.
+- Bridge gate: A / B1 (~0.30 m box) / B2 (1.5 m arm) / C pillar; plus `test_hard_gate_short_circuit`.
+
+### Verification
+
+See `PROGRESS.md` after this round’s docker gates + 5-goal smoke.

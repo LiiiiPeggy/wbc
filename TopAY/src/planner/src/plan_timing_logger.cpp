@@ -100,13 +100,16 @@ void PlanTimingLogger::startSession(const std::string& robot_name)
         return;
     }
     ofs << "# session_start=" << isoNow() << " robot=" << robot_name << "\n";
+    ofs << "# fields: tag front topo_ms front_ms opt_ms hard_ms total_ms\n";
+    ofs << "# note: total_ms is whole-plan wall latency; stages are winning-path components\n";
     enabled_ = true;
     ROS_INFO("[PlanTiming] writing to %s", log_path_.c_str());
 }
 
 void PlanTimingLogger::logPlan(const std::string& tag,
+                               const std::string& front,
                                double topo_ms,
-                               double mcrrt_ms,
+                               double front_ms,
                                double opt_ms,
                                double hard_ms,
                                double total_ms,
@@ -122,9 +125,10 @@ void PlanTimingLogger::logPlan(const std::string& tag,
         return;
     }
     ofs << isoNow() << " plan tag=" << tag
+        << " front=" << front
         << " succ=" << (success ? 1 : 0)
         << " topo_ms=" << topo_ms
-        << " mcrrt_ms=" << mcrrt_ms
+        << " front_ms=" << front_ms
         << " opt_ms=" << opt_ms
         << " hard_ms=" << hard_ms
         << " total_ms=" << total_ms << "\n";

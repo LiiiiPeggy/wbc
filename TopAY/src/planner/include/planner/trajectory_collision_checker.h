@@ -21,4 +21,12 @@ bool checkWholeBodyTrajectoryCollision(const std::shared_ptr<GridMap>& grid_map,
 bool checkWholeBodyTrajectoryCollision(GridMap& grid_map,
                                        const MomaTraj& traj,
                                        double resolution);
+
+// ################################
+// C++: Hard gate only after opt+print success and initialized traj
+// ################################
+inline bool shouldRunWholeBodyTrajHardGate(bool opt_ok, bool traj_is_init)
+{
+    return opt_ok && traj_is_init;
+}
 }  // namespace nmoma_planner
