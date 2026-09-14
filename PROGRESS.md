@@ -2,7 +2,7 @@
 
 **Goal:** Ranger + CR10 whole-body planning/visualization on branch `topay`.
 
-**Branch / HEAD:** `topay` (pushing short-circuit / WallTime / B1+B2 / physical boxes).
+**Branch / HEAD:** `topay` @ `0cb8528` (docs) / feature `b0fefef`.
 
 **Current status:** Hard-gate runs only when `shouldRunWholeBodyTrajHardGate`; timings use `ros::WallTime`; bridge gate A/B1/B2/C; physical bridge boxes ≠ placement footprint.
 
@@ -16,4 +16,4 @@
 
 **Rulings (unchanged):** no visual/box envelope/weight changes.
 
-**Open:** do not commit `map.pcd` / `bin/` / `topay_current_review2.txt`. Commit when asked.
+**Open:** `map.pcd` local dirty — do not commit.
