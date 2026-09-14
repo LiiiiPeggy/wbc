@@ -2,7 +2,7 @@
 
 **Goal:** Ranger + CR10 whole-body planning/visualization on branch `topay`.
 
-**Branch / HEAD:** `topay` @ `3c8b3fe` (local uncommitted short-circuit / WallTime / B1+B2 / physical boxes).
+**Branch / HEAD:** `topay` (pushing short-circuit / WallTime / B1+B2 / physical boxes).
 
 **Current status:** Hard-gate runs only when `shouldRunWholeBodyTrajHardGate`; timings use `ros::WallTime`; bridge gate A/B1/B2/C; physical bridge boxes ≠ placement footprint.
 
