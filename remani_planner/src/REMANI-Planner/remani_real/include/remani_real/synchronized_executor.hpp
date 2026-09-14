@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cmath>
 #include <string>
 
 #include <boost/optional.hpp>
@@ -24,6 +25,20 @@ struct StartTimingRecord {
   double ranger_start_error{0.0};
   double cr10_start_error{0.0};
   boost::optional<double> start_skew;
+};
+
+struct PauseRecord {
+  double pause_param_time{0.0};
+  WholeBodySample expected_pause_state;
+  ActualStateSnapshot actual_stop_state;
+  bool ranger_stopped{false};
+  bool cr10_stopped{false};
+};
+
+struct ResumeTolerance {
+  double base_position{0.02};
+  double base_yaw{2.0 * M_PI / 180.0};
+  double arm_joint{1.0 * M_PI / 180.0};
 };
 
 enum class ExecutorStepState {
@@ -57,6 +72,9 @@ struct SynchronizedExecutorConfig {
   double arm_sample_period{0.10};
   double arm_hold_tol{0.02};
   double command_zero_epsilon{1e-4};
+  double stop_base_speed{1e-3};
+  double stop_joint_speed{1e-3};
+  ResumeTolerance resume_tol;
 };
 
 class SynchronizedExecutor {
@@ -69,27 +87,43 @@ class SynchronizedExecutor {
                           const ros::SteadyTime& request_time);
   ExecutorStepResult tick(const ros::SteadyTime& now,
                           const ActualStateSnapshot& actual);
+  ExecuteDecision requestPause();
+  ExecuteDecision requestResume(const ActualStateSnapshot& actual,
+                                const ros::SteadyTime& request_time);
+  ExecuteDecision requestAbort(const ActualStateSnapshot& actual);
+
   const StartTimingRecord& timing() const { return timing_; }
+  const PauseRecord& pauseRecord() const { return pause_record_; }
   ExecutorStepState state() const { return state_; }
   const ExecutionEpoch& epoch() const { return epoch_; }
+  std::size_t generatedConnectorCount() const { return 0; }
+  uint64_t executionGeneration() const { return execution_generation_; }
 
-  // Optional: Executor observes CR10 first non-hold steady timestamp (sec).
   void noteCr10FirstMotionSteady(double steady_sec);
 
  private:
   bool armAccepted() const;
   bool publishRangerZero();
+  bool devicesStopped(const ActualStateSnapshot& actual) const;
+  ExecuteDecision checkResumeTolerance(const ActualStateSnapshot& actual) const;
   ExecutorStepResult fail(const std::string& code, const std::string& detail);
 
   SynchronizedExecutorConfig config_;
   RangerCommandChannel* ranger_;
   ArmCommandChannel* arm_;
-  FrozenCandidate candidate_;
+  FrozenCandidate original_candidate_;
+  FrozenCandidate active_candidate_;
   ExecutionEpoch epoch_;
   StartTimingRecord timing_;
+  PauseRecord pause_record_;
   ExecutorStepState state_{ExecutorStepState::Idle};
   bool prepared_{false};
   bool recorded_ranger_start_{false};
+  bool pause_arm_cancel_issued_{false};
+  bool pause_arm_stop_issued_{false};
+  uint64_t execution_generation_{0};
+  double last_parameter_time_{0.0};
+  bool have_last_parameter_time_{false};
 };
 // ################################
 // C++: SynchronizedExecutor types end

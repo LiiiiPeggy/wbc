@@ -105,6 +105,7 @@ add_library(remani_real_candidate
   # ################################
   src/execution_clock.cpp
   src/synchronized_executor.cpp
+  src/remaining_candidate.cpp
   # ################################
   # CMake: Phase5 synchronized executor end
   # ################################
@@ -336,6 +337,34 @@ if(CATKIN_ENABLE_TESTING)
   endif()
   # ################################
   # CMake: Phase5 execution clock / synchronized start gtests end
+  # ################################
+
+  # ################################
+  # CMake: Phase5 remaining / pause-resume gtests begin
+  # ################################
+  catkin_add_gtest(test_remaining_candidate
+    test/test_remaining_candidate.cpp
+  )
+  if(TARGET test_remaining_candidate)
+    target_compile_features(test_remaining_candidate PRIVATE cxx_std_14)
+    target_link_libraries(test_remaining_candidate
+      remani_real_candidate
+      ${catkin_LIBRARIES}
+    )
+  endif()
+
+  catkin_add_gtest(test_pause_resume
+    test/test_pause_resume.cpp
+  )
+  if(TARGET test_pause_resume)
+    target_compile_features(test_pause_resume PRIVATE cxx_std_14)
+    target_link_libraries(test_pause_resume
+      remani_real_candidate
+      ${catkin_LIBRARIES}
+    )
+  endif()
+  # ################################
+  # CMake: Phase5 remaining / pause-resume gtests end
   # ################################
 
   # ################################
