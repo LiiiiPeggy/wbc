@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <cmath>
 #include <memory>
 #include <string>
@@ -25,14 +26,16 @@
 #include <remani_real/base_tracking_controller.hpp>
 #include <remani_real/candidate_assembler.hpp>
 #include <remani_real/candidate_validator.hpp>
+#include <remani_real/completion_verifier.hpp>
+#include <remani_real/cr10_hardware_channel.hpp>
 #include <remani_real/deployment_state_machine.hpp>
 #include <remani_real/dry_run_motion_output.hpp>
 #include <remani_real/mm_config_validation_environment.hpp>
 #include <remani_real/motion_output.hpp>
 #include <remani_real/preview_publisher.hpp>
-#include <remani_real/completion_verifier.hpp>
 #include <remani_real/ranger_hardware_channel.hpp>
 #include <remani_real/runtime_safety_monitor.hpp>
+#include <remani_real/synchronized_executor.hpp>
 
 namespace remani_real {
 namespace {
@@ -124,14 +127,35 @@ class RemaniRealNode {
     // ################################
 
     // ################################
-    // C++: compose Ranger output channel begin
+    // C++: compose Ranger/CR10 channels + SynchronizedExecutor begin
     // ################################
     if (!dry_run_) {
       ranger_hw_.reset(new RangerHardwareChannel(
           nh_, kRangerHardwareCmdVelTopic, ros::this_node::getName()));
+      cr10_hw_.reset(new Cr10HardwareChannel(
+          nh_, "/cr10_robot/joint_controller/follow_joint_trajectory",
+          "/cr10_robot/stop", "/cr10_robot/emergency_stop", true));
+    }
+    SynchronizedExecutorConfig exec_cfg;
+    exec_cfg.dry_run = dry_run_;
+    nh_.param("executor/start_lead_time", exec_cfg.start_lead_time, 1.0);
+    nh_.param("executor/arm_accept_guard", exec_cfg.arm_accept_guard, 0.20);
+    nh_.param("executor/max_start_skew", exec_cfg.max_start_skew, 0.10);
+    nh_.param("executor/resume_base_position", exec_cfg.resume_tol.base_position,
+              0.02);
+    nh_.param("executor/resume_base_yaw", exec_cfg.resume_tol.base_yaw,
+              0.0349065850);
+    nh_.param("executor/resume_arm_joint", exec_cfg.resume_tol.arm_joint,
+              0.0174532925);
+    if (dry_run_) {
+      executor_.reset(
+          new SynchronizedExecutor(exec_cfg, &dry_output_, &dry_output_));
+    } else {
+      executor_.reset(new SynchronizedExecutor(exec_cfg, ranger_hw_.get(),
+                                               cr10_hw_.get()));
     }
     // ################################
-    // C++: compose Ranger output channel end
+    // C++: compose Ranger/CR10 channels + SynchronizedExecutor end
     // ################################
 
     // ################################
@@ -325,6 +349,32 @@ class RemaniRealNode {
     msg.execution_progress = execution_progress_;
     msg.pause_param_time = pause_param_time_;
     // ################################
+    // C++: publish SynchronizedExecutor timing fields begin
+    // ################################
+    if (executor_) {
+      const StartTimingRecord& timing = executor_->timing();
+      msg.requested_t0 = timing.requested_t0.toSec();
+      if (timing.ranger_trajectory_start_at) {
+        msg.ranger_trajectory_start_time =
+            timing.ranger_trajectory_start_at->toSec();
+      }
+      msg.ranger_first_motion_available =
+          static_cast<bool>(timing.ranger_first_motion_at);
+      if (timing.ranger_first_motion_at) {
+        msg.ranger_first_motion_time = timing.ranger_first_motion_at->toSec();
+      }
+      if (timing.cr10_first_motion_at) {
+        msg.cr10_first_motion_time = timing.cr10_first_motion_at->toSec();
+      }
+      msg.start_skew_available = static_cast<bool>(timing.start_skew);
+      if (timing.start_skew) {
+        msg.start_skew = *timing.start_skew;
+      }
+    }
+    // ################################
+    // C++: publish SynchronizedExecutor timing fields end
+    // ################################
+    // ################################
     // C++: prefer FSM fault code over stale validation report begin
     // ################################
     if (!fsm_.lastErrorCode().empty()) {
@@ -444,11 +494,43 @@ class RemaniRealNode {
   }
 
   void onOdom(const nav_msgs::Odometry::ConstPtr& msg) {
-    actual_.base_xy.x() = msg->pose.pose.position.x;
-    actual_.base_xy.y() = msg->pose.pose.position.y;
+    // ################################
+    // C++: reject non-origin startup odom (START_ODOM_NOT_ZERO) begin
+    // ################################
+    const double x = msg->pose.pose.position.x;
+    const double y = msg->pose.pose.position.y;
     const double z = msg->pose.pose.orientation.z;
     const double w = msg->pose.pose.orientation.w;
-    actual_.base_yaw = std::atan2(2.0 * w * z, 1.0 - 2.0 * z * z);
+    const double yaw = std::atan2(2.0 * w * z, 1.0 - 2.0 * z * z);
+    if (odom_origin_samples_ < 3) {
+      ++odom_origin_samples_;
+      const bool near_origin =
+          std::isfinite(x) && std::isfinite(y) && std::isfinite(yaw) &&
+          std::hypot(x, y) <= 1.0e-3 && std::abs(yaw) <= (0.1 * M_PI / 180.0);
+      if (!near_origin) {
+        odom_origin_ok_ = false;
+        have_odom_ = false;
+        actual_.odom_valid = false;
+        actual_.tf_valid = false;
+        fsm_.onExecutionFault("START_ODOM_NOT_ZERO");
+        return;
+      }
+      if (odom_origin_samples_ < 3) {
+        return;
+      }
+    }
+    if (!odom_origin_ok_) {
+      have_odom_ = false;
+      actual_.odom_valid = false;
+      actual_.tf_valid = false;
+      return;
+    }
+    // ################################
+    // C++: reject non-origin startup odom (START_ODOM_NOT_ZERO) end
+    // ################################
+    actual_.base_xy.x() = x;
+    actual_.base_xy.y() = y;
+    actual_.base_yaw = yaw;
     actual_.odom_valid = true;
     actual_.tf_valid = true;
     actual_.captured_at = ros::SteadyTime::now();
@@ -498,10 +580,25 @@ class RemaniRealNode {
     res.accepted = result.accepted;
     res.message = result.accepted ? "accepted" : result.error_code;
     if (result.accepted) {
-      execute_start_ = ros::SteadyTime::now();
-      pause_param_time_ = 0.0;
-      paused_ = false;
-      execution_progress_ = 0.0;
+      // ################################
+      // C++: SynchronizedExecutor prepare on accepted Execute begin
+      // ################################
+      const ExecuteDecision prepared = executor_->prepare(
+          frozen_, actual_, ros::SteadyTime::now());
+      if (!prepared.accepted) {
+        res.accepted = false;
+        res.message = prepared.error_code;
+        fsm_.onExecutionFault(prepared.error_code.empty() ? "PREPARE_FAILED"
+                                                          : prepared.error_code);
+      } else {
+        pause_param_time_ = 0.0;
+        paused_ = false;
+        pause_confirm_pending_ = false;
+        execution_progress_ = 0.0;
+      }
+      // ################################
+      // C++: SynchronizedExecutor prepare on accepted Execute end
+      // ################################
     }
     publishState();
     return true;
@@ -512,25 +609,49 @@ class RemaniRealNode {
     res.success = result.accepted;
     res.message = result.accepted ? "pause requested" : result.error_code;
     if (result.accepted) {
-      pause_param_time_ =
-          (ros::SteadyTime::now() - execute_start_).toSec();
-      fsm_.onPauseConfirmed();
-      paused_ = true;
+      // ################################
+      // C++: defer PAUSED until SynchronizedExecutor confirms stop begin
+      // ################################
+      const ExecuteDecision paused = executor_->requestPause();
+      if (!paused.accepted) {
+        res.success = false;
+        res.message = paused.error_code;
+      } else {
+        pause_confirm_pending_ = true;
+      }
+      // ################################
+      // C++: defer PAUSED until SynchronizedExecutor confirms stop end
+      // ################################
     }
     publishState();
     return true;
   }
 
   bool onResume(std_srvs::Trigger::Request&, std_srvs::Trigger::Response& res) {
+    // ################################
+    // C++: strict suffix Resume via SynchronizedExecutor begin
+    // ################################
+    const ExecuteDecision resumed =
+        executor_->requestResume(actual_, ros::SteadyTime::now());
+    if (!resumed.accepted) {
+      const CommandResult denied = fsm_.requestResume(false);
+      res.success = false;
+      res.message = resumed.error_code.empty() ? denied.error_code
+                                               : resumed.error_code;
+      publishState();
+      return true;
+    }
     const CommandResult result = fsm_.requestResume(true);
     res.success = result.accepted;
     res.message = result.accepted ? "resumed" : result.error_code;
     if (result.accepted) {
-      // Continue the frozen pause parameter without wall-clock rebaseline tricks.
-      execute_start_ = ros::SteadyTime::now();
-      execute_start_.fromSec(execute_start_.toSec() - pause_param_time_);
       paused_ = false;
+      pause_confirm_pending_ = false;
+      pause_param_time_ = executor_->pauseRecord().pause_param_time;
     }
+    // ################################
+    // C++: strict suffix Resume via SynchronizedExecutor end
+    // ################################
     publishState();
     return true;
   }
@@ -545,10 +666,12 @@ class RemaniRealNode {
       // C++: Abort isolates assembler from late FINAL begin
       // ################################
       assembler_.invalidate("ABORT");
+      executor_->requestAbort(actual_);
       // ################################
       // C++: Abort isolates assembler from late FINAL end
       // ################################
       paused_ = false;
+      pause_confirm_pending_ = false;
       execution_progress_ = 0.0;
       dry_output_.stop();
       geometry_msgs::Twist zero;
@@ -596,52 +719,82 @@ class RemaniRealNode {
     // ################################
     // C++: poll assembler timeout while Planning end
     // ################################
-    if (fsm_.state() == State::Executing && frozen_ && !paused_) {
-      const double t =
-          std::max(0.0, (ros::SteadyTime::now() - execute_start_).toSec());
+    // ################################
+    // C++: drive SynchronizedExecutor while Executing begin
+    // ################################
+    if (fsm_.state() == State::Executing && frozen_ && executor_) {
+      const ExecutorStepResult step =
+          executor_->tick(ros::SteadyTime::now(), actual_);
+      pause_param_time_ = executor_->pauseRecord().pause_param_time;
       const double duration = frozen_->duration();
-      const double sample_t = std::min(t, duration);
-      execution_progress_ = duration > 0.0 ? sample_t / duration : 1.0;
-      try {
-        const WholeBodySample sample = frozen_->sample(sample_t);
-        // ################################
-        // C++: dry-run uses base tracker for command shaping begin
-        // ################################
-        const BaseTrackingResult tracked =
-            base_tracker_->compute(sample, actual_);
-        geometry_msgs::Twist twist;
-        if (tracked.valid) {
-          twist = tracked.command;
-          // ################################
-          // C++: evaluate runtime safety before output begin
-          // ################################
+      const double absolute_t = pause_param_time_ + step.parameter_time;
+      execution_progress_ =
+          duration > 0.0 ? std::min(1.0, absolute_t / duration) : 1.0;
+
+      if (step.state == ExecutorStepState::Error) {
+        geometry_msgs::Twist zero;
+        publishRangerCommand(zero);
+        fsm_.onExecutionFault(step.error_code.empty() ? "EXECUTOR_ERROR"
+                                                      : step.error_code);
+        publishState();
+        return;
+      }
+
+      if (step.state == ExecutorStepState::Paused) {
+        if (pause_confirm_pending_ || !paused_) {
+          fsm_.onPauseConfirmed();
+          paused_ = true;
+          pause_confirm_pending_ = false;
+        }
+        publishState();
+        return;
+      }
+
+      if (step.state == ExecutorStepState::HoldingForT0 ||
+          step.state == ExecutorStepState::Stopping) {
+        geometry_msgs::Twist zero;
+        publishRangerCommand(zero);
+        publishState();
+        return;
+      }
+
+      if (step.state == ExecutorStepState::Running ||
+          step.state == ExecutorStepState::Finished) {
+        try {
+          const double sample_t =
+              std::min(absolute_t, std::max(0.0, duration));
+          const WholeBodySample sample = frozen_->sample(sample_t);
+          const BaseTrackingResult tracked =
+              base_tracker_->compute(sample, actual_);
+          if (!tracked.valid) {
+            geometry_msgs::Twist zero;
+            publishRangerCommand(zero);
+            fsm_.onExecutionFault(tracked.error_code.empty()
+                                      ? "BASE_TRACKING_ERROR"
+                                      : tracked.error_code);
+            publishState();
+            return;
+          }
           const SafetyDecision safety = evaluateRuntimeSafety(tracked);
           if (!safety.safe) {
             geometry_msgs::Twist zero;
             publishRangerCommand(zero);
+            executor_->requestAbort(actual_);
             fsm_.onExecutionFault(safety.error_code);
             publishState();
             return;
           }
-          // ################################
-          // C++: evaluate runtime safety before output end
-          // ################################
-          publishRangerCommand(twist);
-        } else {
-          // Keep diagnostics zeroed and surface fault without hardware path.
-          geometry_msgs::Twist zero;
-          publishRangerCommand(zero);
-          fsm_.onExecutionFault(tracked.error_code.empty()
-                                    ? "BASE_TRACKING_ERROR"
-                                    : tracked.error_code);
+          if (dry_run_) {
+            publishRangerCommand(tracked.command);
+          }
+        } catch (const std::exception& ex) {
+          fsm_.onExecutionFault(ex.what());
+          publishState();
+          return;
         }
-        // ################################
-        // C++: dry-run uses base tracker for command shaping end
-        // ################################
-      } catch (const std::exception& ex) {
-        fsm_.onExecutionFault(ex.what());
       }
-      if (t >= duration) {
+
+      if (step.state == ExecutorStepState::Finished) {
         if (dry_run_) {
           fsm_.onExecutionSucceeded();
         } else {
@@ -658,8 +811,7 @@ class RemaniRealNode {
           input.arm_action_succeeded = true;
           input.feedback_fresh = true;
           input.robot_status_healthy = status_ok_;
-          const CompletionDecision done =
-              completion_verifier_->verify(input);
+          const CompletionDecision done = completion_verifier_->verify(input);
           remani_real_msgs::ExecutionResult result;
           result.header.stamp = ros::Time::now();
           result.candidate_id = frozen_->id();
@@ -682,6 +834,9 @@ class RemaniRealNode {
         }
       }
     }
+    // ################################
+    // C++: drive SynchronizedExecutor while Executing end
+    // ################################
     publishState();
   }
 
@@ -731,6 +886,8 @@ class RemaniRealNode {
   std::shared_ptr<remani_planner::MMConfig> mm_config_;
   DryRunMotionOutput dry_output_;
   std::unique_ptr<RangerHardwareChannel> ranger_hw_;
+  std::unique_ptr<Cr10HardwareChannel> cr10_hw_;
+  std::unique_ptr<SynchronizedExecutor> executor_;
   std::unique_ptr<RuntimeSafetyMonitor> safety_monitor_;
   std::unique_ptr<MmConfigEeKinematics> ee_kinematics_;
   std::unique_ptr<CompletionVerifier> completion_verifier_;
@@ -776,9 +933,11 @@ class RemaniRealNode {
   bool watchdog_ready_{false};
   bool watchdog_timed_out_{false};
   bool paused_{false};
+  bool pause_confirm_pending_{false};
+  bool odom_origin_ok_{true};
+  int odom_origin_samples_{0};
   double execution_progress_{0.0};
   double pause_param_time_{0.0};
-  ros::SteadyTime execute_start_;
 };
 // ################################
 // C++: remani_real_node dry-run control plane end

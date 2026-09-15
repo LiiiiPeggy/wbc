@@ -146,6 +146,38 @@ class RemaniStateBridgeNode {
       return;
     }
 
+    // ################################
+    // C++: reject non-origin startup odom before TF publish begin
+    // ################################
+    const double x = msg->pose.pose.position.x;
+    const double y = msg->pose.pose.position.y;
+    const double zq = msg->pose.pose.orientation.z;
+    const double w = msg->pose.pose.orientation.w;
+    const double yaw = std::atan2(2.0 * w * zq, 1.0 - 2.0 * zq * zq);
+    if (odom_origin_samples_ < 3) {
+      ++odom_origin_samples_;
+      const bool near_origin =
+          std::hypot(x, y) <= 1.0e-3 && std::abs(yaw) <= (0.1 * M_PI / 180.0);
+      if (!near_origin) {
+        odom_origin_ok_ = false;
+        snapshot_.odom_valid = false;
+        snapshot_.tf_valid = false;
+        ROS_ERROR("State Bridge START_ODOM_NOT_ZERO: first odom not at origin");
+        return;
+      }
+      if (odom_origin_samples_ < 3) {
+        return;
+      }
+    }
+    if (!odom_origin_ok_) {
+      snapshot_.odom_valid = false;
+      snapshot_.tf_valid = false;
+      return;
+    }
+    // ################################
+    // C++: reject non-origin startup odom before TF publish end
+    // ################################
+
     geometry_msgs::TransformStamped transform;
     transform.header = msg->header;
     transform.header.frame_id = "world";
@@ -236,6 +268,8 @@ class RemaniStateBridgeNode {
   remani_real_msgs::Cr10Status latest_status_;
   bool have_status_{false};
   double status_stale_timeout_{0.5};
+  bool odom_origin_ok_{true};
+  int odom_origin_samples_{0};
 };
 
 }  // namespace remani_real

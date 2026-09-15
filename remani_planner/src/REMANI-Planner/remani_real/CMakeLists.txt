@@ -179,6 +179,9 @@ install(DIRECTORY config/
 
 install(DIRECTORY launch/
   DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}/launch
+)
+install(DIRECTORY rviz/
+  DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}/rviz
   OPTIONAL
 )
 
@@ -434,18 +437,27 @@ if(CATKIN_ENABLE_TESTING)
     test/fake_real_feedback_node.py
     test/fake_ee_goal_marker.py
     test/fake_candidate_planner.py
+    test/fake_whole_body_system.py
     test/test_real_control_plane.py
+    test/test_real_launch_contract.py
     test/test_ranger_topic_isolation.py
     test/fake_ranger_driver_node.py
     test/test_ranger_only_execution.py
     test/fake_cr10_action_server.py
     test/test_cr10_only_execution.py
+    test/test_synchronized_dry_run.py
+    test/test_pause_resume_abort.py
+    test/test_final_completion.py
     DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION})
   add_rostest(test/state_bridge.test)
   add_rostest(test/real_control_plane.test)
+  add_rostest(test/real_launch_contract.test)
   add_rostest(test/ranger_topic_isolation.test)
   add_rostest(test/ranger_only_execution.test)
   add_rostest(test/cr10_only_execution.test)
+  add_rostest(test/synchronized_dry_run.test)
+  add_rostest(test/pause_resume_abort.test)
+  add_rostest(test/final_completion.test)
   # ################################
   # CMake: State Bridge unit/rostests end
   # ################################

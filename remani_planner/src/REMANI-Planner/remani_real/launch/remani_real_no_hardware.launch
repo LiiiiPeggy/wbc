@@ -1,0 +1,10 @@
+<?xml version="1.0"?>
+<!-- ################################ -->
+<!-- XML: empty hardware stub (laptop/CI) begin -->
+<!-- ################################ -->
+<launch>
+  <!-- Intentionally empty: start_hardware_drivers:=false uses fakes instead. -->
+</launch>
+<!-- ################################ -->
+<!-- XML: empty hardware stub (laptop/CI) end -->
+<!-- ################################ -->

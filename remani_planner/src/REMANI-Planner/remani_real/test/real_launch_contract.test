@@ -1,0 +1,19 @@
+<?xml version="1.0"?>
+<!-- ################################ -->
+<!-- XML: real launch contract rostest begin -->
+<!-- ################################ -->
+<launch>
+  <include file="$(find remani_real)/launch/remani_real.launch">
+    <arg name="dry_run" value="true"/>
+    <arg name="start_hardware_drivers" value="false"/>
+    <arg name="start_planner" value="false"/>
+    <arg name="start_rviz" value="false"/>
+    <arg name="use_fake_feedback" value="true"/>
+  </include>
+
+  <test test-name="test_real_launch_contract" pkg="remani_real"
+        type="test_real_launch_contract.py" time-limit="120.0"/>
+</launch>
+<!-- ################################ -->
+<!-- XML: real launch contract rostest end -->
+<!-- ################################ -->

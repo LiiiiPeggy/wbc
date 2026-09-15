@@ -1,0 +1,94 @@
+<?xml version="1.0"?>
+<!-- ################################ -->
+<!-- XML: unified REMANI real deployment launch begin -->
+<!-- ################################ -->
+<launch>
+  <arg name="mode" default="real"/>
+  <arg name="execution_owner" default="external"/>
+  <arg name="dry_run" default="true"/>
+  <arg name="environment_mode" default="static_empty"/>
+  <arg name="robotIp" default="192.168.5.1"/>
+  <arg name="port_name" default="can0"/>
+  <!-- Laptop/CI default false so ranger_base/dobot packages are never required.
+       Robot host:
+         start_hardware_drivers:=true
+         hardware_drivers_launch:=$(find remani_real)/launch/remani_real_hardware.launch
+         use_fake_feedback:=false -->
+  <arg name="start_hardware_drivers" default="false"/>
+  <arg name="hardware_drivers_launch"
+       default="$(find remani_real)/launch/remani_real_no_hardware.launch"/>
+  <arg name="start_planner" default="false"/>
+  <arg name="start_rviz" default="false"/>
+  <arg name="enable_staged_test" default="false"/>
+  <arg name="use_fake_feedback" default="true"/>
+
+  <param name="/mode" value="$(arg mode)"/>
+  <param name="/execution_owner" value="$(arg execution_owner)"/>
+  <param name="/environment_mode" value="$(arg environment_mode)"/>
+  <param name="/dry_run" value="$(arg dry_run)"/>
+
+  <rosparam command="load" file="$(find remani_real)/config/remani_real.yaml"/>
+
+  <param name="mm/manipulator_type" value="cr10"/>
+  <param name="mm/mobile_base_dof" value="2"/>
+  <param name="mm/mobile_base_length" value="1.10"/>
+  <param name="mm/mobile_base_width" value="0.90"/>
+  <param name="mm/mobile_base_height" value="0.40"/>
+  <param name="mm/mobile_base_check_radius" value="0.20"/>
+  <param name="mm/mobile_base_wheel_base" value="0.56"/>
+  <param name="mm/mobile_base_wheel_radius" value="0.125"/>
+  <param name="mm/mobile_base_max_wheel_omega" value="4.0"/>
+  <param name="mm/mobile_base_max_wheel_alpha" value="8.0"/>
+  <param name="mm/manipulator_dof" value="6"/>
+  <param name="mm/manipulator_thickness" value="0.06"/>
+  <rosparam param="mm/manipulator_config">[0.1765, 0.607, 0.568, 0.191, 0.125, 0.1084]</rosparam>
+  <rosparam param="mm/manipulator_min_pos">[-3.0, -3.0, -3.0, -3.0, -3.0, -3.0]</rosparam>
+  <rosparam param="mm/manipulator_max_pos">[3.0, 3.0, 3.0, 3.0, 3.0, 3.0]</rosparam>
+  <rosparam param="mm/base_mani_fixed_joint_xyz_ypr">[0.2462, 0.0, 0.1, 0.0, 0.0, 0.0]</rosparam>
+  <rosparam param="mm/ee_tcp_xyz_rpy">[0.0, 0.0, 0.0, 0.0, 0.0, 0.0]</rosparam>
+  <param name="optimization/safe_margin" value="0.05"/>
+  <param name="optimization/safe_margin_mani" value="0.05"/>
+  <param name="optimization/self_safe_margin" value="0.02"/>
+  <param name="optimization/ground_safe_dis" value="0.1"/>
+  <param name="grid_map/resolution" value="0.05"/>
+  <param name="environment/static_empty/resolution" value="0.05"/>
+  <param name="environment/static_empty/size_x" value="16.0"/>
+  <param name="environment/static_empty/size_y" value="12.0"/>
+  <param name="environment/static_empty/size_z" value="3.0"/>
+  <param name="grid_map/ground_height" value="0.0"/>
+
+  <group if="$(arg use_fake_feedback)">
+    <node pkg="remani_real" type="fake_real_feedback_node.py"
+          name="fake_real_feedback" output="screen" required="true"/>
+  </group>
+
+  <!-- Fake planner only when the real PLAN-ONLY planner is not started. -->
+  <node unless="$(arg start_planner)" pkg="remani_real" type="fake_candidate_planner.py"
+        name="fake_candidate_planner" output="screen" required="true"/>
+  <node unless="$(arg start_planner)" pkg="remani_real" type="fake_ee_goal_marker.py"
+        name="fake_ee_goal_marker" output="screen" required="true"/>
+
+  <include if="$(arg start_hardware_drivers)" file="$(arg hardware_drivers_launch)">
+    <arg name="robotIp" value="$(arg robotIp)"/>
+    <arg name="port_name" value="$(arg port_name)"/>
+  </include>
+
+  <node pkg="remani_real" type="remani_state_bridge_node"
+        name="remani_state_bridge" output="screen" required="true"/>
+  <node pkg="remani_real" type="remani_real_node"
+        name="remani_real_node" output="screen" required="true">
+    <param name="enable_staged_test" value="$(arg enable_staged_test)"/>
+  </node>
+
+  <group if="$(arg start_planner)">
+    <include file="$(find remani_planner)/launch/remani_ranger_cr10_real_planner.launch"/>
+    <node pkg="remani_planner" type="ee_goal_marker_node"
+          name="ee_goal_marker_node" output="screen"/>
+  </group>
+
+  <node if="$(arg start_rviz)" pkg="rviz" type="rviz" name="remani_real_rviz"
+        args="-d $(find remani_real)/rviz/remani_real.rviz" output="screen"/>
+</launch>
+<!-- ################################ -->
+<!-- XML: unified REMANI real deployment launch end -->
+<!-- ################################ -->
