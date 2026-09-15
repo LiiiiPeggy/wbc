@@ -1,0 +1,56 @@
+<?xml version="1.0"?>
+<!-- ################################ -->
+<!-- XML: synchronized dry-run rostest begin -->
+<!-- ################################ -->
+<launch>
+  <param name="/mode" value="real"/>
+  <param name="/execution_owner" value="external"/>
+  <param name="/environment_mode" value="static_empty"/>
+  <param name="/dry_run" value="true"/>
+  <rosparam command="load" file="$(find remani_real)/config/remani_real.yaml"/>
+
+  <param name="mm/manipulator_type" value="cr10"/>
+  <param name="mm/mobile_base_dof" value="2"/>
+  <param name="mm/mobile_base_length" value="1.10"/>
+  <param name="mm/mobile_base_width" value="0.90"/>
+  <param name="mm/mobile_base_height" value="0.40"/>
+  <param name="mm/mobile_base_check_radius" value="0.20"/>
+  <param name="mm/mobile_base_wheel_base" value="0.56"/>
+  <param name="mm/mobile_base_wheel_radius" value="0.125"/>
+  <param name="mm/mobile_base_max_wheel_omega" value="4.0"/>
+  <param name="mm/mobile_base_max_wheel_alpha" value="8.0"/>
+  <param name="mm/manipulator_dof" value="6"/>
+  <param name="mm/manipulator_thickness" value="0.06"/>
+  <rosparam param="mm/manipulator_config">[0.1765, 0.607, 0.568, 0.191, 0.125, 0.1084]</rosparam>
+  <rosparam param="mm/manipulator_min_pos">[-3.0, -3.0, -3.0, -3.0, -3.0, -3.0]</rosparam>
+  <rosparam param="mm/manipulator_max_pos">[3.0, 3.0, 3.0, 3.0, 3.0, 3.0]</rosparam>
+  <rosparam param="mm/base_mani_fixed_joint_xyz_ypr">[0.2462, 0.0, 0.1, 0.0, 0.0, 0.0]</rosparam>
+  <rosparam param="mm/ee_tcp_xyz_rpy">[0.0, 0.0, 0.0, 0.0, 0.0, 0.0]</rosparam>
+  <param name="optimization/safe_margin" value="0.05"/>
+  <param name="optimization/safe_margin_mani" value="0.05"/>
+  <param name="optimization/self_safe_margin" value="0.02"/>
+  <param name="optimization/ground_safe_dis" value="0.1"/>
+  <param name="grid_map/resolution" value="0.05"/>
+  <param name="environment/static_empty/resolution" value="0.05"/>
+  <param name="environment/static_empty/size_x" value="6.0"/>
+  <param name="environment/static_empty/size_y" value="6.0"/>
+  <param name="environment/static_empty/size_z" value="3.0"/>
+  <param name="grid_map/ground_height" value="0.0"/>
+
+  <node pkg="remani_real" type="remani_state_bridge_node"
+        name="remani_state_bridge" output="screen" required="true"/>
+  <node pkg="remani_real" type="remani_real_node"
+        name="remani_real_node" output="screen" required="true"/>
+  <node pkg="remani_real" type="fake_whole_body_system.py"
+        name="fake_whole_body_system" output="screen" required="true"/>
+  <node pkg="remani_real" type="fake_ee_goal_marker.py"
+        name="fake_ee_goal_marker" output="screen" required="true"/>
+  <node pkg="remani_real" type="fake_candidate_planner.py"
+        name="fake_candidate_planner" output="screen" required="true"/>
+
+  <test test-name="test_synchronized_dry_run" pkg="remani_real"
+        type="test_synchronized_dry_run.py" time-limit="180.0"/>
+</launch>
+<!-- ################################ -->
+<!-- XML: synchronized dry-run rostest end -->
+<!-- ################################ -->
