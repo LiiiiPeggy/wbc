@@ -2,6 +2,10 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Shared Project Memory
+
+Before substantial REMANI-related work in this subtree, follow `../AGENTS.md`, read `../remani_planner/PROGRESS.md`, and consult relevant parts of `../remani_planner/MEMORY.md`. Update only those REMANI memory files when project state or durable knowledge changes; do not create Agent-specific memory copies under `agx/`.
+
 ## Project Overview
 
 This is a ROS 1 (catkin) workspace for a **Loco-Manipulation robot** platform consisting of:
