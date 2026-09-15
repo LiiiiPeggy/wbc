@@ -8,8 +8,8 @@ Deploy REMANI on the Ranger+CR10 real robot while preserving the existing simula
 
 ## Current Implementation State
 
-- Worktree: `.worktrees/remani-real-implementation` on `remani-real-implementation` (ahead of origin by 16; Phase 3–5 commits local through `d474601`).
-- Phase 2–5 software gates green on laptop.
+- Active branch: `remani-real-implementation` (primary checkout; worktree no longer used).
+- Phase 2–5 software gates green on laptop; Phase 5 tip includes unified launch through `d474601`, plus project memory under `remani_planner/`.
 - Leftover uncommitted (out of scope): `remani_real/package.xml` demo deps, `remani_real_dry_run_demo.launch`, `agx/.catkin_workspace`.
 
 ## Verified Work (2026-09-15)
