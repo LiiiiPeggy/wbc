@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+# ################################
+# Bash: robot-host lidar topic watch begin
+# ################################
+set -euo pipefail
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck disable=SC1091
+source "${SCRIPT_DIR}/_common.sh"
+remani_require_ros
+
+TOPIC="${LIDAR_TOPIC:-/rslidar_points}"
+echo "[watch_lidar] hz ${TOPIC}"
+rostopic info "${TOPIC}" 2>/dev/null || {
+  echo "ERROR: ${TOPIC} not advertised — run run_lidar.sh first" >&2
+  exit 1
+}
+rostopic hz "${TOPIC}"
+# ################################
+# Bash: robot-host lidar topic watch end
+# ################################

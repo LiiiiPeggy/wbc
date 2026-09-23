@@ -144,3 +144,15 @@ Ranger and CR10 channels existed separately; dry-run Execute still used wall-clo
 - AGX pure gtests on laptop: ranger_command 7/7, watchdog 2/2, CR10 validator/runner/adapter 6/5/3. Messenger build skipped without standalone asio (18.04 host).
 - Acceptance checklist: `remani_real/docs/synchronized_acceptance.md` (physical stages still unauthorized).
 - Commits: `ee96065`, `d474601` on `remani-real-implementation`.
+
+## Robot-Host Scripts (agilex_ws/scripts) for Split Deployment
+
+Date: 2026-09-22
+
+### Decision
+
+Keep `remani_planner` on the laptop and robot drivers in `agilex_ws/` (`src/` packages + `scripts/` helpers; formerly flat `agx/`). Split helpers: `agilex_ws/scripts/` (build/CAN/drivers/sensors/watches) vs `remani_planner/scripts/` (dry-run control plane, Cr10Status stub, execution watches). Builds must use `--source agilex_ws/src`. Robot `run_real_dry_run.sh` only launches `scripts/launch/remani_hardware_drivers.launch`. Do not put motion-publishing or `dry_run:=false` one-liners on either host's helper set.
+
+### Gap recorded
+
+No AGX → `remani_real_msgs/Cr10Status` bridge yet. Temporary laptop stub: `remani_planner/scripts/publish_cr10_status_stub.sh`.

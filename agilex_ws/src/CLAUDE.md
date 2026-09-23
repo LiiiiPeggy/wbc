@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Shared Project Memory
 
-Before substantial REMANI-related work in this subtree, follow `../AGENTS.md`, read `../remani_planner/PROGRESS.md`, and consult relevant parts of `../remani_planner/MEMORY.md`. Update only those REMANI memory files when project state or durable knowledge changes; do not create Agent-specific memory copies under `agx/`.
+Before substantial REMANI-related work in this subtree, follow `../../AGENTS.md`, read `../../remani_planner/PROGRESS.md`, and consult relevant parts of `../../remani_planner/MEMORY.md`. Update only those REMANI memory files when project state or durable knowledge changes; do not create Agent-specific memory copies under `agilex_ws/`.
 
 ## Project Overview
 
@@ -18,13 +18,14 @@ This is a ROS 1 (catkin) workspace for a **Loco-Manipulation robot** platform co
 ## Build Commands
 
 ```bash
-# Full workspace build (from workspace root)
-cd ~/catkin_ws && catkin_make
+# From agilex_ws workspace root (packages under src/)
+cd /path/to/agilex_ws
+catkin_make --source src
 
-# Build specific package only
-catkin_make --pkg <package_name>
+# Or whitelist selected packages (see scripts/build_agx_*.sh)
+./scripts/build_agx_drivers.sh
+./scripts/build_agx_sensors.sh
 
-# Source the workspace after building
 source devel/setup.bash
 ```
 

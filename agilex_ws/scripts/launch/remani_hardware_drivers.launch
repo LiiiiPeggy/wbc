@@ -1,0 +1,30 @@
+<?xml version="1.0"?>
+<!-- ################################ -->
+<!-- XML: agx-host Ranger+CR10 drivers for laptop REMANI begin -->
+<!-- ################################ -->
+<!-- Robot host only (no remani_planner). Mirrors remani_real_hardware.launch
+     remaps so the laptop control plane can attach with use_fake_feedback:=false.
+-->
+<launch>
+  <arg name="robotIp" default="192.168.5.1"/>
+  <arg name="port_name" default="can0"/>
+  <arg name="remani_prestart_hold_mode" default="true"/>
+
+  <include file="$(find ranger_base)/launch/include/ranger_robot_base.launch">
+    <arg name="port_name" value="$(arg port_name)"/>
+    <arg name="odom_frame" value="world"/>
+    <arg name="base_frame" value="base_link"/>
+    <arg name="odom_topic_name" value="odom"/>
+    <arg name="publish_odom_tf" value="false"/>
+    <arg name="cmd_vel_remap" value="/remani/hardware/ranger/cmd_vel"/>
+  </include>
+
+  <include file="$(find dobot_v4_bringup)/launch/bringup_v4.launch">
+    <arg name="robotIp" value="$(arg robotIp)"/>
+    <arg name="remani_prestart_hold_mode" value="$(arg remani_prestart_hold_mode)"/>
+    <remap from="/joint_states" to="/remani/cr10_joint_states_raw"/>
+  </include>
+</launch>
+<!-- ################################ -->
+<!-- XML: agx-host Ranger+CR10 drivers for laptop REMANI end -->
+<!-- ################################ -->
